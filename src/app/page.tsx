@@ -1,12 +1,22 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Header } from '@/components/Header';
 import { ProductCard } from '@/components/ProductCard';
 import { CartDrawer } from '@/components/CartDrawer';
 import { PaymentModal } from '@/components/PaymentModal';
 import { MedicineDetailModal } from '@/components/MedicineDetailModal';
-import { Product, CartItem, Order, DeliveryType, PaymentMethod, MerchantSettings } from '@/types';
+import { LocationModal, LocationInfo } from '@/components/LocationModal';
+import { QuickBuyModal } from '@/components/QuickBuyModal';
+import { MobileFilterDrawer } from '@/components/MobileFilterDrawer';
+import {
+  Product,
+  CartItem,
+  Order,
+  DeliveryType,
+  PaymentMethod,
+  MerchantSettings,
+} from '@/types';
 import {
   getStoredProducts,
   getStoredOrders,
@@ -20,32 +30,53 @@ import {
   ShieldCheck,
   ShoppingBag,
   ArrowRight,
-  Package,
-  QrCode,
-  CheckCircle,
-  FileCheck2,
-  ChevronRight,
-  Filter,
   PhoneCall,
-  X,
+  CheckCircle,
+  Truck,
+  RotateCcw,
+  SlidersHorizontal,
+  ChevronDown,
+  Sparkles,
 } from 'lucide-react';
+
+const DEFAULT_LOCATION: LocationInfo = {
+  area: 'Bhavnagar 364001',
+  city: 'Bhavnagar',
+  pincode: '364001',
+  dispatchType: 'RAPIDO_CITY',
+  estimate: '30–45m Rapido',
+};
+
+type SortKey = 'FEATURED' | 'PRICE_ASC' | 'PRICE_DESC' | 'DISCOUNT_DESC' | 'RATING_DESC';
 
 export default function StorefrontPage() {
   const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [settings, setSettings] = useState<MerchantSettings>(getStoredSettings());
+
+  // Navigation & Modals
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+  const [isQuickBuyModalOpen, setIsQuickBuyModalOpen] = useState(false);
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [selectedMedicineDetails, setSelectedMedicineDetails] = useState<Product | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<LocationInfo>(DEFAULT_LOCATION);
 
-  // Filters
+  // Filters & Sorting
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [selectedBrand, setSelectedBrand] = useState('ALL');
+  const [selectedPriceRange, setSelectedPriceRange] = useState('ALL');
+  const [selectedDispatch, setSelectedDispatch] = useState('ALL');
+  const [sortBy, setSortBy] = useState<SortKey>('FEATURED');
 
-  // Phone callback input for Tata 1mg bottom strip
+  // Callback form
   const [callbackPhone, setCallbackPhone] = useState('');
-  const [callbackSuccess, setCallbackSuccess] = useState(false);
+  const [callbackSent, setCallbackSent] = useState(false);
+
+  // Catalog anchor
+  const catalogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setProducts(getStoredProducts());
@@ -56,6 +87,10 @@ export default function StorefrontPage() {
       if (savedCart) {
         setCart(JSON.parse(savedCart));
       }
+      const savedLoc = sessionStorage.getItem('ayurswift_location');
+      if (savedLoc) {
+        setCurrentLocation(JSON.parse(savedLoc));
+      }
     } catch {}
   }, []);
 
@@ -63,6 +98,13 @@ export default function StorefrontPage() {
     setCart(newCart);
     try {
       sessionStorage.setItem('ayurswift_cart', JSON.stringify(newCart));
+    } catch {}
+  };
+
+  const handleSelectLocation = (loc: LocationInfo) => {
+    setCurrentLocation(loc);
+    try {
+      sessionStorage.setItem('ayurswift_location', JSON.stringify(loc));
     } catch {}
   };
 
@@ -86,14 +128,29 @@ export default function StorefrontPage() {
     return Array.from(brands);
   }, [products]);
 
-  // STRICT AVAILABILITY GUARANTEE:
-  // Customers ONLY see items currently in stock at home (stockQuantity > 0 and isLive === true)
+  // Filtered & Sorted Products
   const filteredProducts = useMemo(() => {
-    return products.filter((p) => {
+    let result = products.filter((p) => {
+      // Strict in-stock only
       if (!p.isLive || p.stockQuantity <= 0) return false;
+
+      // Category
       if (selectedCategory !== 'ALL' && p.category !== selectedCategory) return false;
+
+      // Brand
       if (selectedBrand !== 'ALL' && p.brand !== selectedBrand) return false;
 
+      // Price Range
+      if (selectedPriceRange === 'UNDER_100' && p.sellingPrice >= 100) return false;
+      if (
+        selectedPriceRange === '100_TO_200' &&
+        (p.sellingPrice < 100 || p.sellingPrice > 200)
+      ) {
+        return false;
+      }
+      if (selectedPriceRange === 'ABOVE_200' && p.sellingPrice <= 200) return false;
+
+      // Search Query
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase().trim();
         const matchName = p.name.toLowerCase().includes(query);
@@ -108,7 +165,41 @@ export default function StorefrontPage() {
 
       return true;
     });
-  }, [products, selectedCategory, selectedBrand, searchQuery]);
+
+    // Sorting
+    switch (sortBy) {
+      case 'PRICE_ASC':
+        result.sort((a, b) => a.sellingPrice - b.sellingPrice);
+        break;
+      case 'PRICE_DESC':
+        result.sort((a, b) => b.sellingPrice - a.sellingPrice);
+        break;
+      case 'DISCOUNT_DESC':
+        result.sort((a, b) => {
+          const discA = (a.mrp - a.sellingPrice) / a.mrp;
+          const discB = (b.mrp - b.sellingPrice) / b.mrp;
+          return discB - discA;
+        });
+        break;
+      case 'RATING_DESC':
+        result.sort((a, b) => b.rating - a.rating);
+        break;
+      case 'FEATURED':
+      default:
+        // Keep order or sort top review count
+        result.sort((a, b) => b.reviewCount - a.reviewCount);
+        break;
+    }
+
+    return result;
+  }, [
+    products,
+    selectedCategory,
+    selectedBrand,
+    selectedPriceRange,
+    searchQuery,
+    sortBy,
+  ]);
 
   // Cart calculations
   const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
@@ -122,7 +213,6 @@ export default function StorefrontPage() {
   );
   const cartSavings = cartTotalMrp - cartSubtotal;
 
-  // Cart actions
   const handleAddToCart = (product: Product) => {
     const existing = cart.find((item) => item.product.id === product.id);
     let updated: CartItem[];
@@ -155,6 +245,20 @@ export default function StorefrontPage() {
   const handleClearCart = () => {
     saveCart([]);
   };
+
+  const handleResetFilters = () => {
+    setSelectedCategory('ALL');
+    setSelectedBrand('ALL');
+    setSelectedPriceRange('ALL');
+    setSelectedDispatch('ALL');
+    setSearchQuery('');
+  };
+
+  const activeFilterCount =
+    (selectedCategory !== 'ALL' ? 1 : 0) +
+    (selectedBrand !== 'ALL' ? 1 : 0) +
+    (selectedPriceRange !== 'ALL' ? 1 : 0) +
+    (selectedDispatch !== 'ALL' ? 1 : 0);
 
   const handlePlaceOrder = (orderData: {
     customerName: string;
@@ -215,98 +319,202 @@ export default function StorefrontPage() {
 
   const handleCallbackSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!callbackPhone) return;
+    if (!callbackPhone.trim()) return;
     const clean = callbackPhone.replace(/\D/g, '');
     const message = encodeURIComponent(
-      `Hello AyurSwift! I want to order medicines via call/WhatsApp. My phone number is: ${clean}. Please dispatch my order.`
+      `Hello AyurSwift! I want to order medicines via call/WhatsApp. My phone number is: ${clean}. Please dispatch my order in Bhavnagar.`
     );
     window.open(`https://wa.me/${settings.merchantWhatsApp}?text=${message}`, '_blank');
-    setCallbackSuccess(true);
-    setTimeout(() => setCallbackSuccess(false), 4000);
+    setCallbackSent(true);
+    setTimeout(() => setCallbackSent(false), 4000);
   };
 
+  const scrollToCatalog = () => {
+    if (catalogRef.current) {
+      catalogRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  // Top 4 Bestsellers for the Homepage showcase
+  const bestSellers = useMemo(() => {
+    return products
+      .filter((p) => p.isLive && p.stockQuantity > 0)
+      .slice(0, 4);
+  }, [products]);
+
   return (
-    <div className="min-h-screen bg-[#F8F9FA] text-gray-900 flex flex-col font-sans">
-      {/* 1. Tata 1mg + Truemeds Header Navigation */}
+    <div className="min-h-screen bg-[#F8FAF9] text-gray-900 flex flex-col font-sans">
+      {/* 1. Header (Reference 1: Clear pharmacy header) */}
       <Header
         cartCount={cartCount}
         cartTotal={cartSubtotal}
         onOpenCart={() => setIsCartOpen(true)}
         settings={settings}
         searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
+        onSearchChange={(q) => {
+          setSearchQuery(q);
+          if (q.trim()) scrollToCatalog();
+        }}
         selectedCategory={selectedCategory}
-        onSelectCategory={setSelectedCategory}
+        onSelectCategory={(cat) => {
+          setSelectedCategory(cat);
+          scrollToCatalog();
+        }}
+        currentLocation={currentLocation}
+        onOpenLocationModal={() => setIsLocationModalOpen(true)}
+        onOpenQuickBuyModal={() => setIsQuickBuyModalOpen(true)}
+        products={products}
+        onSelectProduct={(p) => setSelectedMedicineDetails(p)}
       />
 
-      {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-4 py-4 sm:py-5 flex-1 w-full space-y-6">
-        {/* 2. Tata 1mg Exact Hero Promo Banners (Dual Carousel Cards from Image 1) */}
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Banner 1: Dark Blue Health Checkup / Ayurvedic Protection */}
-          <div className="rounded-2xl bg-gradient-to-r from-[#003B71] to-[#005B96] text-white p-5 sm:p-6 flex items-center justify-between shadow-sm relative overflow-hidden group">
-            <div className="space-y-2 z-10 max-w-[65%]">
-              <span className="text-[10px] font-bold bg-white/20 text-white px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                Home Dark Store
-              </span>
-              <h2 className="text-lg sm:text-xl font-black tracking-tight leading-snug">
-                Prioritize Your Health &amp; Stay Ahead of Pain
-              </h2>
-              <p className="text-xs text-blue-100">
-                Enjoy <strong>up to 25% off</strong> on genuine Ayurvedic &amp; primary OTC medicines.
-              </p>
-              <div className="pt-2">
-                <button
-                  onClick={() => setSelectedCategory('Joint & Muscle Pain')}
-                  className="bg-white text-[#003B71] hover:bg-blue-50 font-bold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 transition-all shadow-xs active:scale-95"
-                >
-                  <span>Explore Pain Care</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 py-4 sm:py-6 flex-1 w-full space-y-6 sm:space-y-8">
+        {/* ============================================================== */}
+        {/* HOMEPAGE SECTION (Reference 1 Layout: Tata 1mg inspired)      */}
+        {/* ============================================================== */}
+
+        {/* 2. Prominent Promotional Hero Banner */}
+        <section className="grid grid-cols-1 md:grid-cols-12 gap-4 items-stretch">
+          {/* Main Hero Card */}
+          <div className="md:col-span-8 rounded-3xl bg-gradient-to-br from-[#0c6b66] via-[#10847e] to-[#044e4a] text-white p-6 sm:p-8 flex flex-col justify-between shadow-sm relative overflow-hidden group">
+            {/* Subtle background circular glow */}
+            <div className="absolute -right-16 -top-16 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none" />
+
+            <div className="relative z-10 space-y-3 max-w-xl">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 text-amber-300 text-xs font-bold backdrop-blur-xs">
+                <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+                <span>Bhavnagar Home Dark Store • 30–45 Mins Express</span>
               </div>
+
+              <h1 className="text-2xl sm:text-4xl font-black tracking-tight leading-snug">
+                Genuine Ayurveda &amp; Primary OTC Medicines,
+                <br />
+                <span className="text-emerald-200">Delivered Swiftly to Your Door.</span>
+              </h1>
+
+              <p className="text-xs sm:text-sm text-emerald-50/90 leading-relaxed font-normal">
+                Authentic remedies procured directly from wholesale agencies with official GST billing.
+                Dispatched in 30–45 mins across Bhavnagar via Rapido bike parcel, or fast all-India courier.
+              </p>
             </div>
 
-            {/* Visual element */}
-            <div className="w-32 h-32 rounded-full bg-white/10 flex items-center justify-center text-5xl shrink-0 group-hover:scale-105 transition-transform">
-              🌿
+            {/* Clear Primary Call to Action */}
+            <div className="relative z-10 pt-5 flex flex-wrap items-center gap-3">
+              <button
+                onClick={scrollToCatalog}
+                className="bg-white hover:bg-emerald-50 text-[#0c6b66] font-extrabold text-xs sm:text-sm px-6 py-3 rounded-2xl flex items-center gap-2 transition-all shadow-md active:scale-95"
+              >
+                <span>Shop In-Stock Medicines</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={() => setIsQuickBuyModalOpen(true)}
+                className="bg-black/25 hover:bg-black/35 text-white border border-white/25 font-bold text-xs sm:text-sm px-5 py-3 rounded-2xl flex items-center gap-2 transition-all backdrop-blur-xs"
+              >
+                <Zap className="w-4 h-4 fill-amber-300 text-amber-300" />
+                <span>Quick Buy</span>
+              </button>
             </div>
           </div>
 
-          {/* Banner 2: Sky Blue Tata 1mg Festive Essentials / 30-45m Rapido */}
-          <div className="rounded-2xl bg-gradient-to-r from-[#EBF5FB] via-[#E1F0FA] to-[#D6EAF8] border border-[#B9D8F1] text-gray-900 p-5 sm:p-6 flex items-center justify-between shadow-sm relative overflow-hidden">
-            <div className="space-y-2 z-10 max-w-[65%]">
-              <span className="text-[10px] font-extrabold bg-[#10847e] text-white px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                ⚡ 30–45 Mins Express
+          {/* Secondary Hero Card: Rapido Instant Bike Dispatch */}
+          <div className="md:col-span-4 rounded-3xl bg-gradient-to-br from-[#EBF5FB] via-[#E1F0FA] to-[#D4E8F8] border border-[#B9D8F1] text-gray-900 p-5 sm:p-6 flex flex-col justify-between shadow-2xs relative overflow-hidden">
+            <div className="space-y-2">
+              <span className="inline-block text-[10px] font-black bg-[#10847e] text-white px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                ⚡ RAPIDO PARCEL
               </span>
               <h2 className="text-lg sm:text-xl font-black text-[#003B71] tracking-tight leading-snug">
-                Dispatched via Rapido Bike Directly from Home
+                Bhavnagar 30–45 Min Bike Delivery
               </h2>
-              <p className="text-xs text-gray-600">
-                100% genuine wholesale agency billed remedies delivered right to your doorstep.
+              <p className="text-xs text-gray-600 leading-relaxed">
+                Have a carry-bag flyer or urgent headache/cold need? Orders pack from home stock in 10 minutes.
               </p>
-              <div className="pt-2">
-                <button
-                  onClick={() => setIsCartOpen(true)}
-                  className="bg-gray-900 hover:bg-black text-white font-bold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 transition-all shadow-xs active:scale-95"
-                >
-                  <span>Order Now</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
             </div>
 
-            {/* Visual element */}
-            <div className="w-28 h-28 rounded-2xl bg-white/80 border border-[#B9D8F1] flex flex-col items-center justify-center p-2 shadow-xs shrink-0">
-              <span className="text-3xl">⚡🚴</span>
-              <span className="text-[10px] font-black text-[#10847e] mt-1 uppercase">Rapido Bike</span>
+            <div className="pt-4 space-y-2">
+              <div className="p-2.5 bg-white/90 rounded-xl border border-blue-100 flex items-center gap-2.5 shadow-2xs">
+                <span className="text-2xl">🛵</span>
+                <div className="text-[11px] leading-tight text-gray-700">
+                  <strong>Delivering to:</strong> {currentLocation.area}
+                </div>
+              </div>
+
+              <a
+                href={`https://wa.me/${settings.merchantWhatsApp}?text=Hi%20AyurSwift,%20I%20want%20to%20place%20a%20quick%20medicine%20order.`}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full bg-[#003B71] hover:bg-[#00284D] text-white font-extrabold text-xs py-2.5 rounded-xl transition-all shadow-xs flex items-center justify-center gap-2 active:scale-95"
+              >
+                <span>💬 Order on WhatsApp</span>
+              </a>
             </div>
           </div>
         </section>
 
-        {/* 3. Tata 1mg Exact Care Plan / Membership Strip (From Image 1) */}
-        <section className="bg-[#FFF4E5] border border-[#FFE0B2] rounded-2xl p-4 sm:p-4.5 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+        {/* 3. Offer & Trust Strip (4 Pillars) */}
+        <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="bg-white border border-gray-200/90 rounded-2xl p-3.5 flex items-center gap-3 shadow-2xs">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-[#10847e] flex items-center justify-center shrink-0">
+              <Zap className="w-5 h-5 fill-amber-400 text-amber-500" />
+            </div>
+            <div>
+              <div className="font-extrabold text-xs text-gray-900 leading-tight">
+                30–45 Mins In-City
+              </div>
+              <div className="text-[10.5px] text-gray-500 mt-0.5">
+                Rapido parcel in Bhavnagar
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white border border-gray-200/90 rounded-2xl p-3.5 flex items-center gap-3 shadow-2xs">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="font-extrabold text-xs text-gray-900 leading-tight">
+                100% Genuine Stock
+              </div>
+              <div className="text-[10.5px] text-gray-500 mt-0.5">
+                Agency GST billed medicines
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white border border-gray-200/90 rounded-2xl p-3.5 flex items-center gap-3 shadow-2xs">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
+              <CheckCircle className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="font-extrabold text-xs text-gray-900 leading-tight">
+                Zero Gateway Cuts
+              </div>
+              <div className="text-[10.5px] text-gray-500 mt-0.5">
+                Direct UPI (₹0 extra fee)
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white border border-gray-200/90 rounded-2xl p-3.5 flex items-center gap-3 shadow-2xs">
+            <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center shrink-0">
+              <Truck className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="font-extrabold text-xs text-gray-900 leading-tight">
+                All-India Courier
+              </div>
+              <div className="text-[10.5px] text-gray-500 mt-0.5">
+                Secure bubble-wrapped boxes
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 4. Service Benefit Strip (AyurSwift Care - Free Delivery Above ₹499) */}
+        <section className="bg-gradient-to-r from-[#FFF4E5] to-[#FFF9F0] border border-[#FFE0B2] rounded-2xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#E65100] text-white flex items-center justify-center text-xl shrink-0 font-black">
+            <div className="w-10 h-10 rounded-xl bg-[#E65100] text-white flex items-center justify-center text-xl shrink-0 font-black shadow-2xs">
               🛡️
             </div>
             <div>
@@ -314,31 +522,42 @@ export default function StorefrontPage() {
                 <span className="bg-[#E65100] text-white text-[10px] font-black px-2 py-0.5 rounded">
                   AyurSwift Care
                 </span>
-                <span className="text-xs font-bold text-gray-800">
+                <span className="text-xs sm:text-sm font-extrabold text-gray-900">
                   Free Express Delivery on Orders Above ₹{settings.cityFreeDeliveryAbove}
                 </span>
               </div>
               <p className="text-xs text-gray-600 mt-0.5">
-                Zero payment gateway commission cuts • 100% direct bank UPI • Zero out-of-stock clutter.
+                Only in-stock remedies shown • Zero out-of-stock confusion • 100% verified batches.
               </p>
             </div>
           </div>
 
-          <a
-            href={`https://wa.me/${settings.merchantWhatsApp}?text=Hi%20AyurSwift,%20I%20want%20to%20know%20more%20about%20your%20home%20delivery%20and%20stock.`}
-            target="_blank"
-            rel="noreferrer"
-            className="bg-[#5D4037] hover:bg-[#4E342E] text-white font-bold text-xs px-4 py-2 rounded-xl transition-colors shrink-0"
+          <button
+            onClick={scrollToCatalog}
+            className="bg-[#5D4037] hover:bg-[#4E342E] text-white font-extrabold text-xs px-4 py-2 rounded-xl transition-colors shrink-0"
           >
-            Know More
-          </a>
+            Explore Catalog
+          </button>
         </section>
 
-        {/* 4. "Shop by health concerns" (Circular Categories Row from Image 1) */}
+        {/* 5. Health-Concern Categories (Reference 1: Circular / Card Categories) */}
         <section className="space-y-3">
-          <h2 className="text-base sm:text-lg font-black text-gray-900 tracking-tight">
-            Shop by Health Concerns
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-base sm:text-lg font-black text-gray-900 tracking-tight flex items-center gap-2">
+              <span>Shop by Health Concerns</span>
+              <span className="text-xs font-normal text-gray-500">
+                (Click any category to filter catalog)
+              </span>
+            </h2>
+            {selectedCategory !== 'ALL' && (
+              <button
+                onClick={() => setSelectedCategory('ALL')}
+                className="text-xs font-bold text-[#10847e] hover:underline"
+              >
+                Show All
+              </button>
+            )}
+          </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
             {[
@@ -364,83 +583,138 @@ export default function StorefrontPage() {
                 color: 'bg-blue-50 text-blue-800 border-blue-200',
               },
               {
-                id: 'Liver & Vital Organs',
-                title: 'Liver & Vital Organs',
-                sub: 'Liv.52 & Herbal Care',
-                icon: '🩺',
+                id: 'Daily Wellness',
+                title: 'Daily Wellness',
+                sub: 'Liv.52, Vitality & Care',
+                icon: '✨',
                 color: 'bg-purple-50 text-purple-800 border-purple-200',
               },
               {
-                id: 'Daily Wellness',
-                title: 'Daily Wellness',
-                sub: 'Natural Supplements',
-                icon: '✨',
+                id: 'Skin & Hair',
+                title: 'Skin & Hair',
+                sub: 'Aloe Vera & Almond Oils',
+                icon: '💆',
                 color: 'bg-rose-50 text-rose-800 border-rose-200',
               },
-            ].map((concern) => (
-              <button
-                key={concern.id}
-                onClick={() => setSelectedCategory(concern.id)}
-                className={`p-3.5 rounded-2xl border text-left transition-all hover:shadow-sm ${
-                  selectedCategory === concern.id
-                    ? 'border-[#10847e] bg-[#F2F9F9] ring-2 ring-[#10847e]'
-                    : 'bg-white border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-2xl mb-2 border border-gray-100">
-                  {concern.icon}
-                </div>
-                <div className="font-bold text-xs sm:text-sm text-gray-900 line-clamp-1">
-                  {concern.title}
-                </div>
-                <div className="text-[10px] text-gray-500 mt-0.5 truncate">
-                  {concern.sub}
-                </div>
-              </button>
-            ))}
+            ].map((concern) => {
+              const isSelected = selectedCategory === concern.id;
+              return (
+                <button
+                  key={concern.id}
+                  onClick={() => {
+                    setSelectedCategory(concern.id);
+                    scrollToCatalog();
+                  }}
+                  className={`p-3.5 rounded-2xl border text-left transition-all hover:shadow-sm cursor-pointer ${
+                    isSelected
+                      ? 'border-[#10847e] bg-emerald-50/50 ring-2 ring-[#10847e]'
+                      : 'bg-white border-gray-200 hover:border-gray-300'
+                  }`}
+                  aria-pressed={isSelected}
+                >
+                  <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-2xl mb-2 border border-gray-100">
+                    {concern.icon}
+                  </div>
+                  <div className="font-extrabold text-xs sm:text-sm text-gray-900 line-clamp-1">
+                    {concern.title}
+                  </div>
+                  <div className="text-[10px] text-gray-500 mt-0.5 truncate">
+                    {concern.sub}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </section>
 
-        {/* 5. Truemeds Exact Two-Column Architecture (Filters Sidebar + 4-Column Grid from Image 2) */}
-        <section className="pt-2">
-          {/* Breadcrumbs (Truemeds style) */}
-          <div className="text-xs text-gray-400 mb-3 flex items-center gap-1.5 font-medium">
-            <span className="hover:text-gray-700 cursor-pointer" onClick={() => setSelectedCategory('ALL')}>
+        {/* 6. Trending Bestsellers Row (Quick 1-Tap Add) */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base sm:text-lg font-black text-gray-900 tracking-tight flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-amber-500" />
+                <span>Trending Daily Bestsellers</span>
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Fast-relief herbal formulations most frequently ordered in Bhavnagar
+              </p>
+            </div>
+            <button
+              onClick={scrollToCatalog}
+              className="text-xs font-bold text-[#10847e] hover:underline"
+            >
+              View Full Catalog ({products.filter((p) => p.isLive && p.stockQuantity > 0).length})
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+            {bestSellers.map((product) => {
+              const inCart = cart.find((i) => i.product.id === product.id);
+              return (
+                <ProductCard
+                  key={`featured-${product.id}`}
+                  product={product}
+                  quantityInCart={inCart ? inCart.quantity : 0}
+                  onAddToCart={handleAddToCart}
+                  onUpdateQuantity={handleUpdateQuantity}
+                  onViewDetails={(p) => setSelectedMedicineDetails(p)}
+                />
+              );
+            })}
+          </div>
+        </section>
+
+        {/* ============================================================== */}
+        {/* MEDICINE CATALOG SECTION (Reference 2: TrueMeds inspired)       */}
+        {/* ============================================================== */}
+        <div ref={catalogRef} className="pt-6 border-t border-gray-200">
+          {/* Breadcrumb */}
+          <nav
+            aria-label="Breadcrumb"
+            className="text-xs text-gray-400 mb-3 flex items-center gap-1.5 font-medium"
+          >
+            <span
+              className="hover:text-gray-700 cursor-pointer"
+              onClick={handleResetFilters}
+            >
               Home
             </span>
             <span>/</span>
-            <span className="hover:text-gray-700 cursor-pointer" onClick={() => setSelectedCategory('ALL')}>
-              Categories
+            <span
+              className="hover:text-gray-700 cursor-pointer"
+              onClick={() => setSelectedCategory('ALL')}
+            >
+              Medicines
             </span>
             <span>/</span>
-            <span className="text-[#10847e] font-semibold">
-              {selectedCategory === 'ALL' ? 'All Medicines' : selectedCategory}
+            <span className="text-[#10847e] font-extrabold">
+              {selectedCategory === 'ALL' ? 'All In-Stock Medicines' : selectedCategory}
             </span>
-          </div>
+          </nav>
 
           <div className="flex flex-col lg:flex-row gap-6 items-start">
-            {/* LEFT SIDEBAR: FILTERS (Exact Truemeds Left Box) */}
-            <aside className="w-full lg:w-64 bg-white rounded-2xl border border-gray-200 p-4 shrink-0 space-y-5 shadow-2xs">
+            {/* DESKTOP FILTER SIDEBAR (Reference 2: Visible left box) */}
+            <aside
+              className="hidden lg:block w-64 bg-white rounded-2xl border border-gray-200 p-4 shrink-0 space-y-5 shadow-2xs sticky top-28"
+              aria-label="Product filters"
+            >
               <div className="flex items-center justify-between border-b border-gray-100 pb-2.5">
                 <h3 className="font-extrabold text-sm text-gray-900 flex items-center gap-1.5">
-                  <Filter className="w-4 h-4 text-[#10847e]" />
+                  <SlidersHorizontal className="w-4 h-4 text-[#10847e]" />
                   <span>Filters</span>
                 </h3>
-                {(selectedCategory !== 'ALL' || selectedBrand !== 'ALL' || searchQuery) && (
+                {activeFilterCount > 0 && (
                   <button
-                    onClick={() => {
-                      setSelectedCategory('ALL');
-                      setSelectedBrand('ALL');
-                      setSearchQuery('');
-                    }}
-                    className="text-xs font-bold text-[#10847e] hover:underline"
+                    onClick={handleResetFilters}
+                    className="text-xs font-bold text-[#10847e] hover:underline flex items-center gap-1"
                   >
-                    Clear All
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Clear All</span>
                   </button>
                 )}
               </div>
 
-              {/* Category Filter Group */}
+              {/* Category Filter */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs font-bold text-gray-900">
                   <span>Category</span>
@@ -461,18 +735,26 @@ export default function StorefrontPage() {
                   >
                     <input
                       type="radio"
-                      name="category_filter"
+                      name="desktop_category"
                       checked={selectedCategory === 'ALL'}
                       onChange={() => setSelectedCategory('ALL')}
                       className="accent-[#10847e] w-3.5 h-3.5"
                     />
-                    <span className={selectedCategory === 'ALL' ? 'font-bold text-[#10847e]' : 'text-gray-700'}>
+                    <span
+                      className={
+                        selectedCategory === 'ALL'
+                          ? 'font-bold text-[#10847e]'
+                          : 'text-gray-700'
+                      }
+                    >
                       All Categories ({products.filter((p) => p.isLive && p.stockQuantity > 0).length})
                     </span>
                   </label>
 
                   {availableCategories.map((cat) => {
-                    const count = products.filter((p) => p.isLive && p.stockQuantity > 0 && p.category === cat).length;
+                    const count = products.filter(
+                      (p) => p.isLive && p.stockQuantity > 0 && p.category === cat
+                    ).length;
                     return (
                       <label
                         key={cat}
@@ -481,12 +763,18 @@ export default function StorefrontPage() {
                       >
                         <input
                           type="radio"
-                          name="category_filter"
+                          name="desktop_category"
                           checked={selectedCategory === cat}
                           onChange={() => setSelectedCategory(cat)}
                           className="accent-[#10847e] w-3.5 h-3.5"
                         />
-                        <span className={selectedCategory === cat ? 'font-bold text-[#10847e]' : 'text-gray-700'}>
+                        <span
+                          className={
+                            selectedCategory === cat
+                              ? 'font-bold text-[#10847e]'
+                              : 'text-gray-700'
+                          }
+                        >
                           {cat} ({count})
                         </span>
                       </label>
@@ -495,7 +783,7 @@ export default function StorefrontPage() {
                 </div>
               </div>
 
-              {/* Brands Filter Group */}
+              {/* Brands Filter */}
               <div className="space-y-2 border-t border-gray-100 pt-3.5">
                 <div className="flex items-center justify-between text-xs font-bold text-gray-900">
                   <span>Brands</span>
@@ -509,19 +797,25 @@ export default function StorefrontPage() {
                   )}
                 </div>
 
-                <div className="space-y-1.5 text-xs max-h-48 overflow-y-auto pr-1">
+                <div className="space-y-1.5 text-xs max-h-40 overflow-y-auto pr-1">
                   <label
                     onClick={() => setSelectedBrand('ALL')}
                     className="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-gray-50"
                   >
                     <input
                       type="radio"
-                      name="brand_filter"
+                      name="desktop_brand"
                       checked={selectedBrand === 'ALL'}
                       onChange={() => setSelectedBrand('ALL')}
                       className="accent-[#10847e] w-3.5 h-3.5"
                     />
-                    <span className={selectedBrand === 'ALL' ? 'font-bold text-[#10847e]' : 'text-gray-700'}>
+                    <span
+                      className={
+                        selectedBrand === 'ALL'
+                          ? 'font-bold text-[#10847e]'
+                          : 'text-gray-700'
+                      }
+                    >
                       All Brands
                     </span>
                   </label>
@@ -534,12 +828,18 @@ export default function StorefrontPage() {
                     >
                       <input
                         type="radio"
-                        name="brand_filter"
+                        name="desktop_brand"
                         checked={selectedBrand === brand}
                         onChange={() => setSelectedBrand(brand)}
                         className="accent-[#10847e] w-3.5 h-3.5"
                       />
-                      <span className={selectedBrand === brand ? 'font-bold text-[#10847e]' : 'text-gray-700'}>
+                      <span
+                        className={
+                          selectedBrand === brand
+                            ? 'font-bold text-[#10847e]'
+                            : 'text-gray-700'
+                        }
+                      >
                         {brand}
                       </span>
                     </label>
@@ -547,55 +847,122 @@ export default function StorefrontPage() {
                 </div>
               </div>
 
-              {/* Guarantee Checkbox */}
+              {/* Price Range */}
+              <div className="space-y-2 border-t border-gray-100 pt-3.5 text-xs">
+                <span className="font-bold text-gray-900 block">Price Range</span>
+                <div className="space-y-1">
+                  {[
+                    { id: 'ALL', label: 'All Prices' },
+                    { id: 'UNDER_100', label: 'Under ₹100' },
+                    { id: '100_TO_200', label: '₹100 to ₹200' },
+                    { id: 'ABOVE_200', label: 'Above ₹200' },
+                  ].map((r) => (
+                    <label
+                      key={r.id}
+                      onClick={() => setSelectedPriceRange(r.id)}
+                      className="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-gray-50"
+                    >
+                      <input
+                        type="radio"
+                        name="desktop_price"
+                        checked={selectedPriceRange === r.id}
+                        onChange={() => setSelectedPriceRange(r.id)}
+                        className="accent-[#10847e] w-3.5 h-3.5"
+                      />
+                      <span
+                        className={
+                          selectedPriceRange === r.id
+                            ? 'font-bold text-[#10847e]'
+                            : 'text-gray-700'
+                        }
+                      >
+                        {r.label}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Dispatch Info Box */}
               <div className="border-t border-gray-100 pt-3.5 space-y-2 text-xs">
-                <span className="font-bold text-gray-900 block">Dispatch Speed</span>
-                <div className="p-2.5 bg-emerald-50/70 border border-emerald-100 rounded-xl space-y-1 text-[11px] text-emerald-900">
-                  <div className="font-bold flex items-center gap-1">
-                    <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                <span className="font-bold text-gray-900 block">Dispatch Guarantee</span>
+                <div className="p-2.5 bg-emerald-50/70 border border-emerald-100 rounded-xl space-y-1 text-[11px] text-emerald-950">
+                  <div className="font-extrabold flex items-center gap-1 text-[#10847e]">
+                    <Zap className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
                     <span>30–45 Mins Rapido Parcel</span>
                   </div>
                   <p className="text-gray-600 text-[10.5px]">
-                    Direct home dark store fulfillment. Zero queue delay.
+                    Dispatched from home dark store in Bhavnagar.
                   </p>
                 </div>
               </div>
             </aside>
 
-            {/* RIGHT MAIN CATALOG GRID (Exact Truemeds Product Feed) */}
+            {/* MAIN CATALOG FEED */}
             <div className="flex-1 w-full space-y-4">
-              {/* Category Title & Count (Truemeds style) */}
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 pb-3">
+              {/* Heading, Result Count & Sort Bar */}
+              <div className="bg-white border border-gray-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
                 <div>
-                  <h1 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
+                  <h2 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
                     {selectedCategory === 'ALL'
                       ? 'Ayurvedic & Primary Health OTC Medicines'
                       : selectedCategory}
-                  </h1>
+                  </h2>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    Strict Availability Guarantee: Only currently stocked remedies in home dark store are displayed.
+                    Strict Availability: Showing {filteredProducts.length} in-stock medicines
                   </p>
                 </div>
-                <span className="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-                  {filteredProducts.length} medicines in stock
-                </span>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                  {/* Mobile Filters Toggle Button */}
+                  <button
+                    onClick={() => setIsMobileFilterOpen(true)}
+                    className="lg:hidden flex items-center gap-1.5 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs font-bold transition-colors"
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-[#10847e]" />
+                    <span>Filters</span>
+                    {activeFilterCount > 0 && (
+                      <span className="bg-[#10847e] text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
+                        {activeFilterCount}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Sort Control Dropdown */}
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="text-gray-500 font-medium hidden md:inline">Sort by:</span>
+                    <div className="relative">
+                      <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value as SortKey)}
+                        className="appearance-none bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 pr-7 text-xs font-bold text-gray-800 focus:outline-none focus:border-[#10847e] cursor-pointer"
+                        aria-label="Sort products"
+                      >
+                        <option value="FEATURED">Featured &amp; Bestselling</option>
+                        <option value="PRICE_ASC">Price: Low to High</option>
+                        <option value="PRICE_DESC">Price: High to Low</option>
+                        <option value="DISCOUNT_DESC">Highest Discount %</option>
+                        <option value="RATING_DESC">Top Customer Rating</option>
+                      </select>
+                      <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-2.5 pointer-events-none" />
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              {/* Grid */}
+              {/* Product Grid (Multi-Column: 2 cols on mobile, 3 on tablet, 4 on desktop) */}
               {filteredProducts.length === 0 ? (
-                <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center space-y-3">
+                <div className="bg-white rounded-3xl border border-gray-200 p-12 text-center space-y-3 shadow-2xs">
                   <div className="text-4xl">🔍</div>
-                  <h3 className="font-bold text-gray-800 text-sm">No stocked medicines found</h3>
+                  <h3 className="font-extrabold text-gray-900 text-base">
+                    No matching medicines found
+                  </h3>
                   <p className="text-xs text-gray-500 max-w-sm mx-auto">
-                    No currently stocked products match your filter. Try clearing filters or searching for another remedy.
+                    Try adjusting your category or brand filters, or clear search terms to view all stocked remedies.
                   </p>
                   <button
-                    onClick={() => {
-                      setSearchQuery('');
-                      setSelectedCategory('ALL');
-                      setSelectedBrand('ALL');
-                    }}
-                    className="text-xs font-bold text-[#10847e] hover:underline"
+                    onClick={handleResetFilters}
+                    className="bg-[#10847e] hover:bg-[#0c6b66] text-white text-xs font-bold px-5 py-2.5 rounded-xl transition-all shadow-xs"
                   >
                     Reset All Filters
                   </button>
@@ -621,42 +988,46 @@ export default function StorefrontPage() {
               )}
             </div>
           </div>
-        </section>
+        </div>
 
-        {/* 6. Tata 1mg Exact "Order Medicines on Call / WhatsApp" Strip (From Image 1) */}
-        <section className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-5 shadow-2xs flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-[#10847e] flex items-center justify-center shrink-0">
-              <PhoneCall className="w-5 h-5" />
+        {/* 7. Persistent Order by Call / WhatsApp Strip (Reference 1 Bottom Section) */}
+        <section className="bg-white border border-gray-200 rounded-3xl p-5 sm:p-6 shadow-2xs flex flex-col md:flex-row items-center justify-between gap-5">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-[#10847e] flex items-center justify-center shrink-0 shadow-2xs">
+              <PhoneCall className="w-6 h-6" />
             </div>
             <div>
-              <div className="font-extrabold text-sm text-gray-900">
-                Order Medicines on Call / WhatsApp
+              <div className="font-black text-sm sm:text-base text-gray-900">
+                Order Medicines via Call / WhatsApp
               </div>
-              <div className="text-xs text-gray-500">
-                Call/Message us directly or get an immediate Rapido bike dispatch
+              <div className="text-xs text-gray-500 mt-0.5">
+                Have a prescription or carry-bag flyer? Enter phone number for instant Rapido bike dispatch.
               </div>
             </div>
           </div>
 
-          <form onSubmit={handleCallbackSubmit} className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-            <div className="flex items-center border border-gray-300 rounded-xl px-3 py-2 bg-white text-xs text-gray-700 w-full sm:w-auto">
+          <form
+            onSubmit={handleCallbackSubmit}
+            className="flex flex-wrap items-center gap-2 w-full md:w-auto"
+          >
+            <div className="flex items-center border border-gray-300 rounded-xl px-3 py-2 bg-white text-xs text-gray-800 w-full sm:w-auto focus-within:border-[#10847e]">
               <span className="font-bold text-gray-500 mr-1.5">🇮🇳 +91</span>
               <input
                 type="tel"
                 value={callbackPhone}
                 onChange={(e) => setCallbackPhone(e.target.value)}
-                placeholder="Enter Phone Number"
+                placeholder="Enter 10-digit mobile"
                 maxLength={10}
                 className="w-40 focus:outline-none text-xs"
                 required
+                aria-label="Phone number for call/WhatsApp order"
               />
             </div>
             <button
               type="submit"
               className="bg-[#E54B38] hover:bg-[#D43D2A] text-white font-extrabold text-xs px-5 py-2.5 rounded-xl transition-all shadow-xs shrink-0 active:scale-95"
             >
-              Get a Call / WhatsApp Order
+              {callbackSent ? 'Opening WhatsApp...' : 'Get Instant WhatsApp Order'}
             </button>
           </form>
         </section>
@@ -666,7 +1037,7 @@ export default function StorefrontPage() {
       {cartCount > 0 && (
         <div className="fixed bottom-0 inset-x-0 z-40 p-3 sm:p-4 bg-gradient-to-t from-black/20 via-black/5 to-transparent pointer-events-none">
           <div className="max-w-2xl mx-auto pointer-events-auto">
-            <div className="bg-[#10847e] text-white p-3 sm:p-3.5 rounded-2xl shadow-xl flex items-center justify-between gap-3 animate-in slide-in-from-bottom duration-250">
+            <div className="bg-[#10847e] text-white p-3 sm:p-3.5 rounded-2xl shadow-xl flex items-center justify-between gap-3 animate-in slide-in-from-bottom duration-200">
               <div className="flex items-center gap-3">
                 <div className="relative bg-[#0c6b66] p-2 rounded-xl">
                   <ShoppingBag className="w-5 h-5 text-amber-300" />
@@ -676,9 +1047,7 @@ export default function StorefrontPage() {
                 </div>
                 <div>
                   <div className="flex items-baseline gap-1.5">
-                    <span className="font-black text-sm sm:text-base">
-                      ₹{cartSubtotal}
-                    </span>
+                    <span className="font-black text-sm sm:text-base">₹{cartSubtotal}</span>
                     {cartSavings > 0 && (
                       <span className="text-[11px] text-amber-300 font-bold">
                         (Saved ₹{cartSavings})
@@ -695,7 +1064,7 @@ export default function StorefrontPage() {
                 onClick={() => setIsCartOpen(true)}
                 className="bg-amber-400 hover:bg-amber-500 text-gray-950 font-black text-xs sm:text-sm px-4 py-2.5 rounded-xl flex items-center gap-1.5 shadow-xs active:scale-95 transition-all"
               >
-                <span>View Cart &amp; Pay</span>
+                <span>View Cart &amp; Checkout</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
@@ -703,31 +1072,44 @@ export default function StorefrontPage() {
         </div>
       )}
 
-      {/* Tata 1mg / Truemeds Clean Clinical Footer */}
+      {/* Persistent WhatsApp Floating Button on Mobile */}
+      <a
+        href={`https://wa.me/${settings.merchantWhatsApp}?text=Hi%20AyurSwift,%20I%20need%20quick%20medicine%20assistance.`}
+        target="_blank"
+        rel="noreferrer"
+        className={`fixed bottom-20 right-4 z-30 sm:hidden bg-emerald-600 hover:bg-emerald-700 text-white p-3 rounded-full shadow-lg flex items-center justify-center transition-transform active:scale-90 ${
+          cartCount > 0 ? 'bottom-24' : 'bottom-6'
+        }`}
+        aria-label="Chat on WhatsApp"
+      >
+        <PhoneCall className="w-5 h-5" />
+      </a>
+
+      {/* Footer */}
       <footer className="mt-14 bg-white border-t border-gray-200 py-10 text-xs text-gray-500 space-y-4">
         <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2 font-bold text-gray-900 text-sm">
             <span className="text-[#10847e]">AyurSwift 🌿⚡</span>
             <span className="text-gray-300">•</span>
-            <span>ayurswift.in</span>
+            <span>Bhavnagar Dark Store</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-6 text-[11px] text-gray-500">
-            <span>⚡ In-City 30-45m Rapido Parcel</span>
+            <span>⚡ Bhavnagar 30-45m Rapido Parcel</span>
             <span>•</span>
-            <span>📦 All-India Speed Post &amp; Courier</span>
+            <span>📦 All-India Courier</span>
             <span>•</span>
-            <span>🛡️ 100% Genuine Wholesale Agency Stock</span>
+            <span>🛡️ 100% Agency Sourced with GST Invoices</span>
             <span>•</span>
-            <span>📱 Direct Bank UPI (₹0 Commission)</span>
+            <span>📱 Direct Bank UPI</span>
           </div>
         </div>
         <p className="text-[11px] text-gray-400 text-center max-w-xl mx-auto">
-          AyurSwift operates as a home-based micro-fulfillment dark store for authentic Ayurvedic &amp; primary OTC medicines with verified GST billing.
+          AyurSwift operates as a home-based micro-fulfillment dark store for authentic Ayurvedic &amp; primary OTC medicines.
         </p>
       </footer>
 
-      {/* Slide-out Cart Drawer */}
+      {/* Modals & Drawers */}
       <CartDrawer
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
@@ -738,14 +1120,12 @@ export default function StorefrontPage() {
         settings={settings}
       />
 
-      {/* UPI QR & WhatsApp Order Confirmation Modal */}
       <PaymentModal
         order={activeOrder}
         onClose={() => setActiveOrder(null)}
         settings={settings}
       />
 
-      {/* Medicine Quick-View Modal */}
       <MedicineDetailModal
         product={selectedMedicineDetails}
         onClose={() => setSelectedMedicineDetails(null)}
@@ -756,6 +1136,41 @@ export default function StorefrontPage() {
         }
         onAddToCart={handleAddToCart}
         onUpdateQuantity={handleUpdateQuantity}
+      />
+
+      <LocationModal
+        isOpen={isLocationModalOpen}
+        onClose={() => setIsLocationModalOpen(false)}
+        currentLocation={currentLocation}
+        onSelectLocation={handleSelectLocation}
+      />
+
+      <QuickBuyModal
+        isOpen={isQuickBuyModalOpen}
+        onClose={() => setIsQuickBuyModalOpen(false)}
+        products={products}
+        cart={cart}
+        onAddToCart={handleAddToCart}
+        onOpenCart={() => setIsCartOpen(true)}
+        settings={settings}
+      />
+
+      <MobileFilterDrawer
+        isOpen={isMobileFilterOpen}
+        onClose={() => setIsMobileFilterOpen(false)}
+        products={products}
+        selectedCategory={selectedCategory}
+        onSelectCategory={setSelectedCategory}
+        selectedBrand={selectedBrand}
+        onSelectBrand={setSelectedBrand}
+        selectedPriceRange={selectedPriceRange}
+        onSelectPriceRange={setSelectedPriceRange}
+        selectedDispatch={selectedDispatch}
+        onSelectDispatch={setSelectedDispatch}
+        availableCategories={availableCategories}
+        availableBrands={availableBrands}
+        onResetFilters={handleResetFilters}
+        totalFilteredCount={filteredProducts.length}
       />
     </div>
   );
