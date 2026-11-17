@@ -6,11 +6,9 @@ import {
   Copy,
   Check,
   ExternalLink,
-  ShieldCheck,
   QrCode,
-  Zap,
-  MessageCircle,
   Smartphone,
+  MessageCircle,
 } from 'lucide-react';
 import { Order, MerchantSettings } from '@/types';
 import { generateUpiUri, generateWhatsAppOrderUrl } from '@/lib/store';
@@ -54,56 +52,56 @@ export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-emerald-100 overflow-hidden animate-in zoom-in-95 duration-200">
-        {/* Success Header */}
-        <div className="bg-gradient-to-r from-emerald-950 via-emerald-900 to-teal-950 p-5 text-white text-center">
-          <div className="w-12 h-12 bg-emerald-500/20 text-emerald-300 rounded-2xl flex items-center justify-center mx-auto mb-2 border border-emerald-400/30">
-            <CheckCircle2 className="w-7 h-7" />
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+      <div className="w-full max-w-md bg-[#0a0e0c] text-white rounded-3xl shadow-2xl border border-white/[0.1] overflow-hidden animate-in zoom-in-95 duration-200">
+        {/* Success Header (Digital Gravity Glow) */}
+        <div className="bg-gradient-to-b from-[#141d18] to-[#0a0e0c] p-6 text-white text-center border-b border-white/[0.08]">
+          <div className="w-14 h-14 bg-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center mx-auto mb-3 border border-emerald-500/30 shadow-[0_0_20px_rgba(16,185,129,0.3)]">
+            <CheckCircle2 className="w-8 h-8" />
           </div>
-          <span className="inline-block bg-amber-400 text-emerald-950 font-black text-[11px] px-3 py-0.5 rounded-full mb-1">
+          <span className="inline-block bg-emerald-500 text-black font-black text-[11px] px-3.5 py-0.5 rounded-full mb-1.5 shadow-[0_0_10px_rgba(16,185,129,0.4)]">
             ORDER BOOKED {order.id}
           </span>
-          <h2 className="text-xl font-black">Ready for Home Dispatch!</h2>
-          <p className="text-xs text-emerald-200 mt-0.5">
+          <h2 className="text-xl font-black tracking-tight">Ready for Home Dispatch!</h2>
+          <p className="text-xs text-gray-400 mt-0.5">
             {order.deliveryType === 'RAPIDO_CITY'
-              ? '⚡ 30–45 Mins Rapido Bike Delivery'
+              ? '⚡ 30–45 Mins Rapido Bike Parcel'
               : '📦 Courier Dispatch in 2–4 Days'}
           </p>
         </div>
 
         <div className="p-5 space-y-4">
           {/* Order Snapshot */}
-          <div className="bg-gray-50 rounded-2xl p-3.5 text-xs space-y-1.5 border border-gray-100">
-            <div className="flex justify-between text-gray-600">
+          <div className="bg-white/[0.03] rounded-2xl p-4 text-xs space-y-2 border border-white/[0.06]">
+            <div className="flex justify-between text-gray-400">
               <span>Customer:</span>
-              <span className="font-bold text-gray-900">{order.customerName}</span>
+              <span className="font-bold text-white">{order.customerName}</span>
             </div>
-            <div className="flex justify-between text-gray-600">
+            <div className="flex justify-between text-gray-400">
               <span>Drop Location:</span>
-              <span className="font-semibold text-gray-900 text-right truncate max-w-[200px]">
+              <span className="font-semibold text-white text-right truncate max-w-[200px]">
                 {order.deliveryAddress}, {order.city}
               </span>
             </div>
-            <div className="flex justify-between text-gray-600 border-t border-gray-200 pt-1.5">
-              <span>Payable Amount:</span>
-              <span className="font-black text-lg text-emerald-950">
+            <div className="flex justify-between text-gray-400 border-t border-white/[0.08] pt-2">
+              <span>Payable Total:</span>
+              <span className="font-black text-xl text-emerald-400">
                 ₹{order.totalAmount}
               </span>
             </div>
           </div>
 
-          {/* If UPI Payment -> Show Dynamic QR & Intent Buttons */}
+          {/* UPI Section */}
           {order.paymentMethod === 'UPI' ? (
             <div className="space-y-3 text-center">
-              <div className="bg-emerald-50/70 border border-emerald-200/90 rounded-3xl p-4">
-                <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-950 mb-2">
-                  <QrCode className="w-4 h-4 text-emerald-700" />
+              <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-3xl p-4">
+                <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-300 mb-2.5">
+                  <QrCode className="w-4 h-4 text-emerald-400" />
                   <span>Scan with Any UPI App (₹0 Fees)</span>
                 </div>
 
                 {/* Scannable Universal QR */}
-                <div className="bg-white p-2.5 rounded-2xl inline-block shadow-sm border border-emerald-100">
+                <div className="bg-white p-3 rounded-2xl inline-block shadow-lg">
                   <img
                     src={qrImageUrl}
                     alt={`UPI QR Code for ${order.id}`}
@@ -112,39 +110,39 @@ export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
                 </div>
 
                 {/* Supported Apps Badges */}
-                <div className="flex items-center justify-center gap-2 mt-2 text-[10px] text-gray-500 font-semibold">
-                  <span className="bg-white px-2 py-0.5 rounded border border-gray-200">GPay</span>
-                  <span className="bg-white px-2 py-0.5 rounded border border-gray-200">PhonePe</span>
-                  <span className="bg-white px-2 py-0.5 rounded border border-gray-200">Paytm</span>
-                  <span className="bg-white px-2 py-0.5 rounded border border-gray-200">BHIM</span>
-                  <span className="bg-white px-2 py-0.5 rounded border border-gray-200">CRED</span>
+                <div className="flex items-center justify-center gap-2 mt-2.5 text-[10px] text-gray-300 font-semibold">
+                  <span className="bg-black/50 px-2 py-0.5 rounded border border-white/10">GPay</span>
+                  <span className="bg-black/50 px-2 py-0.5 rounded border border-white/10">PhonePe</span>
+                  <span className="bg-black/50 px-2 py-0.5 rounded border border-white/10">Paytm</span>
+                  <span className="bg-black/50 px-2 py-0.5 rounded border border-white/10">BHIM</span>
+                  <span className="bg-black/50 px-2 py-0.5 rounded border border-white/10">CRED</span>
                 </div>
 
-                {/* Direct App Launch Button for Mobile users */}
-                <div className="mt-3">
+                {/* Mobile Intent Button */}
+                <div className="mt-3.5">
                   <button
                     onClick={handleOpenUpiApp}
-                    className="w-full bg-emerald-800 hover:bg-emerald-900 text-white font-extrabold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-98 transition-all"
+                    className="w-full bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-300 text-black font-black py-3 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-[0_0_20px_rgba(16,185,129,0.3)] active:scale-98 transition-all"
                   >
-                    <Smartphone className="w-4 h-4 text-amber-300" />
-                    <span>Pay ₹{order.totalAmount} in GPay / PhonePe / Paytm</span>
+                    <Smartphone className="w-4 h-4 text-black" />
+                    <span>Pay ₹{order.totalAmount} on GPay / PhonePe / Paytm</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
                 {/* Merchant UPI ID display with Copy */}
-                <div className="mt-2.5 flex items-center justify-center gap-2 text-[11px] text-gray-600">
+                <div className="mt-3 flex items-center justify-center gap-2 text-[11px] text-gray-400">
                   <span>UPI ID:</span>
-                  <code className="bg-white px-2 py-0.5 rounded-md border border-gray-200 font-mono font-bold text-emerald-950 text-xs">
+                  <code className="bg-black/60 px-2 py-0.5 rounded-md border border-white/10 font-mono font-bold text-emerald-300 text-xs">
                     {settings.merchantUpiId}
                   </code>
                   <button
                     onClick={handleCopyUpi}
-                    className="p-1 hover:bg-emerald-100 rounded text-emerald-800"
+                    className="p-1 hover:bg-white/[0.08] rounded text-emerald-400 transition-colors"
                     title="Copy UPI ID"
                   >
                     {copiedUpi ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
                     ) : (
                       <Copy className="w-3.5 h-3.5" />
                     )}
@@ -153,12 +151,12 @@ export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
               </div>
             </div>
           ) : (
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center space-y-1">
-              <div className="text-amber-950 font-black text-sm">
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-center space-y-1">
+              <div className="text-amber-300 font-black text-sm">
                 💵 Cash on Delivery Selected
               </div>
-              <p className="text-xs text-amber-900/90">
-                Please hand <strong>₹{order.totalAmount}</strong> cash to the Rapido bike parcel rider upon arrival.
+              <p className="text-xs text-amber-200/90">
+                Please hand <strong>₹{order.totalAmount}</strong> cash to the Rapido parcel bike rider upon arrival.
               </p>
             </div>
           )}
@@ -167,20 +165,19 @@ export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
           <div className="space-y-1.5">
             <button
               onClick={handleOpenWhatsApp}
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-3 px-4 rounded-2xl text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 active:scale-98 transition-all"
+              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3.5 px-4 rounded-2xl text-xs sm:text-sm shadow-[0_0_20px_rgba(16,185,129,0.35)] flex items-center justify-center gap-2 active:scale-98 transition-all"
             >
-              <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5 fill-white" />
+              <MessageCircle className="w-5 h-5 fill-white" />
               <span>Confirm & Dispatch on WhatsApp</span>
             </button>
-            <p className="text-[10px] text-center text-gray-400">
+            <p className="text-[10px] text-center text-gray-500">
               Sends your order details directly to our dark store fulfillment team.
             </p>
           </div>
 
-          {/* Back to store */}
           <button
             onClick={onClose}
-            className="w-full py-2 text-xs text-gray-400 hover:text-gray-800 font-bold"
+            className="w-full py-2 text-xs text-gray-500 hover:text-white font-bold transition-colors"
           >
             ← Back to Storefront
           </button>

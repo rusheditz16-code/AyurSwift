@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Plus, Minus, Star, ShieldCheck, Zap, Info } from 'lucide-react';
+import { Plus, Minus, Star, Info } from 'lucide-react';
 import { Product } from '@/types';
 import { MedicinePackVisual } from './MedicinePackVisual';
 
@@ -25,97 +25,97 @@ export function ProductCard({
   );
 
   return (
-    <div className="bg-white rounded-2xl border border-emerald-100/80 shadow-xs hover:shadow-md transition-all flex flex-col justify-between overflow-hidden group hover:border-emerald-300">
+    <div className="bg-[#0e1311]/90 rounded-3xl border border-white/[0.08] hover:border-emerald-500/40 shadow-xl hover:shadow-[0_0_30px_rgba(16,185,129,0.15)] transition-all duration-300 flex flex-col justify-between overflow-hidden group">
       <div>
-        {/* Top Product Visual Container */}
+        {/* Top Product Visual Container (Dark Luxury Canvas) */}
         <div
           onClick={() => onViewDetails(product)}
-          className="relative w-full h-44 bg-gradient-to-b from-[#F3F8F4] to-white flex items-center justify-center p-2 cursor-pointer border-b border-emerald-50/60"
+          className="relative w-full h-44 bg-gradient-to-b from-[#161f1a]/80 via-[#101713]/90 to-[#0e1311] flex items-center justify-center p-2 cursor-pointer border-b border-white/[0.06] group-hover:from-[#1b2620] transition-colors"
         >
           {/* Custom high-fidelity medicine visual */}
           <MedicinePackVisual product={product} className="w-full h-36" />
 
           {/* Discount Pill */}
           {discountPercent > 0 && (
-            <div className="absolute top-2.5 left-2.5 bg-amber-500 text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded-md shadow-xs">
+            <div className="absolute top-3 left-3 bg-gradient-to-r from-amber-500 to-amber-600 text-black text-[10px] font-black px-2 py-0.5 rounded-full shadow-md">
               {discountPercent}% OFF
             </div>
           )}
 
-          {/* Bestseller Badge */}
+          {/* Badge */}
           {product.badgeText && (
-            <div className="absolute top-2.5 right-2.5 bg-emerald-900/90 text-emerald-200 text-[9px] font-bold px-2 py-0.5 rounded-md backdrop-blur-xs">
+            <div className="absolute top-3 right-3 bg-black/60 text-emerald-300 border border-emerald-500/30 text-[9px] font-bold px-2 py-0.5 rounded-full backdrop-blur-md">
               {product.badgeText}
             </div>
           )}
 
-          {/* Pack Size Pill */}
-          <div className="absolute bottom-2 left-2.5 bg-white/95 text-gray-700 text-[10px] font-bold px-2 py-0.5 rounded border border-gray-200 shadow-2xs">
+          {/* Pack Size */}
+          <div className="absolute bottom-2.5 left-3 bg-black/70 backdrop-blur-md text-gray-300 text-[10px] font-bold px-2.5 py-0.5 rounded-md border border-white/[0.08]">
             {product.packSize}
           </div>
 
-          {/* Low Stock Warning */}
+          {/* Stock */}
           {product.stockQuantity <= 5 && product.stockQuantity > 0 && (
-            <div className="absolute bottom-2 right-2.5 bg-rose-50 text-rose-700 border border-rose-200 text-[9px] font-bold px-1.5 py-0.5 rounded">
+            <div className="absolute bottom-2.5 right-3 bg-rose-950/80 text-rose-300 border border-rose-500/30 text-[9px] font-bold px-2 py-0.5 rounded-md">
               {product.stockQuantity} Left
             </div>
           )}
         </div>
 
         {/* Product Details */}
-        <div className="p-3.5 space-y-1.5">
+        <div className="p-4 space-y-2">
           {/* Brand & Rating */}
           <div className="flex items-center justify-between text-[11px]">
-            <span className="font-extrabold text-emerald-900 tracking-wider uppercase text-[10px]">
+            <span className="font-black text-emerald-400 tracking-wider uppercase text-[10px]">
               {product.brand}
             </span>
-            <div className="flex items-center gap-1 bg-emerald-50 text-emerald-800 px-1.5 py-0.5 rounded text-[10px] font-bold border border-emerald-200/60">
+            <div className="flex items-center gap-1 bg-white/[0.05] text-amber-300 px-2 py-0.5 rounded-md text-[10px] font-bold border border-white/[0.08]">
               <span>{product.rating}</span>
-              <Star className="w-2.5 h-2.5 fill-emerald-700 text-emerald-700" />
+              <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
             </div>
           </div>
 
-          {/* Medicine Title */}
+          {/* Title */}
           <h3
             onClick={() => onViewDetails(product)}
-            className="font-bold text-xs sm:text-sm text-gray-900 line-clamp-1 group-hover:text-emerald-800 transition-colors cursor-pointer"
+            className="font-bold text-sm text-white line-clamp-1 group-hover:text-emerald-300 transition-colors cursor-pointer"
             title={product.name}
           >
             {product.name}
           </h3>
 
           {/* Clinical Indications Snippet */}
-          <p className="text-[11px] text-gray-500 line-clamp-2 leading-relaxed">
+          <p className="text-[11px] text-gray-400 line-clamp-2 leading-relaxed font-normal">
             {product.indications}
           </p>
 
-          {/* Trust Badge */}
-          <div className="flex items-center justify-between pt-0.5 text-[10px] text-gray-400">
-            <span className="truncate max-w-[120px]">{product.manufacturer}</span>
+          {/* Manufacturer & Details Trigger */}
+          <div className="flex items-center justify-between pt-1 text-[10px] text-gray-400">
+            <span className="truncate max-w-[130px]">{product.manufacturer}</span>
             <button
               onClick={() => onViewDetails(product)}
-              className="text-emerald-700 font-bold hover:underline flex items-center gap-0.5"
+              className="text-emerald-400 font-bold hover:text-emerald-300 flex items-center gap-1 transition-colors"
             >
-              <Info className="w-2.5 h-2.5" /> Details
+              <Info className="w-3 h-3" /> Details
             </button>
           </div>
         </div>
       </div>
 
-      {/* Pricing & Stepper */}
-      <div className="p-3.5 pt-0 border-t border-gray-50 flex items-center justify-between gap-2 mt-1">
+      {/* Pricing & High-Speed Stepper */}
+      <div className="p-4 pt-0 border-t border-white/[0.04] flex items-center justify-between gap-2 mt-2">
         <div>
           <div className="flex items-baseline gap-1.5">
-            <span className="font-black text-sm sm:text-base text-gray-900">
+            <span className="font-black text-base text-white tracking-tight">
               ₹{product.sellingPrice}
             </span>
             {product.mrp > product.sellingPrice && (
-              <span className="text-[11px] text-gray-400 line-through">
+              <span className="text-xs text-gray-500 line-through">
                 ₹{product.mrp}
               </span>
             )}
           </div>
-          <span className="text-[10px] text-emerald-700 font-bold block -mt-0.5">
+          <span className="text-[10px] text-emerald-400 font-semibold block -mt-0.5">
             Save ₹{product.mrp - product.sellingPrice}
           </span>
         </div>
@@ -125,21 +125,21 @@ export function ProductCard({
           {quantityInCart === 0 ? (
             <button
               onClick={() => onAddToCart(product)}
-              className="bg-emerald-50 hover:bg-emerald-800 text-emerald-900 hover:text-white border border-emerald-300 hover:border-emerald-800 px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all active:scale-95 shadow-2xs flex items-center gap-1"
+              className="bg-emerald-500/10 hover:bg-emerald-400 text-emerald-400 hover:text-black border border-emerald-500/40 hover:border-emerald-400 px-4 py-1.5 rounded-xl font-black text-xs transition-all active:scale-95 shadow-[0_0_15px_rgba(16,185,129,0.15)] flex items-center gap-1"
             >
               <Plus className="w-3.5 h-3.5" />
               ADD
             </button>
           ) : (
-            <div className="flex items-center bg-emerald-800 text-white rounded-xl shadow-xs overflow-hidden">
+            <div className="flex items-center bg-emerald-500 text-black rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.3)] overflow-hidden font-black">
               <button
                 onClick={() => onUpdateQuantity(product.id, quantityInCart - 1)}
-                className="px-2 py-1.5 hover:bg-emerald-900 active:bg-emerald-950 transition-colors"
+                className="px-2.5 py-1.5 hover:bg-emerald-600 transition-colors"
                 aria-label="Decrease quantity"
               >
-                <Minus className="w-3 h-3" />
+                <Minus className="w-3 h-3 text-black" />
               </button>
-              <span className="px-2 font-bold text-xs min-w-[20px] text-center">
+              <span className="px-2 font-black text-xs min-w-[20px] text-center">
                 {quantityInCart}
               </span>
               <button
@@ -149,10 +149,10 @@ export function ProductCard({
                   }
                 }}
                 disabled={quantityInCart >= product.stockQuantity}
-                className="px-2 py-1.5 hover:bg-emerald-900 active:bg-emerald-950 disabled:opacity-40 transition-colors"
+                className="px-2.5 py-1.5 hover:bg-emerald-600 disabled:opacity-40 transition-colors"
                 aria-label="Increase quantity"
               >
-                <Plus className="w-3 h-3" />
+                <Plus className="w-3 h-3 text-black" />
               </button>
             </div>
           )}
