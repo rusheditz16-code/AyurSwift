@@ -4,7 +4,7 @@ export type ProductCategory =
   | 'Immunity & Cold'
   | 'Skin & Hair'
   | 'Daily Wellness'
-  | 'Respiratory Care';
+  | 'Liver & Detox';
 
 export type BrandName = 
   | 'Dabur'
@@ -15,6 +15,7 @@ export type BrandName =
   | 'Dr. Ortho'
   | 'Hamdard'
   | 'Vicco'
+  | 'Charak'
   | 'Other';
 
 export interface Product {
@@ -22,16 +23,22 @@ export interface Product {
   name: string;
   brand: BrandName | string;
   category: ProductCategory | string;
-  packSize: string;               // e.g. '25g', '100ml', '60 Tablets'
-  agencyCostPrice: number;        // Wholesale price from agency with GST
+  manufacturer: string;           // e.g. 'Dabur India Ltd.'
+  form: 'Oil' | 'Tablets' | 'Churna' | 'Syrup' | 'Balm' | 'Gel' | 'Husk' | 'Capsules';
+  packSize: string;               // e.g. '25g Jar', '100ml Bottle', '60 Tablets'
+  agencyCostPrice: number;        // Wholesale agency purchase price with GST
   mrp: number;                    // Maximum Retail Price
   sellingPrice: number;           // Storefront customer price (with savings)
   stockQuantity: number;          // Real-time home dark store stock
   isLive: boolean;                // Merchant visibility switch
+  rating: number;                 // e.g. 4.8
+  reviewCount: number;            // e.g. 1420
   imageUrl?: string;
-  indications: string;            // Bullet point indication / benefits
-  dosage?: string;                // e.g. '1 tablet twice daily' or 'apply gently'
-  composition?: string;           // Key Ayurvedic herbs/ingredients
+  indications: string;            // Bullet point benefits
+  dosage: string;                 // Dosage instructions
+  composition: string;            // Key Ayurvedic herbs/ingredients
+  safetyAdvice?: string;          // e.g. 'Store in cool dry place, keep away from direct sunlight'
+  badgeText?: string;             // e.g. 'Bestseller', 'Doctor Verified', '100% Ayurvedic'
 }
 
 export interface CartItem {
@@ -79,7 +86,7 @@ export interface MerchantSettings {
   storeName: string;
   tagline: string;
   merchantWhatsApp: string;       // WhatsApp number with country code, e.g. '919876543210'
-  merchantUpiId: string;          // e.g. 'ayurswift@okaxis'
+  merchantUpiId: string;          // e.g. 'ayurswift@okhdfcbank'
   merchantUpiName: string;        // Name on UPI account
   cityDeliveryFee: number;        // Flat ₹35
   cityFreeDeliveryAbove: number;  // Free above ₹499
