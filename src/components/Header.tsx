@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ShoppingBag, ShieldCheck, Zap, Lock, MapPin, Sparkles } from 'lucide-react';
+import { ShoppingBag, ShieldCheck, Zap, Lock, MapPin } from 'lucide-react';
 import { MerchantSettings } from '@/types';
 
 interface HeaderProps {
@@ -14,106 +14,85 @@ interface HeaderProps {
 
 export function Header({ cartCount, cartTotal, onOpenCart, settings }: HeaderProps) {
   return (
-    <header className="sticky top-0 z-40 bg-[#060908]/85 backdrop-blur-xl border-b border-white/[0.08] shadow-2xl">
-      {/* Top Futuristic Ribbon (Digital Gravity Style) */}
-      <div className="bg-black/60 border-b border-white/[0.05] text-[11px] py-1 px-4 text-gray-300">
-        <div className="max-w-7xl mx-auto flex items-center justify-between font-medium">
-          <div className="flex items-center gap-2">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 shadow-[0_0_8px_#10B981]" />
+    <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-xs">
+      {/* Top Delivery Notice Bar (Blinkit style) */}
+      <div className="bg-emerald-50 border-b border-emerald-100/80 px-4 py-1.5 text-xs text-emerald-900">
+        <div className="max-w-6xl mx-auto flex items-center justify-between font-medium">
+          <div className="flex items-center gap-1.5 text-[11px] sm:text-xs">
+            <span className="flex h-2 w-2 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
             </span>
-            <span className="text-emerald-400 font-bold uppercase tracking-wider text-[10px]">
-              Dark Store Live
-            </span>
-            <span className="text-gray-500">•</span>
-            <span className="text-gray-300 hidden sm:inline">Direct Home Fulfillment Hub</span>
+            <span className="font-bold text-emerald-800">Delivery in 30–45 Mins</span>
+            <span className="text-gray-300">•</span>
+            <span className="text-gray-600 hidden sm:inline">Via Rapido Parcel Bike Rider</span>
           </div>
 
-          <div className="hidden md:flex items-center gap-4 text-gray-400 text-[11px]">
-            <span className="flex items-center gap-1.5 text-white font-medium">
-              <Zap className="w-3 h-3 text-amber-400 fill-amber-400" /> 30-45m Rapido Parcel In-City
+          <div className="flex items-center gap-3 text-[11px] text-gray-600">
+            <span className="hidden md:inline">📦 All-India Courier Available</span>
+            <span className="hidden md:inline text-gray-300">•</span>
+            <span className="flex items-center gap-1 text-emerald-700 font-semibold">
+              <ShieldCheck className="w-3.5 h-3.5" /> 100% Genuine GST Stock
             </span>
-            <span>•</span>
-            <span>📦 All-India Speed Post & Courier</span>
-            <span>•</span>
-            <span className="text-emerald-400 font-semibold">₹0 Platform Fee</span>
-          </div>
-
-          <div className="flex items-center gap-1.5 text-emerald-300 text-[11px] font-semibold">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span>100% Genuine GST Billed</span>
           </div>
         </div>
       </div>
 
-      {/* Main Glass Navigation Bar */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
-        {/* Brand & Location Indicator */}
-        <div className="flex items-center gap-5">
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500/20 via-emerald-600/30 to-teal-500/10 border border-emerald-500/30 flex items-center justify-center text-xl shadow-[0_0_20px_rgba(16,185,129,0.2)] group-hover:scale-105 group-hover:border-emerald-400 transition-all">
-              🌿
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-black text-xl tracking-tight text-white">
-                  Ayur<span className="bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">Swift</span>
-                </span>
-                <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-black bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.4)]">
-                  <Zap className="w-2.5 h-2.5 mr-0.5 fill-black" /> RAPID
-                </span>
-              </div>
-              <p className="text-[10px] text-gray-400 font-medium tracking-wide">
-                Genuine Ayurveda & OTC, Delivered Swiftly
-              </p>
-            </div>
-          </Link>
-
-          {/* Location Badge (Dubai Agency Style Pill) */}
-          <div className="hidden lg:flex items-center gap-2 bg-white/[0.03] border border-white/[0.08] px-3.5 py-1.5 rounded-full text-xs text-gray-300">
-            <MapPin className="w-3.5 h-3.5 text-emerald-400" />
-            <div className="leading-tight">
-              <span className="text-[9.5px] font-bold text-emerald-400 uppercase tracking-wider block">
-                Instant Dispatch In 30-45 Mins
-              </span>
-              <span className="text-[11px] text-gray-300 font-medium">
-                Home Dark Store Hub
-              </span>
-            </div>
+      {/* Main Clean Storefront Header */}
+      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+        {/* Brand */}
+        <Link href="/" className="flex items-center gap-2.5 group">
+          <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-lg shadow-xs group-hover:bg-emerald-700 transition-colors">
+            🌿
           </div>
-        </div>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-extrabold text-lg sm:text-xl tracking-tight text-gray-900">
+                Ayur<span className="text-emerald-600">Swift</span>
+              </span>
+              <span className="bg-amber-100 text-amber-800 font-black text-[10px] px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                <Zap className="w-2.5 h-2.5 fill-amber-500 text-amber-500" /> RAPID
+              </span>
+            </div>
+            <p className="text-[10px] text-gray-500 font-medium">
+              Authentic Ayurveda & OTC Health
+            </p>
+          </div>
+        </Link>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-2.5">
-          {/* Admin Dashboard Lock Button */}
+        <div className="flex items-center gap-2">
+          {/* Admin Lock Button */}
           <Link
             href="/admin"
-            className="p-2 text-gray-400 hover:text-white bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.08] hover:border-emerald-500/40 rounded-xl transition-all"
+            className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-colors"
             title="Merchant Admin Hub"
           >
             <Lock className="w-4 h-4" />
           </Link>
 
-          {/* Quick Commerce Cart CTA (Digital Gravity Electric Glow) */}
+          {/* Clean Cart Button */}
           <button
             onClick={onOpenCart}
-            className="relative flex items-center gap-2.5 bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-300 hover:from-emerald-300 hover:to-teal-300 text-black px-4 py-2 rounded-xl font-black text-xs sm:text-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:shadow-[0_0_30px_rgba(16,185,129,0.6)] active:scale-95 transition-all"
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all active:scale-95 ${
+              cartCount > 0
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+            }`}
             aria-label="View Shopping Cart"
           >
             <div className="relative">
-              <ShoppingBag className="w-4 h-4 fill-black" />
+              <ShoppingBag className="w-4 h-4" />
               {cartCount > 0 && (
-                <span className="absolute -top-2.5 -right-2.5 bg-black text-emerald-300 border border-emerald-400 text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center">
+                <span className="absolute -top-1.5 -right-1.5 bg-amber-400 text-gray-900 font-black text-[9px] w-3.5 h-3.5 rounded-full flex items-center justify-center">
                   {cartCount}
                 </span>
               )}
             </div>
-            <span className="hidden sm:inline font-black tracking-wide">CART</span>
-            {cartCount > 0 && (
-              <span className="bg-black/20 px-1.5 py-0.5 rounded text-xs font-black">
-                ₹{cartTotal}
-              </span>
+            {cartCount > 0 ? (
+              <span className="font-black">₹{cartTotal}</span>
+            ) : (
+              <span className="font-semibold">Cart</span>
             )}
           </button>
         </div>

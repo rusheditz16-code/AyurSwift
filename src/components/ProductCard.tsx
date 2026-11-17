@@ -1,9 +1,8 @@
 'use client';
 
-import React from 'react';
-import { Plus, Minus, Star, Info } from 'lucide-react';
+import React, { useState } from 'react';
+import { Plus, Minus, Star, Zap, Info } from 'lucide-react';
 import { Product } from '@/types';
-import { MedicinePackVisual } from './MedicinePackVisual';
 
 interface ProductCardProps {
   product: Product;
@@ -20,139 +19,126 @@ export function ProductCard({
   onUpdateQuantity,
   onViewDetails,
 }: ProductCardProps) {
+  const [imageError, setImageError] = useState(false);
   const discountPercent = Math.round(
     ((product.mrp - product.sellingPrice) / product.mrp) * 100
   );
 
   return (
-    <div className="bg-[#0e1311]/90 rounded-3xl border border-white/[0.08] hover:border-emerald-500/40 shadow-xl hover:shadow-[0_0_30px_rgba(16,185,129,0.15)] transition-all duration-300 flex flex-col justify-between overflow-hidden group">
+    <div className="bg-white rounded-2xl border border-gray-200/90 hover:border-emerald-500 hover:shadow-md transition-all duration-200 flex flex-col justify-between p-3 relative group">
       <div>
-        {/* Top Product Visual Container (Dark Luxury Canvas) */}
+        {/* Top Product Image & Delivery Tag (Blinkit style) */}
         <div
           onClick={() => onViewDetails(product)}
-          className="relative w-full h-44 bg-gradient-to-b from-[#161f1a]/80 via-[#101713]/90 to-[#0e1311] flex items-center justify-center p-2 cursor-pointer border-b border-white/[0.06] group-hover:from-[#1b2620] transition-colors"
+          className="relative w-full h-36 bg-gray-50 rounded-xl flex items-center justify-center p-2 cursor-pointer overflow-hidden border border-gray-100"
         >
-          {/* Custom high-fidelity medicine visual */}
-          <MedicinePackVisual product={product} className="w-full h-36" />
+          {/* Real product photo or clean fallback */}
+          {product.imageUrl && !imageError ? (
+            <img
+              src={product.imageUrl}
+              alt={product.name}
+              onError={() => setImageError(true)}
+              className="max-h-full max-w-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-200"
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center text-center p-2">
+              <span className="text-3xl mb-1">🌿</span>
+              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                {product.brand}
+              </span>
+            </div>
+          )}
 
-          {/* Discount Pill */}
+          {/* Delivery speed pill */}
+          <div className="absolute top-2 left-2 bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow-2xs">
+            <Zap className="w-2.5 h-2.5 fill-emerald-700 text-emerald-700" />
+            <span>30-45 MINS</span>
+          </div>
+
+          {/* Discount badge */}
           {discountPercent > 0 && (
-            <div className="absolute top-3 left-3 bg-gradient-to-r from-amber-500 to-amber-600 text-black text-[10px] font-black px-2 py-0.5 rounded-full shadow-md">
+            <div className="absolute top-2 right-2 bg-amber-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-md shadow-2xs">
               {discountPercent}% OFF
             </div>
           )}
 
-          {/* Badge */}
-          {product.badgeText && (
-            <div className="absolute top-3 right-3 bg-black/60 text-emerald-300 border border-emerald-500/30 text-[9px] font-bold px-2 py-0.5 rounded-full backdrop-blur-md">
-              {product.badgeText}
-            </div>
-          )}
-
           {/* Pack Size */}
-          <div className="absolute bottom-2.5 left-3 bg-black/70 backdrop-blur-md text-gray-300 text-[10px] font-bold px-2.5 py-0.5 rounded-md border border-white/[0.08]">
+          <div className="absolute bottom-2 left-2 bg-white/95 text-gray-700 text-[10px] font-bold px-2 py-0.5 rounded-md border border-gray-200 shadow-2xs">
             {product.packSize}
           </div>
-
-          {/* Stock */}
-          {product.stockQuantity <= 5 && product.stockQuantity > 0 && (
-            <div className="absolute bottom-2.5 right-3 bg-rose-950/80 text-rose-300 border border-rose-500/30 text-[9px] font-bold px-2 py-0.5 rounded-md">
-              {product.stockQuantity} Left
-            </div>
-          )}
         </div>
 
-        {/* Product Details */}
-        <div className="p-4 space-y-2">
-          {/* Brand & Rating */}
+        {/* Product Info */}
+        <div className="pt-2.5 space-y-1">
           <div className="flex items-center justify-between text-[11px]">
-            <span className="font-black text-emerald-400 tracking-wider uppercase text-[10px]">
+            <span className="font-bold text-gray-400 uppercase tracking-wider text-[10px]">
               {product.brand}
             </span>
-            <div className="flex items-center gap-1 bg-white/[0.05] text-amber-300 px-2 py-0.5 rounded-md text-[10px] font-bold border border-white/[0.08]">
+            <div className="flex items-center gap-0.5 text-amber-600 text-[10px] font-bold">
+              <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
               <span>{product.rating}</span>
-              <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
             </div>
           </div>
 
-          {/* Title */}
           <h3
             onClick={() => onViewDetails(product)}
-            className="font-bold text-sm text-white line-clamp-1 group-hover:text-emerald-300 transition-colors cursor-pointer"
+            className="font-bold text-xs sm:text-sm text-gray-900 line-clamp-2 leading-snug cursor-pointer hover:text-emerald-700 transition-colors"
             title={product.name}
           >
             {product.name}
           </h3>
 
-          {/* Clinical Indications Snippet */}
-          <p className="text-[11px] text-gray-400 line-clamp-2 leading-relaxed font-normal">
+          <p className="text-[11px] text-gray-500 line-clamp-1">
             {product.indications}
           </p>
-
-          {/* Manufacturer & Details Trigger */}
-          <div className="flex items-center justify-between pt-1 text-[10px] text-gray-400">
-            <span className="truncate max-w-[130px]">{product.manufacturer}</span>
-            <button
-              onClick={() => onViewDetails(product)}
-              className="text-emerald-400 font-bold hover:text-emerald-300 flex items-center gap-1 transition-colors"
-            >
-              <Info className="w-3 h-3" /> Details
-            </button>
-          </div>
         </div>
       </div>
 
-      {/* Pricing & High-Speed Stepper */}
-      <div className="p-4 pt-0 border-t border-white/[0.04] flex items-center justify-between gap-2 mt-2">
+      {/* Price & Add / Stepper Section */}
+      <div className="pt-3 border-t border-gray-100 mt-2 flex items-center justify-between">
         <div>
           <div className="flex items-baseline gap-1.5">
-            <span className="font-black text-base text-white tracking-tight">
+            <span className="font-extrabold text-sm sm:text-base text-gray-900">
               ₹{product.sellingPrice}
             </span>
             {product.mrp > product.sellingPrice && (
-              <span className="text-xs text-gray-500 line-through">
+              <span className="text-[11px] text-gray-400 line-through">
                 ₹{product.mrp}
               </span>
             )}
           </div>
-          <span className="text-[10px] text-emerald-400 font-semibold block -mt-0.5">
-            Save ₹{product.mrp - product.sellingPrice}
+          <span className="text-[10px] text-emerald-700 font-semibold block">
+            GST wholesale billed
           </span>
         </div>
 
-        {/* Quick Stepper */}
+        {/* Action Button: Blinkit style Add or Stepper */}
         <div>
           {quantityInCart === 0 ? (
             <button
               onClick={() => onAddToCart(product)}
-              className="bg-emerald-500/10 hover:bg-emerald-400 text-emerald-400 hover:text-black border border-emerald-500/40 hover:border-emerald-400 px-4 py-1.5 rounded-xl font-black text-xs transition-all active:scale-95 shadow-[0_0_15px_rgba(16,185,129,0.15)] flex items-center gap-1"
+              className="bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-600 font-extrabold text-xs px-3.5 py-1.5 rounded-xl shadow-2xs transition-all active:scale-95"
             >
-              <Plus className="w-3.5 h-3.5" />
               ADD
             </button>
           ) : (
-            <div className="flex items-center bg-emerald-500 text-black rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.3)] overflow-hidden font-black">
+            <div className="flex items-center bg-emerald-600 text-white rounded-xl shadow-xs overflow-hidden">
               <button
                 onClick={() => onUpdateQuantity(product.id, quantityInCart - 1)}
-                className="px-2.5 py-1.5 hover:bg-emerald-600 transition-colors"
+                className="px-2 py-1.5 hover:bg-emerald-700 transition-colors"
                 aria-label="Decrease quantity"
               >
-                <Minus className="w-3 h-3 text-black" />
+                <Minus className="w-3 h-3" />
               </button>
               <span className="px-2 font-black text-xs min-w-[20px] text-center">
                 {quantityInCart}
               </span>
               <button
-                onClick={() => {
-                  if (quantityInCart < product.stockQuantity) {
-                    onUpdateQuantity(product.id, quantityInCart + 1);
-                  }
-                }}
-                disabled={quantityInCart >= product.stockQuantity}
-                className="px-2.5 py-1.5 hover:bg-emerald-600 disabled:opacity-40 transition-colors"
+                onClick={() => onUpdateQuantity(product.id, quantityInCart + 1)}
+                className="px-2 py-1.5 hover:bg-emerald-700 transition-colors"
                 aria-label="Increase quantity"
               >
-                <Plus className="w-3 h-3 text-black" />
+                <Plus className="w-3 h-3" />
               </button>
             </div>
           )}

@@ -15,24 +15,20 @@ import {
   getStoredSettings,
   generateNextOrderId,
 } from '@/lib/store';
+import { INITIAL_PRODUCTS } from '@/lib/initialData';
 import {
   Zap,
   ShieldCheck,
   ShoppingBag,
-  Sparkles,
   ArrowRight,
-  Clock,
   Package,
   QrCode,
   CheckCircle,
-  Truck,
   FileCheck2,
-  Lock,
-  Flame,
 } from 'lucide-react';
 
 export default function StorefrontPage() {
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [settings, setSettings] = useState<MerchantSettings>(getStoredSettings());
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -211,14 +207,7 @@ export default function StorefrontPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#060908] text-white flex flex-col font-sans relative selection:bg-emerald-500/30 selection:text-emerald-200">
-      {/* Digital Gravity Ambient Glowing Mesh Elements */}
-      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-        <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[700px] sm:w-[1000px] h-[500px] bg-[radial-gradient(ellipse_at_center,rgba(16,185,129,0.14)_0%,rgba(16,185,129,0.03)_50%,transparent_75%)] blur-2xl" />
-        <div className="absolute top-[35%] -left-[10%] w-[500px] h-[500px] bg-[radial-gradient(circle,rgba(20,184,166,0.08)_0%,transparent_70%)] blur-3xl" />
-        <div className="absolute bottom-[10%] -right-[10%] w-[600px] h-[600px] bg-[radial-gradient(circle,rgba(245,158,11,0.05)_0%,transparent_70%)] blur-3xl" />
-      </div>
-
+    <div className="min-h-screen bg-[#F8FAF9] text-gray-900 flex flex-col font-sans">
       {/* Header */}
       <Header
         cartCount={cartCount}
@@ -228,102 +217,87 @@ export default function StorefrontPage() {
       />
 
       {/* Main Container */}
-      <main className="relative z-10 max-w-6xl mx-auto px-4 py-5 sm:py-7 flex-1 w-full space-y-6">
-        {/* Digital Gravity Style Hero Showcase */}
-        <section className="relative rounded-3xl p-6 sm:p-9 glass-card border border-white/[0.08] bg-gradient-to-br from-white/[0.05] via-[#09110d] to-[#050807] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.6)]">
-          {/* Subtle Ambient Backlight */}
-          <div className="absolute -right-16 -top-16 w-80 h-80 rounded-full bg-emerald-500/15 blur-3xl pointer-events-none" />
-          <div className="absolute -left-16 -bottom-16 w-72 h-72 rounded-full bg-amber-400/10 blur-3xl pointer-events-none" />
-
-          <div className="relative z-10 max-w-3xl space-y-4">
-            {/* Pill Badge */}
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs font-bold tracking-wide backdrop-blur-md">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span className="text-[11px] sm:text-xs">AyurSwift Micro-Fulfillment Dark Store</span>
-              <span className="text-white/30">•</span>
-              <span className="text-amber-400 font-extrabold text-[11px]">30-45m Dispatch</span>
+      <main className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6 flex-1 w-full space-y-4 sm:space-y-5">
+        {/* Clean, Fast Quick-Commerce Hero Banner (Blinkit / Zepto Style) */}
+        <div className="bg-gradient-to-r from-emerald-800 to-teal-800 text-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm relative overflow-hidden">
+          <div className="relative z-10 max-w-2xl space-y-2.5">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/15 text-amber-300 text-[11px] font-bold">
+              <Zap className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+              <span>AyurSwift Micro-Fulfillment Dark Store</span>
             </div>
 
-            {/* Main Headline */}
-            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-[1.12]">
-              Genuine Ayurveda & Primary Health,{' '}
-              <br className="hidden sm:inline" />
-              <span className="bg-gradient-to-r from-emerald-300 via-teal-200 to-amber-300 bg-clip-text text-transparent">
-                Delivered Swiftly to Your Doorstep.
-              </span>
+            <h1 className="text-xl sm:text-3xl font-black tracking-tight leading-snug">
+              Genuine Ayurveda & Primary OTC Medicines,
+              <br />
+              <span className="text-emerald-200">Delivered in 30–45 Mins via Rapido.</span>
             </h1>
 
-            {/* Subtitle */}
-            <p className="text-xs sm:text-sm text-neutral-300 leading-relaxed font-normal max-w-2xl">
-              100% genuine OTC healthcare remedies procured from authorized pharmaceutical wholesale agencies with verified GST invoicing. Stored under strict temperature-controlled dark store conditions for instantaneous <strong>30–45 minute Rapido bike dispatch</strong> in-city, or pan-India courier delivery.
+            <p className="text-xs sm:text-sm text-emerald-100/90 leading-relaxed font-normal">
+              100% authentic remedies procured from wholesale agency distributors with GST invoices. Stocked safely at home for lightning-fast 30–45 min bike delivery in-city, or reliable courier all across India.
             </p>
 
-            {/* Carry-Bag Flyer Scan Cue & Trust Points */}
-            <div className="pt-2 flex flex-wrap items-center gap-2.5 sm:gap-3 text-[11px] sm:text-xs text-neutral-300">
-              <div className="bg-white/[0.04] border border-amber-400/30 px-3 py-1.5 rounded-xl flex items-center gap-2 text-amber-300 font-bold backdrop-blur-md">
-                <QrCode className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span>Flyer customer? Orders pack & dispatch within 10 mins!</span>
+            <div className="pt-1 flex flex-wrap items-center gap-2 text-[11px] text-emerald-100">
+              <div className="bg-emerald-900/80 px-2.5 py-1 rounded-lg border border-emerald-700/60 flex items-center gap-1.5 text-white font-semibold">
+                <QrCode className="w-3.5 h-3.5 text-amber-300" />
+                <span>Carry-bag flyer customer? Orders dispatch in 10 mins!</span>
               </div>
-              <span className="hidden sm:inline text-white/20">•</span>
-              <span className="flex items-center gap-1.5 text-emerald-300 font-medium">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Only In-Stock Items Shown
+              <span className="hidden sm:inline">•</span>
+              <span className="flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" /> Only In-Stock Shown
               </span>
-              <span className="hidden sm:inline text-white/20">•</span>
-              <span className="flex items-center gap-1.5 text-emerald-300 font-medium">
-                <CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> ₹0 Payment Fees (Direct UPI)
+              <span className="hidden sm:inline">•</span>
+              <span className="flex items-center gap-1">
+                <CheckCircle className="w-3.5 h-3.5 text-emerald-300" /> Zero Fee Direct UPI
               </span>
             </div>
           </div>
-        </section>
+        </div>
 
-        {/* Digital Gravity Clinical Trust Strip */}
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="glass-card border border-white/[0.08] bg-white/[0.02] hover:border-emerald-500/40 p-3.5 rounded-2xl transition-all duration-300 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+        {/* 4 Clean Trust Badges */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
+          <div className="bg-white p-3 rounded-xl border border-gray-200 flex items-center gap-2.5 shadow-2xs">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
               <FileCheck2 className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-xs font-black text-white leading-tight">100% Genuine</div>
-              <div className="text-[10px] text-neutral-400 mt-0.5">GST Wholesale Billed</div>
+              <div className="text-xs font-bold text-gray-900">100% Genuine</div>
+              <div className="text-[10px] text-gray-500">GST Wholesale Stock</div>
             </div>
           </div>
 
-          <div className="glass-card border border-white/[0.08] bg-white/[0.02] hover:border-amber-500/40 p-3.5 rounded-2xl transition-all duration-300 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
-              <Zap className="w-4 h-4 fill-amber-400" />
+          <div className="bg-white p-3 rounded-xl border border-gray-200 flex items-center gap-2.5 shadow-2xs">
+            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
+              <Zap className="w-4 h-4 fill-amber-500 text-amber-500" />
             </div>
             <div>
-              <div className="text-xs font-black text-white leading-tight">30-45m Rapido</div>
-              <div className="text-[10px] text-neutral-400 mt-0.5">Instant Home Dispatch</div>
+              <div className="text-xs font-bold text-gray-900">30-45m Rapido</div>
+              <div className="text-[10px] text-gray-500">Rapid Bike Dispatch</div>
             </div>
           </div>
 
-          <div className="glass-card border border-white/[0.08] bg-white/[0.02] hover:border-teal-500/40 p-3.5 rounded-2xl transition-all duration-300 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400 flex items-center justify-center shrink-0">
+          <div className="bg-white p-3 rounded-xl border border-gray-200 flex items-center gap-2.5 shadow-2xs">
+            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center shrink-0">
               <ShieldCheck className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-xs font-black text-white leading-tight">Strict In-Stock</div>
-              <div className="text-[10px] text-neutral-400 mt-0.5">Zero Out-Of-Stock Clutter</div>
+              <div className="text-xs font-bold text-gray-900">Verified Stock</div>
+              <div className="text-[10px] text-gray-500">Zero Out-Of-Stock Clutter</div>
             </div>
           </div>
 
-          <div className="glass-card border border-white/[0.08] bg-white/[0.02] hover:border-emerald-500/40 p-3.5 rounded-2xl transition-all duration-300 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-              <Sparkles className="w-4 h-4" />
+          <div className="bg-white p-3 rounded-xl border border-gray-200 flex items-center gap-2.5 shadow-2xs">
+            <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center shrink-0">
+              <Package className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-xs font-black text-white leading-tight">₹0 Gateway Cut</div>
-              <div className="text-[10px] text-neutral-400 mt-0.5">100% Direct Bank UPI</div>
+              <div className="text-xs font-bold text-gray-900">₹0 Gateway Fee</div>
+              <div className="text-[10px] text-gray-500">Direct Bank UPI QR</div>
             </div>
           </div>
-        </section>
+        </div>
 
-        {/* Categories, Brands & Search Filter Container */}
-        <section className="glass-panel rounded-2xl p-4 sm:p-5 border border-white/[0.08] bg-white/[0.02] shadow-[0_10px_30px_rgba(0,0,0,0.4)]">
+        {/* Clean Filter Rail */}
+        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-gray-200 shadow-2xs">
           <CategoryFilter
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
@@ -334,32 +308,30 @@ export default function StorefrontPage() {
             categories={availableCategories}
             brands={availableBrands}
           />
-        </section>
+        </div>
 
-        {/* Live Catalog Feed */}
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="font-black text-base sm:text-lg text-white tracking-tight flex items-center gap-2">
-                <span>Available In Home Dark Store</span>
-                <span className="bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-xs font-extrabold px-2.5 py-0.5 rounded-full">
-                  {filteredProducts.length} medicines
-                </span>
+        {/* Product Catalog Grid */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-2">
+              <h2 className="font-extrabold text-sm sm:text-base text-gray-900">
+                Available In Home Stock
               </h2>
-              <p className="text-xs text-neutral-400 mt-0.5">
-                Strict Availability Guarantee: Only in-stock Ayurvedic remedies are displayed.
-              </p>
+              <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-2 py-0.5 rounded-full">
+                {filteredProducts.length} medicines
+              </span>
             </div>
+            <span className="text-[11px] text-gray-400 hidden sm:inline">
+              Strict Availability Guarantee
+            </span>
           </div>
 
           {filteredProducts.length === 0 ? (
-            <div className="glass-card rounded-2xl border border-white/[0.08] bg-white/[0.02] p-12 text-center space-y-3">
-              <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-xl">
-                🔍
-              </div>
-              <h3 className="font-bold text-white text-sm">No stocked medicines found</h3>
-              <p className="text-xs text-neutral-400 max-w-sm mx-auto">
-                No currently stocked products match your filter. Try changing the health concern or searching for another remedy.
+            <div className="bg-white rounded-2xl border border-gray-200 p-10 text-center space-y-2">
+              <div className="text-3xl">🔍</div>
+              <h3 className="font-bold text-gray-800 text-sm">No stocked medicines found</h3>
+              <p className="text-xs text-gray-500 max-w-sm mx-auto">
+                No currently stocked products match your filter. Try changing health concern or searching for another remedy.
               </p>
               <button
                 onClick={() => {
@@ -367,13 +339,13 @@ export default function StorefrontPage() {
                   setSelectedCategory('ALL');
                   setSelectedBrand('ALL');
                 }}
-                className="text-xs font-bold text-emerald-400 hover:text-emerald-300 underline transition-colors"
+                className="text-xs font-bold text-emerald-700 hover:text-emerald-800 underline"
               >
                 Reset All Filters
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-4">
               {filteredProducts.map((product) => {
                 const itemInCart = cart.find((i) => i.product.id === product.id);
                 const quantityInCart = itemInCart ? itemInCart.quantity : 0;
@@ -391,24 +363,24 @@ export default function StorefrontPage() {
               })}
             </div>
           )}
-        </section>
+        </div>
       </main>
 
-      {/* Floating Zepto / Blinkit Bottom Sticky Cart Bar (Digital Gravity Dark Luxury Theme) */}
+      {/* Floating Zepto / Blinkit Bottom Sticky Cart Bar */}
       {cartCount > 0 && (
-        <div className="fixed bottom-0 inset-x-0 z-40 p-3 sm:p-4 bg-gradient-to-t from-black/90 via-black/60 to-transparent pointer-events-none">
+        <div className="fixed bottom-0 inset-x-0 z-40 p-3 sm:p-4 bg-gradient-to-t from-black/20 via-black/5 to-transparent pointer-events-none">
           <div className="max-w-2xl mx-auto pointer-events-auto">
-            <div className="bg-[#0e1612]/95 backdrop-blur-xl text-white p-3 sm:p-3.5 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.9)] border border-emerald-500/30 flex items-center justify-between gap-3 animate-in slide-in-from-bottom duration-300">
+            <div className="bg-emerald-900 text-white p-3 sm:p-3.5 rounded-2xl shadow-xl flex items-center justify-between gap-3 animate-in slide-in-from-bottom duration-250">
               <div className="flex items-center gap-3">
-                <div className="relative bg-emerald-500/15 border border-emerald-500/30 p-2.5 rounded-xl">
-                  <ShoppingBag className="w-5 h-5 text-emerald-400" />
-                  <span className="absolute -top-1.5 -right-1.5 bg-amber-400 text-neutral-950 font-black text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
+                <div className="relative bg-emerald-800 p-2 rounded-xl">
+                  <ShoppingBag className="w-5 h-5 text-amber-300" />
+                  <span className="absolute -top-1.5 -right-1.5 bg-amber-400 text-gray-900 font-black text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
                     {cartCount}
                   </span>
                 </div>
                 <div>
                   <div className="flex items-baseline gap-1.5">
-                    <span className="font-black text-sm sm:text-base text-white">
+                    <span className="font-black text-sm sm:text-base">
                       ₹{cartSubtotal}
                     </span>
                     {cartSavings > 0 && (
@@ -417,7 +389,7 @@ export default function StorefrontPage() {
                       </span>
                     )}
                   </div>
-                  <span className="text-[10px] text-emerald-400 block">
+                  <span className="text-[10px] text-emerald-200 block">
                     {cartCount} medicine{cartCount === 1 ? '' : 's'} ready for dispatch
                   </span>
                 </div>
@@ -425,7 +397,7 @@ export default function StorefrontPage() {
 
               <button
                 onClick={() => setIsCartOpen(true)}
-                className="bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-neutral-950 font-black text-xs sm:text-sm px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.3)] active:scale-95 transition-all"
+                className="bg-amber-400 hover:bg-amber-500 text-gray-900 font-black text-xs sm:text-sm px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-xs active:scale-95 transition-all"
               >
                 <span>View Cart & Pay</span>
                 <ArrowRight className="w-4 h-4" />
@@ -435,23 +407,16 @@ export default function StorefrontPage() {
         </div>
       )}
 
-      {/* Digital Gravity Dark Footer */}
-      <footer className="relative z-10 mt-16 bg-[#040605] border-t border-white/[0.06] py-10 text-center text-xs text-neutral-500 space-y-3">
-        <div className="flex items-center justify-center gap-2 font-black text-white text-sm">
-          <span className="text-emerald-400">AyurSwift 🌿⚡</span>
-          <span className="text-neutral-600">•</span>
-          <span className="text-neutral-300">ayurswift.in</span>
+      {/* Clean Footer */}
+      <footer className="mt-14 bg-white border-t border-gray-200 py-8 text-center text-xs text-gray-500 space-y-1.5">
+        <div className="flex items-center justify-center gap-2 font-bold text-gray-800 text-sm">
+          <span>AyurSwift 🌿⚡</span>
+          <span>•</span>
+          <span className="text-emerald-700">ayurswift.in</span>
         </div>
-        <p className="text-[11px] text-neutral-400 max-w-md mx-auto leading-relaxed">
-          Home micro-fulfillment dark store for authentic Ayurvedic & primary OTC medicines. Dispatched via Rapido Parcel & Speed Post. Zero transaction fees via direct UPI.
+        <p className="text-[11px] text-gray-400 max-w-md mx-auto">
+          Home micro-fulfillment dark store for authentic Ayurvedic & primary OTC medicines. Dispatched via Rapido Parcel & Speed Post.
         </p>
-        <div className="flex items-center justify-center gap-4 text-[10px] text-neutral-500 pt-2">
-          <span>⚡ Rapido 30-45m Express</span>
-          <span>•</span>
-          <span>🛡️ Verified Home Inventory</span>
-          <span>•</span>
-          <span>₹0 Gateway Cut</span>
-        </div>
       </footer>
 
       {/* Slide-out Cart Drawer */}
