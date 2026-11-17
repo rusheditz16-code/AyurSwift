@@ -518,7 +518,7 @@ export function CartDrawer({
             <button
               type="submit"
               form="checkout-form"
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 px-4 rounded-xl text-sm flex items-center justify-center gap-2 shadow-sm transition-all active:scale-98"
+              className="w-full bg-[#10847e] hover:bg-[#0c6b66] text-white font-black py-3 px-4 rounded-xl text-sm flex items-center justify-center gap-2 shadow-sm transition-all active:scale-98"
             >
               <span>Place Order • ₹{grandTotal}</span>
               <ArrowRight className="w-4 h-4" />

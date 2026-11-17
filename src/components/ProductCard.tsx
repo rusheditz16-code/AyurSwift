@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Plus, Minus, Star, Zap, Info } from 'lucide-react';
+import { Plus, Minus, ChevronRight, Zap } from 'lucide-react';
 import { Product } from '@/types';
 
 interface ProductCardProps {
@@ -25,125 +25,120 @@ export function ProductCard({
   );
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-200/90 hover:border-emerald-500 hover:shadow-md transition-all duration-200 flex flex-col justify-between p-3 relative group">
-      <div>
-        {/* Top Product Image & Delivery Tag (Blinkit style) */}
+    <div className="bg-white rounded-2xl border border-gray-200 hover:border-[#10847e] hover:shadow-lg transition-all duration-200 flex flex-col justify-between overflow-hidden group">
+      <div className="p-3.5">
+        {/* Top Header: Truemeds Green Discount Pill */}
+        <div className="flex items-center justify-between min-h-[22px] mb-2">
+          {discountPercent > 0 ? (
+            <span className="bg-[#10847e] text-white text-[10.5px] font-bold px-2 py-0.5 rounded tracking-wide uppercase">
+              {discountPercent}% OFF
+            </span>
+          ) : (
+            <span />
+          )}
+
+          {product.badgeText && (
+            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+              {product.badgeText}
+            </span>
+          )}
+        </div>
+
+        {/* Product Image on Pure White Background */}
         <div
           onClick={() => onViewDetails(product)}
-          className="relative w-full h-36 bg-gray-50 rounded-xl flex items-center justify-center p-2 cursor-pointer overflow-hidden border border-gray-100"
+          className="w-full h-36 flex items-center justify-center p-2 cursor-pointer relative overflow-hidden"
         >
-          {/* Real product photo or clean fallback */}
           {product.imageUrl && !imageError ? (
             <img
               src={product.imageUrl}
               alt={product.name}
               onError={() => setImageError(true)}
-              className="max-h-full max-w-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-200"
+              className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-200"
             />
           ) : (
             <div className="flex flex-col items-center justify-center text-center p-2">
               <span className="text-3xl mb-1">🌿</span>
-              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
                 {product.brand}
               </span>
             </div>
           )}
-
-          {/* Delivery speed pill */}
-          <div className="absolute top-2 left-2 bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow-2xs">
-            <Zap className="w-2.5 h-2.5 fill-emerald-700 text-emerald-700" />
-            <span>30-45 MINS</span>
-          </div>
-
-          {/* Discount badge */}
-          {discountPercent > 0 && (
-            <div className="absolute top-2 right-2 bg-amber-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-md shadow-2xs">
-              {discountPercent}% OFF
-            </div>
-          )}
-
-          {/* Pack Size */}
-          <div className="absolute bottom-2 left-2 bg-white/95 text-gray-700 text-[10px] font-bold px-2 py-0.5 rounded-md border border-gray-200 shadow-2xs">
-            {product.packSize}
-          </div>
         </div>
 
-        {/* Product Info */}
-        <div className="pt-2.5 space-y-1">
-          <div className="flex items-center justify-between text-[11px]">
-            <span className="font-bold text-gray-400 uppercase tracking-wider text-[10px]">
-              {product.brand}
-            </span>
-            <div className="flex items-center gap-0.5 text-amber-600 text-[10px] font-bold">
-              <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
-              <span>{product.rating}</span>
-            </div>
+        {/* Product Details (Truemeds typography) */}
+        <div className="pt-2 space-y-1">
+          <div className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">
+            {product.brand} • {product.packSize}
           </div>
 
           <h3
             onClick={() => onViewDetails(product)}
-            className="font-bold text-xs sm:text-sm text-gray-900 line-clamp-2 leading-snug cursor-pointer hover:text-emerald-700 transition-colors"
+            className="font-medium text-[13px] text-gray-900 line-clamp-2 leading-snug cursor-pointer hover:text-[#10847e] transition-colors min-h-[36px]"
             title={product.name}
           >
             {product.name}
           </h3>
-
-          <p className="text-[11px] text-gray-500 line-clamp-1">
-            {product.indications}
-          </p>
         </div>
-      </div>
 
-      {/* Price & Add / Stepper Section */}
-      <div className="pt-3 border-t border-gray-100 mt-2 flex items-center justify-between">
-        <div>
-          <div className="flex items-baseline gap-1.5">
-            <span className="font-extrabold text-sm sm:text-base text-gray-900">
-              ₹{product.sellingPrice}
-            </span>
+        {/* Pricing & Add Button (Exact Truemeds Layout) */}
+        <div className="pt-3 mt-2 flex items-center justify-between border-t border-gray-100">
+          <div>
             {product.mrp > product.sellingPrice && (
-              <span className="text-[11px] text-gray-400 line-through">
-                ₹{product.mrp}
-              </span>
+              <div className="text-[11px] text-gray-400 line-through leading-none mb-0.5">
+                MRP ₹{product.mrp}
+              </div>
+            )}
+            <div className="font-extrabold text-[15px] text-gray-900 leading-none">
+              ₹{product.sellingPrice}
+            </div>
+          </div>
+
+          {/* Truemeds Clean Outlined Add Button / Stepper */}
+          <div>
+            {quantityInCart === 0 ? (
+              <button
+                onClick={() => onAddToCart(product)}
+                className="border border-[#10847e] text-[#10847e] hover:bg-[#10847e] hover:text-white font-bold text-xs px-5 py-1.5 rounded-lg transition-all active:scale-95 shadow-2xs"
+              >
+                Add
+              </button>
+            ) : (
+              <div className="flex items-center bg-[#10847e] text-white rounded-lg shadow-xs overflow-hidden">
+                <button
+                  onClick={() => onUpdateQuantity(product.id, quantityInCart - 1)}
+                  className="px-2.5 py-1 hover:bg-[#0c6b66] transition-colors"
+                  aria-label="Decrease quantity"
+                >
+                  <Minus className="w-3 h-3" />
+                </button>
+                <span className="px-2 font-black text-xs min-w-[20px] text-center">
+                  {quantityInCart}
+                </span>
+                <button
+                  onClick={() => onUpdateQuantity(product.id, quantityInCart + 1)}
+                  className="px-2.5 py-1 hover:bg-[#0c6b66] transition-colors"
+                  aria-label="Increase quantity"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+              </div>
             )}
           </div>
-          <span className="text-[10px] text-emerald-700 font-semibold block">
-            GST wholesale billed
-          </span>
-        </div>
-
-        {/* Action Button: Blinkit style Add or Stepper */}
-        <div>
-          {quantityInCart === 0 ? (
-            <button
-              onClick={() => onAddToCart(product)}
-              className="bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-600 font-extrabold text-xs px-3.5 py-1.5 rounded-xl shadow-2xs transition-all active:scale-95"
-            >
-              ADD
-            </button>
-          ) : (
-            <div className="flex items-center bg-emerald-600 text-white rounded-xl shadow-xs overflow-hidden">
-              <button
-                onClick={() => onUpdateQuantity(product.id, quantityInCart - 1)}
-                className="px-2 py-1.5 hover:bg-emerald-700 transition-colors"
-                aria-label="Decrease quantity"
-              >
-                <Minus className="w-3 h-3" />
-              </button>
-              <span className="px-2 font-black text-xs min-w-[20px] text-center">
-                {quantityInCart}
-              </span>
-              <button
-                onClick={() => onUpdateQuantity(product.id, quantityInCart + 1)}
-                className="px-2 py-1.5 hover:bg-emerald-700 transition-colors"
-                aria-label="Increase quantity"
-              >
-                <Plus className="w-3 h-3" />
-              </button>
-            </div>
-          )}
         </div>
       </div>
+
+      {/* Bottom Lilac Strip (Truemeds signature: "Save with substitute" / "⚡ 30-45m Rapido Dispatch >") */}
+      <button
+        onClick={() => onViewDetails(product)}
+        className="w-full bg-[#F6F3FF] hover:bg-[#EFE8FF] text-[#6941C6] text-[11px] font-semibold py-2 px-3 flex items-center justify-between border-t border-[#E9D7FE] transition-colors text-left"
+      >
+        <span className="flex items-center gap-1 truncate">
+          <Zap className="w-3 h-3 fill-[#6941C6] text-[#6941C6] shrink-0" />
+          <span>30–45 Mins Rapido Dispatch</span>
+        </span>
+        <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+      </button>
     </div>
   );
 }

@@ -198,15 +198,15 @@ export function MedicineDetailModal({
             {quantityInCart === 0 ? (
               <button
                 onClick={() => onAddToCart(product)}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm px-6 py-2.5 rounded-xl shadow-xs transition-all active:scale-95"
+                className="bg-[#10847e] hover:bg-[#0c6b66] text-white font-black text-xs sm:text-sm px-6 py-2.5 rounded-xl shadow-xs transition-all active:scale-95"
               >
                 ADD TO CART
               </button>
             ) : (
-              <div className="flex items-center bg-emerald-600 text-white rounded-xl shadow-xs overflow-hidden">
+              <div className="flex items-center bg-[#10847e] text-white rounded-xl shadow-xs overflow-hidden">
                 <button
                   onClick={() => onUpdateQuantity(product.id, quantityInCart - 1)}
-                  className="px-3 py-2 hover:bg-emerald-700 transition-colors"
+                  className="px-3 py-2 hover:bg-[#0c6b66] transition-colors"
                 >
                   <Minus className="w-4 h-4" />
                 </button>
@@ -215,7 +215,7 @@ export function MedicineDetailModal({
                 </span>
                 <button
                   onClick={() => onUpdateQuantity(product.id, quantityInCart + 1)}
-                  className="px-3 py-2 hover:bg-emerald-700 transition-colors"
+                  className="px-3 py-2 hover:bg-[#0c6b66] transition-colors"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
