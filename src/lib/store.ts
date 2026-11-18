@@ -21,14 +21,18 @@ export function getStoredSettings(): MerchantSettings {
       return DEFAULT_SETTINGS;
     }
     const parsed = JSON.parse(raw);
-    // If old demo whatsapp or old upi is detected, automatically migrate to user's real details
+    // If old demo whatsapp, old upi, or old pin is detected, automatically migrate to user's real details
     if (
       parsed.merchantUpiId === 'ayurswift@okhdfcbank' ||
       parsed.merchantWhatsApp === '919876543210' ||
+      parsed.adminPin === '1234' ||
+      !parsed.adminEmail ||
       !parsed.merchantUpiId
     ) {
       const updated: MerchantSettings = {
         ...parsed,
+        adminPin: DEFAULT_SETTINGS.adminPin,
+        adminEmail: DEFAULT_SETTINGS.adminEmail,
         merchantWhatsApp: DEFAULT_SETTINGS.merchantWhatsApp,
         merchantUpiId: DEFAULT_SETTINGS.merchantUpiId,
         merchantUpiName: DEFAULT_SETTINGS.merchantUpiName,

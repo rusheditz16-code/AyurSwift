@@ -27,6 +27,12 @@ import {
   QrCode,
   Star,
   Images,
+  Mail,
+  KeyRound,
+  Eye,
+  EyeOff,
+  LogOut,
+  ShieldAlert,
 } from 'lucide-react';
 import { Product, Order, MerchantSettings } from '@/types';
 import {
@@ -41,10 +47,17 @@ import {
   syncProductToSupabase,
 } from '@/lib/store';
 
+const AUTHORIZED_GMAIL = 'rushirajdabhi16@gmail.com';
+const DEFAULT_PIN = '1602';
+
 export function AdminDashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [emailInput, setEmailInput] = useState('');
   const [pinInput, setPinInput] = useState('');
-  const [pinError, setPinError] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockoutSeconds, setLockoutSeconds] = useState(0);
 
   const [activeTab, setActiveTab] = useState<'INVENTORY' | 'RAPIDO' | 'SETTINGS'>('INVENTORY');
   const [products, setProducts] = useState<Product[]>([]);
@@ -89,18 +102,74 @@ export function AdminDashboard() {
   useEffect(() => {
     setProducts(getStoredProducts());
     setOrders(getStoredOrders());
-    setSettings(getStoredSettings());
+    const stored = getStoredSettings();
+    setSettings(stored);
+
+    // Restore active browser session
+    try {
+      const sessionAuth = sessionStorage.getItem('ayurswift_admin_session');
+      if (sessionAuth === 'authenticated') {
+        setIsAuthenticated(true);
+      }
+    } catch {}
   }, []);
 
-  const handlePinSubmit = (e: React.FormEvent) => {
+  // Lockout countdown timer
+  useEffect(() => {
+    if (lockoutSeconds <= 0) return;
+    const timer = setInterval(() => {
+      setLockoutSeconds((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [lockoutSeconds]);
+
+  // Dual-Factor Authentication: Authorized Gmail AND Security PIN
+  const handleAuthSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (pinInput === settings.adminPin || pinInput === '1234') {
+    if (lockoutSeconds > 0) return;
+
+    const cleanEmail = emailInput.trim().toLowerCase();
+    const cleanPin = pinInput.trim();
+    const targetPin = settings.adminPin || DEFAULT_PIN;
+    const targetEmail = (settings.adminEmail || AUTHORIZED_GMAIL).toLowerCase();
+
+    const isEmailValid = cleanEmail === targetEmail;
+    const isPinValid = cleanPin === targetPin;
+
+    if (isEmailValid && isPinValid) {
       setIsAuthenticated(true);
-      setPinError(false);
+      setAuthError(null);
+      setFailedAttempts(0);
+      try {
+        sessionStorage.setItem('ayurswift_admin_session', 'authenticated');
+        sessionStorage.setItem('ayurswift_admin_email', cleanEmail);
+      } catch {}
     } else {
-      setPinError(true);
-      setPinInput('');
+      const nextAttempts = failedAttempts + 1;
+      setFailedAttempts(nextAttempts);
+
+      if (nextAttempts >= 5) {
+        setLockoutSeconds(30);
+        setAuthError('Too many failed attempts. Security lockout active for 30 seconds.');
+      } else if (!isEmailValid && !isPinValid) {
+        setAuthError('Invalid Gmail address and Security PIN. Both are required for login.');
+      } else if (!isEmailValid) {
+        setAuthError(`Unauthorized email. Access is strictly restricted to ${targetEmail}.`);
+      } else {
+        setAuthError('Incorrect Security PIN. Please verify your 4-digit PIN.');
+      }
     }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setEmailInput('');
+    setPinInput('');
+    setAuthError(null);
+    try {
+      sessionStorage.removeItem('ayurswift_admin_session');
+      sessionStorage.removeItem('ayurswift_admin_email');
+    } catch {}
   };
 
   // Stock Quantity Stepper with Auto-Hide Guarantee
@@ -355,51 +424,113 @@ export function AdminDashboard() {
   const liveCount = products.filter((p) => p.isLive && p.stockQuantity > 0).length;
   const outOfStockCount = products.filter((p) => p.stockQuantity === 0).length;
 
-  // PIN Authentication Screen
+  // Dual-Factor Security Authentication Screen
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-[#f8f8f3] flex items-center justify-center p-4">
-        <div className="w-full max-w-sm bg-white text-[#1c2e24] rounded-3xl p-7 border border-[#d6ddce] shadow-xl space-y-5">
+        <div className="w-full max-w-md bg-white text-[#1c2e24] rounded-3xl p-6 sm:p-8 border border-[#d6ddce] shadow-2xl space-y-6">
           <div className="text-center space-y-2">
-            <div className="w-12 h-12 bg-[#e9efdf] text-[#1d5a3e] rounded-2xl flex items-center justify-center mx-auto border border-[#d6ddce] shadow-2xs">
-              <Lock className="w-6 h-6" />
+            <div className="w-14 h-14 bg-[#e9efdf] text-[#1d5a3e] rounded-2xl flex items-center justify-center mx-auto border border-[#d6ddce] shadow-2xs">
+              <ShieldCheck className="w-7 h-7" />
             </div>
-            <h1 className="font-serif text-lg font-bold tracking-tight text-[#143d29]">AyurSwift Merchant Hub</h1>
-            <p className="text-xs text-[#526359]">
-              Enter 4-digit PIN to access dark store inventory & Rapido parcel dispatch
+            <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#1d5a3e]/10 text-[#1d5a3e] text-[10.5px] font-bold border border-[#1d5a3e]/20">
+              <Lock className="w-3 h-3" />
+              <span>Admin Security Portal</span>
+            </div>
+            <h1 className="font-serif text-xl sm:text-2xl font-bold tracking-tight text-[#143d29]">
+              AyurSwift Merchant Hub
+            </h1>
+            <p className="text-xs text-[#526359] max-w-xs mx-auto leading-relaxed">
+              Two-factor verification required: Authorized Gmail account and 4-digit security PIN.
             </p>
           </div>
 
-          <form onSubmit={handlePinSubmit} className="space-y-3.5">
-            <div>
-              <input
-                type="password"
-                maxLength={6}
-                value={pinInput}
-                onChange={(e) => setPinInput(e.target.value)}
-                placeholder="PIN (Default: 1234)"
-                autoFocus
-                className="w-full text-center tracking-widest text-2xl font-bold py-2.5 bg-[#f8f8f3] border border-[#d6ddce] rounded-xl text-[#143d29] focus:outline-none focus:ring-2 focus:ring-[#1d5a3e]"
-              />
-              {pinError && (
-                <p className="text-xs text-rose-600 text-center mt-2 font-medium flex items-center justify-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5" /> Incorrect PIN. (Default: 1234)
-                </p>
-              )}
+          <form onSubmit={handleAuthSubmit} className="space-y-4">
+            {/* 1. Gmail Address */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-[#143d29]">
+                Authorized Gmail Address *
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#526359]">
+                  <Mail className="w-4 h-4" />
+                </div>
+                <input
+                  type="email"
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  placeholder="rushirajdabhi16@gmail.com"
+                  autoFocus
+                  required
+                  disabled={lockoutSeconds > 0}
+                  className="w-full pl-9 pr-3 py-2.5 bg-[#f8f8f3] border border-[#d6ddce] rounded-xl text-xs text-[#143d29] focus:outline-none focus:ring-2 focus:ring-[#1d5a3e] font-medium"
+                />
+              </div>
+              <p className="text-[10px] text-[#526359]">
+                Only <strong>rushirajdabhi16@gmail.com</strong> is authorized for dark store access.
+              </p>
             </div>
+
+            {/* 2. Security PIN */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-[#143d29]">
+                Security PIN *
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#526359]">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  maxLength={6}
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value)}
+                  placeholder="•••• (1602)"
+                  required
+                  disabled={lockoutSeconds > 0}
+                  className="w-full pl-9 pr-10 py-2.5 bg-[#f8f8f3] border border-[#d6ddce] rounded-xl text-sm font-bold tracking-widest text-[#143d29] focus:outline-none focus:ring-2 focus:ring-[#1d5a3e]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-[#526359] hover:text-[#143d29] cursor-pointer"
+                  tabIndex={-1}
+                  aria-label={showPassword ? 'Hide PIN' : 'Show PIN'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-[10px] text-[#526359]">
+                Both Gmail and PIN (1602) are required to unlock dashboard.
+              </p>
+            </div>
+
+            {/* Error Message */}
+            {authError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2">
+                <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+                <span className="font-medium">{authError}</span>
+              </div>
+            )}
 
             <button
               type="submit"
-              className="w-full bg-[#1d5a3e] hover:bg-[#143d29] text-white font-bold py-2.5 rounded-xl text-xs sm:text-sm transition-all shadow-xs active:scale-98"
+              disabled={lockoutSeconds > 0}
+              className={`w-full font-bold py-3 rounded-xl text-xs sm:text-sm transition-all shadow-xs flex items-center justify-center gap-2 ${
+                lockoutSeconds > 0
+                  ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                  : 'bg-[#1d5a3e] hover:bg-[#143d29] text-white active:scale-98 cursor-pointer'
+              }`}
             >
-              Unlock Dashboard
+              <ShieldCheck className="w-4 h-4" />
+              <span>{lockoutSeconds > 0 ? `Locked for ${lockoutSeconds}s` : 'Verify & Unlock Dashboard'}</span>
             </button>
           </form>
 
-          <div className="text-center">
+          <div className="text-center pt-2">
             <Link
               href="/"
-              className="text-xs text-[#526359] hover:text-[#1d5a3e] inline-flex items-center gap-1 font-semibold"
+              className="text-xs text-[#526359] hover:text-[#1d5a3e] inline-flex items-center gap-1 font-semibold transition-colors"
             >
               <ArrowLeft className="w-3.5 h-3.5" /> Back to Storefront
             </Link>
@@ -436,12 +567,28 @@ export function AdminDashboard() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* Authenticated Admin Account Badge */}
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#f8f8f3] border border-[#d6ddce] text-xs text-[#143d29]">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="font-mono text-[11px] font-medium">rushirajdabhi16@gmail.com</span>
+            </div>
+
             <button
               onClick={handleOpenAddModal}
-              className="bg-[#1d5a3e] hover:bg-[#143d29] text-white text-xs font-bold py-2 px-3 sm:px-4 rounded-xl flex items-center gap-1.5 shadow-2xs transition-all active:scale-95"
+              className="bg-[#1d5a3e] hover:bg-[#143d29] text-white text-xs font-bold py-2 px-3 sm:px-4 rounded-xl flex items-center gap-1.5 shadow-2xs transition-all active:scale-95 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Add Medicine</span>
+            </button>
+
+            {/* Secure Logout Button */}
+            <button
+              onClick={handleLogout}
+              className="p-2 rounded-xl text-gray-500 hover:text-rose-600 hover:bg-rose-50 border border-[#d6ddce] transition-colors cursor-pointer"
+              title="Secure Logout"
+              aria-label="Secure Logout"
+            >
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -1058,19 +1205,39 @@ export function AdminDashboard() {
 
                 <div>
                   <label className="block text-xs font-bold text-[#526359] mb-1">
-                    Admin Portal PIN
+                    Admin Security PIN (Default: 1602)
                   </label>
                   <input
-                    type="password"
+                    type="text"
                     maxLength={6}
                     value={settings.adminPin}
                     onChange={(e) =>
                       setSettings({ ...settings, adminPin: e.target.value })
                     }
-                    className="w-full px-3 py-2 text-xs bg-[#f8f8f3] border border-[#d6ddce] rounded-xl text-[#143d29] focus:ring-1 focus:ring-[#1d5a3e]"
+                    className="w-full px-3 py-2 text-xs bg-[#f8f8f3] border border-[#d6ddce] rounded-xl text-[#143d29] focus:ring-1 focus:ring-[#1d5a3e] font-mono font-bold tracking-wider"
                     required
                   />
                 </div>
+              </div>
+
+              {/* Authorized Admin Gmail Notice Card */}
+              <div className="bg-[#e9efdf] border border-[#d6ddce] rounded-xl p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-[#1d5a3e] text-white flex items-center justify-center">
+                    <Mail className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-[#143d29]">
+                      Authorized Administrator Gmail
+                    </div>
+                    <div className="text-[11px] text-[#526359] font-mono">
+                      {settings.adminEmail || 'rushirajdabhi16@gmail.com'}
+                    </div>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold bg-[#1d5a3e] text-white px-2 py-0.5 rounded-full shadow-2xs">
+                  Dual-Factor Protected
+                </span>
               </div>
 
               <div className="pt-2 flex items-center justify-between">

@@ -92,5 +92,6 @@ export interface MerchantSettings {
   cityDeliveryFee: number;        // Flat ₹35
   cityFreeDeliveryAbove: number;  // Free above ₹499
   courierDeliveryFee: number;     // Flat ₹60
-  adminPin: string;               // Default '1234'
+  adminPin: string;               // Security PIN (default '1602')
+  adminEmail?: string;            // Authorized admin Gmail (default 'rushirajdabhi16@gmail.com')
 }

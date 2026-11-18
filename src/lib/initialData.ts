@@ -9,7 +9,8 @@ export const DEFAULT_SETTINGS: MerchantSettings = {
   cityDeliveryFee: 35,
   cityFreeDeliveryAbove: 499,
   courierDeliveryFee: 60,
-  adminPin: '1234',
+  adminPin: '1602',
+  adminEmail: 'rushirajdabhi16@gmail.com',
 };
 
 export const INITIAL_PRODUCTS: Product[] = [
