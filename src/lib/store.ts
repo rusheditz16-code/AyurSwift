@@ -5,7 +5,7 @@ import { INITIAL_PRODUCTS, DEFAULT_SETTINGS } from './initialData';
 import { supabase, isSupabaseConfigured } from './supabase';
 
 const STORAGE_KEYS = {
-  PRODUCTS: 'ayurswift_products_v1',
+  PRODUCTS: 'ayurswift_products_v2', // Updated key for real product catalog
   ORDERS: 'ayurswift_orders_v1',
   SETTINGS: 'ayurswift_settings_v1',
   CART: 'ayurswift_cart_v1',
@@ -47,6 +47,13 @@ export function getStoredProducts(): Product[] {
 export function saveStoredProducts(products: Product[]) {
   if (typeof window === 'undefined') return;
   localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
+}
+
+export function resetToInitialProducts(): Product[] {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
+  }
+  return INITIAL_PRODUCTS;
 }
 
 // Retrieve orders

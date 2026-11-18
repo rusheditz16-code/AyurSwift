@@ -42,7 +42,7 @@ export function MobileFilterDrawer({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-70 flex justify-end bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
       <div className="bg-[#f8f8f3] w-full max-w-xs h-full flex flex-col shadow-2xl border-l border-[#d6ddce] animate-in slide-in-from-right duration-200">
         {/* Header */}
         <div className="p-4 border-b border-[#d6ddce] flex items-center justify-between bg-[#e9efdf]">

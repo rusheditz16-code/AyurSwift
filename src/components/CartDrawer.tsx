@@ -154,7 +154,7 @@ export function CartDrawer({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/40 backdrop-blur-xs flex justify-end">
+    <div className="fixed inset-0 z-70 overflow-hidden bg-black/40 backdrop-blur-xs flex justify-end">
       <div className="w-full max-w-lg bg-[#f8f8f3] text-[#1c2e24] h-full flex flex-col shadow-2xl border-l border-[#d6ddce] animate-in slide-in-from-right duration-250">
         {/* Header */}
         <div className="p-4 border-b border-[#d6ddce] flex items-center justify-between bg-[#e9efdf]">

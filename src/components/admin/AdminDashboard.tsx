@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   Lock,
@@ -19,6 +19,11 @@ import {
   ShieldCheck,
   AlertCircle,
   X,
+  Upload,
+  Image as ImageIcon,
+  Edit2,
+  Trash2,
+  RotateCcw,
 } from 'lucide-react';
 import { Product, Order, MerchantSettings } from '@/types';
 import {
@@ -28,6 +33,7 @@ import {
   saveStoredOrders,
   getStoredSettings,
   saveStoredSettings,
+  resetToInitialProducts,
   formatRapidoDropText,
   syncProductToSupabase,
 } from '@/lib/store';
@@ -47,10 +53,12 @@ export function AdminDashboard() {
 
   const [copiedOrderId, setCopiedOrderId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [settingsSavedToast, setSettingsSavedToast] = useState(false);
+  const [resetToast, setResetToast] = useState(false);
 
-  // New Product Form state
-  const [newProd, setNewProd] = useState<Partial<Product>>({
+  // New / Edit Product Form state
+  const defaultNewProd: Partial<Product> = {
     name: '',
     brand: 'Dabur',
     category: 'Joint & Muscle Pain',
@@ -65,9 +73,14 @@ export function AdminDashboard() {
     rating: 4.8,
     reviewCount: 100,
     indications: '',
-    dosage: 'Apply or take as directed',
+    dosage: 'Apply or take as directed on pack',
     composition: 'Ayurvedic Botanical Extracts',
-  });
+    imageUrl: '',
+  };
+
+  const [newProd, setNewProd] = useState<Partial<Product>>(defaultNewProd);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setProducts(getStoredProducts());
@@ -119,36 +132,126 @@ export function AdminDashboard() {
     saveStoredProducts(updated);
   };
 
-  const handleAddProductSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newProd.name || !newProd.packSize) return;
+  // Open modal for Adding a new product
+  const handleOpenAddModal = () => {
+    setEditingProductId(null);
+    setNewProd(defaultNewProd);
+    setImagePreview(null);
+    setShowAddModal(true);
+  };
 
-    const created: Product = {
-      id: `sku-custom-${Date.now()}`,
-      name: newProd.name,
-      brand: newProd.brand || 'Dabur',
-      category: newProd.category || 'Joint & Muscle Pain',
-      manufacturer: newProd.manufacturer || 'Ayurvedic Pharmacy',
-      form: (newProd.form as Product['form']) || 'Balm',
-      packSize: newProd.packSize,
-      agencyCostPrice: Number(newProd.agencyCostPrice) || 0,
-      mrp: Number(newProd.mrp) || 0,
-      sellingPrice: Number(newProd.sellingPrice) || 0,
-      stockQuantity: Number(newProd.stockQuantity) || 0,
-      isLive: (Number(newProd.stockQuantity) || 0) > 0,
-      rating: 4.8,
-      reviewCount: 1,
-      indications: newProd.indications || 'Ayurvedic health remedy',
-      dosage: newProd.dosage || 'As directed on pack',
-      composition: newProd.composition || 'Herbal Ayurvedic Formulation',
-      safetyAdvice: 'Store in a cool dry place away from sunlight.',
+  // Open modal for Editing an existing product
+  const handleOpenEditModal = (product: Product) => {
+    setEditingProductId(product.id);
+    setNewProd({ ...product });
+    setImagePreview(product.imageUrl || null);
+    setShowAddModal(true);
+  };
+
+  // Delete product
+  const handleDeleteProduct = (productId: string) => {
+    if (confirm('Are you sure you want to remove this product from the dark store catalog?')) {
+      const updated = products.filter((p) => p.id !== productId);
+      setProducts(updated);
+      saveStoredProducts(updated);
+    }
+  };
+
+  // Handle image upload from file picker
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Please upload an image smaller than 5MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      setImagePreview(result);
+      setNewProd((prev) => ({ ...prev, imageUrl: result }));
     };
+    reader.readAsDataURL(file);
+  };
 
-    const updated = [created, ...products];
-    setProducts(updated);
-    saveStoredProducts(updated);
-    syncProductToSupabase(created);
+  const handleRemoveImage = () => {
+    setImagePreview(null);
+    setNewProd((prev) => ({ ...prev, imageUrl: '' }));
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Save new or edited product
+  const handleSaveProductSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProd.name || !newProd.packSize) {
+      alert('Please fill in product name and pack size.');
+      return;
+    }
+
+    if (editingProductId) {
+      // Update existing
+      const updated = products.map((p) => {
+        if (p.id === editingProductId) {
+          const updatedItem: Product = {
+            ...p,
+            name: newProd.name!,
+            brand: newProd.brand || p.brand,
+            category: newProd.category || p.category,
+            manufacturer: newProd.manufacturer || p.manufacturer,
+            form: (newProd.form as Product['form']) || p.form,
+            packSize: newProd.packSize!,
+            agencyCostPrice: Number(newProd.agencyCostPrice) || 0,
+            mrp: Number(newProd.mrp) || 0,
+            sellingPrice: Number(newProd.sellingPrice) || 0,
+            stockQuantity: Number(newProd.stockQuantity) || 0,
+            isLive: (Number(newProd.stockQuantity) || 0) > 0 ? (newProd.isLive ?? true) : false,
+            indications: newProd.indications || p.indications,
+            dosage: newProd.dosage || p.dosage,
+            composition: newProd.composition || p.composition,
+            imageUrl: newProd.imageUrl || undefined,
+          };
+          syncProductToSupabase(updatedItem);
+          return updatedItem;
+        }
+        return p;
+      });
+
+      setProducts(updated);
+      saveStoredProducts(updated);
+    } else {
+      // Create new
+      const created: Product = {
+        id: `sku-custom-${Date.now()}`,
+        name: newProd.name!,
+        brand: newProd.brand || 'Dabur',
+        category: newProd.category || 'Joint & Muscle Pain',
+        manufacturer: newProd.manufacturer || 'Ayurvedic Pharmacy',
+        form: (newProd.form as Product['form']) || 'Balm',
+        packSize: newProd.packSize!,
+        agencyCostPrice: Number(newProd.agencyCostPrice) || 0,
+        mrp: Number(newProd.mrp) || 0,
+        sellingPrice: Number(newProd.sellingPrice) || 0,
+        stockQuantity: Number(newProd.stockQuantity) || 0,
+        isLive: (Number(newProd.stockQuantity) || 0) > 0,
+        rating: 4.8,
+        reviewCount: 1,
+        indications: newProd.indications || 'Targeted Ayurvedic health remedy',
+        dosage: newProd.dosage || 'As directed on pack',
+        composition: newProd.composition || 'Herbal Ayurvedic Formulation',
+        safetyAdvice: 'Store in a cool dry place away from sunlight.',
+        imageUrl: newProd.imageUrl || undefined,
+      };
+
+      const updated = [created, ...products];
+      setProducts(updated);
+      saveStoredProducts(updated);
+      syncProductToSupabase(created);
+    }
+
     setShowAddModal(false);
+    setEditingProductId(null);
   };
 
   const handleCopyForRapido = (order: Order) => {
@@ -180,6 +283,15 @@ export function AdminDashboard() {
     setTimeout(() => setSettingsSavedToast(false), 2000);
   };
 
+  const handleResetCatalog = () => {
+    if (confirm('Reset catalog to the verified 20 authentic Ayurvedic medicines with real stock? Custom modifications will be replaced.')) {
+      const fresh = resetToInitialProducts();
+      setProducts(fresh);
+      setResetToast(true);
+      setTimeout(() => setResetToast(false), 2500);
+    }
+  };
+
   // Filtered inventory
   const filteredProducts = products.filter((p) => {
     if (categoryFilter !== 'ALL' && p.category !== categoryFilter) return false;
@@ -208,15 +320,15 @@ export function AdminDashboard() {
   // PIN Authentication Screen
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#F8FAF9] flex items-center justify-center p-4">
-        <div className="w-full max-w-sm bg-white text-gray-900 rounded-3xl p-7 border border-gray-200 shadow-xl space-y-5">
+      <div className="min-h-screen bg-[#f8f8f3] flex items-center justify-center p-4">
+        <div className="w-full max-w-sm bg-white text-[#1c2e24] rounded-3xl p-7 border border-[#d6ddce] shadow-xl space-y-5">
           <div className="text-center space-y-2">
-            <div className="w-12 h-12 bg-emerald-50 text-emerald-700 rounded-2xl flex items-center justify-center mx-auto border border-emerald-100 shadow-2xs">
+            <div className="w-12 h-12 bg-[#e9efdf] text-[#1d5a3e] rounded-2xl flex items-center justify-center mx-auto border border-[#d6ddce] shadow-2xs">
               <Lock className="w-6 h-6" />
             </div>
-            <h1 className="text-lg font-black tracking-tight text-gray-900">AyurSwift Merchant Hub</h1>
-            <p className="text-xs text-gray-500">
-              Enter 4-digit PIN to access inventory & Rapido dispatch controls
+            <h1 className="font-serif text-lg font-bold tracking-tight text-[#143d29]">AyurSwift Merchant Hub</h1>
+            <p className="text-xs text-[#526359]">
+              Enter 4-digit PIN to access dark store inventory & Rapido parcel dispatch
             </p>
           </div>
 
@@ -229,10 +341,10 @@ export function AdminDashboard() {
                 onChange={(e) => setPinInput(e.target.value)}
                 placeholder="PIN (Default: 1234)"
                 autoFocus
-                className="w-full text-center tracking-widest text-2xl font-black py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full text-center tracking-widest text-2xl font-bold py-2.5 bg-[#f8f8f3] border border-[#d6ddce] rounded-xl text-[#143d29] focus:outline-none focus:ring-2 focus:ring-[#1d5a3e]"
               />
               {pinError && (
-                <p className="text-xs text-rose-500 text-center mt-2 font-medium flex items-center justify-center gap-1">
+                <p className="text-xs text-rose-600 text-center mt-2 font-medium flex items-center justify-center gap-1">
                   <AlertCircle className="w-3.5 h-3.5" /> Incorrect PIN. (Default: 1234)
                 </p>
               )}
@@ -240,7 +352,7 @@ export function AdminDashboard() {
 
             <button
               type="submit"
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2.5 rounded-xl text-xs sm:text-sm transition-all shadow-xs active:scale-98"
+              className="w-full bg-[#1d5a3e] hover:bg-[#143d29] text-white font-bold py-2.5 rounded-xl text-xs sm:text-sm transition-all shadow-xs active:scale-98"
             >
               Unlock Dashboard
             </button>
@@ -249,7 +361,7 @@ export function AdminDashboard() {
           <div className="text-center">
             <Link
               href="/"
-              className="text-xs text-gray-500 hover:text-emerald-700 inline-flex items-center gap-1 font-semibold"
+              className="text-xs text-[#526359] hover:text-[#1d5a3e] inline-flex items-center gap-1 font-semibold"
             >
               <ArrowLeft className="w-3.5 h-3.5" /> Back to Storefront
             </Link>
@@ -260,212 +372,243 @@ export function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAF9] text-gray-900 pb-16">
-      {/* Top Admin Header Bar */}
-      <header className="bg-emerald-900 text-white sticky top-0 z-30 shadow-xs">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <span className="text-lg">🌿⚡</span>
+    <div className="min-h-screen bg-[#f8f8f3] text-[#1c2e24] flex flex-col font-sans">
+      {/* Top Header */}
+      <header className="bg-white border-b border-[#d6ddce] sticky top-0 z-30 shadow-2xs">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              className="p-1.5 rounded-xl hover:bg-[#e9efdf] text-[#526359] hover:text-[#143d29] transition-colors"
+              title="Return to Storefront"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
             <div>
-              <h1 className="font-black text-sm sm:text-base tracking-tight leading-tight">
-                AyurSwift Merchant Hub
-              </h1>
-              <p className="text-[10px] text-emerald-200 font-medium">
-                Home Dark Store • Rapido Rider Dispatch Engine
+              <div className="flex items-center gap-2">
+                <span className="font-serif font-black text-lg text-[#143d29]">AyurSwift</span>
+                <span className="text-[10px] font-bold bg-[#e9efdf] text-[#1d5a3e] px-2 py-0.5 rounded-full border border-[#d6ddce]">
+                  Dark Store Hub
+                </span>
+              </div>
+              <p className="text-[10px] text-[#526359]">
+                Bhavnagar Home Fulfillment • Rapido Bike Dispatch
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Link
-              href="/"
-              className="text-xs bg-emerald-800 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl border border-emerald-700 flex items-center gap-1.5 font-bold transition-all"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" /> Storefront
-            </Link>
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
-              onClick={() => setIsAuthenticated(false)}
-              className="text-xs text-emerald-200 hover:text-white p-1.5"
-              title="Lock Hub"
+              onClick={handleOpenAddModal}
+              className="bg-[#1d5a3e] hover:bg-[#143d29] text-white text-xs font-bold py-2 px-3 sm:px-4 rounded-xl flex items-center gap-1.5 shadow-2xs transition-all active:scale-95"
             >
-              <Lock className="w-4 h-4" />
+              <Plus className="w-4 h-4" />
+              <span>Add Medicine</span>
             </button>
           </div>
         </div>
 
         {/* Tab Navigation */}
-        <div className="max-w-6xl mx-auto px-4 flex gap-4 text-xs font-bold border-t border-emerald-800/80 pt-1">
+        <div className="max-w-7xl mx-auto px-4 flex border-t border-[#d6ddce] text-xs font-bold">
           <button
             onClick={() => setActiveTab('INVENTORY')}
-            className={`py-2.5 border-b-2 flex items-center gap-1.5 transition-colors ${
+            className={`py-2.5 px-4 border-b-2 flex items-center gap-1.5 transition-colors ${
               activeTab === 'INVENTORY'
-                ? 'border-amber-400 text-amber-300'
-                : 'border-transparent text-emerald-200/80 hover:text-white'
+                ? 'border-[#1d5a3e] text-[#1d5a3e]'
+                : 'border-transparent text-[#526359] hover:text-[#143d29]'
             }`}
           >
-            <Package className="w-3.5 h-3.5" />
-            Inventory & Profit ({products.length})
+            <Package className="w-4 h-4" />
+            <span>Inventory ({products.length})</span>
           </button>
-
           <button
             onClick={() => setActiveTab('RAPIDO')}
-            className={`py-2.5 border-b-2 flex items-center gap-1.5 transition-colors relative ${
+            className={`py-2.5 px-4 border-b-2 flex items-center gap-1.5 transition-colors ${
               activeTab === 'RAPIDO'
-                ? 'border-amber-400 text-amber-300'
-                : 'border-transparent text-emerald-200/80 hover:text-white'
+                ? 'border-[#1d5a3e] text-[#1d5a3e]'
+                : 'border-transparent text-[#526359] hover:text-[#143d29]'
             }`}
           >
-            <Zap className="w-3.5 h-3.5 text-amber-400" />
-            Rapido Dispatch Feed ({orders.length})
-            {orders.some((o) => o.orderStatus === 'NEW') && (
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping inline-block" />
-            )}
+            <Zap className="w-4 h-4 fill-[#c86326] text-[#c86326]" />
+            <span>Rapido Dispatch ({orders.length})</span>
           </button>
-
           <button
             onClick={() => setActiveTab('SETTINGS')}
-            className={`py-2.5 border-b-2 flex items-center gap-1.5 transition-colors ${
+            className={`py-2.5 px-4 border-b-2 flex items-center gap-1.5 transition-colors ${
               activeTab === 'SETTINGS'
-                ? 'border-amber-400 text-amber-300'
-                : 'border-transparent text-emerald-200/80 hover:text-white'
+                ? 'border-[#1d5a3e] text-[#1d5a3e]'
+                : 'border-transparent text-[#526359] hover:text-[#143d29]'
             }`}
           >
-            <Settings className="w-3.5 h-3.5" />
-            UPI & Store Settings
+            <Settings className="w-4 h-4" />
+            <span>Store Configuration</span>
           </button>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-5 space-y-5">
-        {/* TAB 1: INVENTORY & PROFIT CALCULATOR */}
+      {/* Main Content Area */}
+      <main className="max-w-7xl mx-auto px-4 py-5 flex-1 w-full space-y-5">
+        {/* TAB 1: INVENTORY & STOCK MANAGEMENT */}
         {activeTab === 'INVENTORY' && (
           <div className="space-y-4">
-            {/* Financial Snapshot Bar */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="bg-white p-3.5 rounded-2xl border border-gray-200 shadow-2xs">
-                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                  Wholesale Procurement Cost
+            {/* KPI Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="bg-white p-3.5 rounded-2xl border border-[#d6ddce] shadow-2xs">
+                <div className="text-[11px] font-bold text-[#526359] uppercase tracking-wider">
+                  Total SKUs in Catalog
                 </div>
-                <div className="text-xl font-black text-gray-900 mt-1">
+                <div className="text-2xl font-serif font-black text-[#143d29] mt-1">
+                  {products.length}
+                </div>
+                <div className="text-[10px] text-[#1d5a3e] mt-1 font-semibold">
+                  {liveCount} Live in Store • {outOfStockCount} Out of Stock
+                </div>
+              </div>
+
+              <div className="bg-white p-3.5 rounded-2xl border border-[#d6ddce] shadow-2xs">
+                <div className="text-[11px] font-bold text-[#526359] uppercase tracking-wider">
+                  Total Units in Stock
+                </div>
+                <div className="text-2xl font-serif font-black text-[#143d29] mt-1">
+                  {totalStockUnits}
+                </div>
+                <div className="text-[10px] text-[#526359] mt-1 font-medium">
+                  Verified Physical Units on Shelf
+                </div>
+              </div>
+
+              <div className="bg-white p-3.5 rounded-2xl border border-[#d6ddce] shadow-2xs">
+                <div className="text-[11px] font-bold text-[#526359] uppercase tracking-wider">
+                  Wholesale Cost Value
+                </div>
+                <div className="text-2xl font-serif font-black text-[#143d29] mt-1">
                   ₹{totalCostValuation}
                 </div>
-                <div className="text-[10px] text-gray-500 mt-0.5">
-                  {totalStockUnits} units in home dark store
+                <div className="text-[10px] text-[#526359] mt-1 font-medium">
+                  At Agency Invoiced GST Price
                 </div>
               </div>
 
-              <div className="bg-white p-3.5 rounded-2xl border border-gray-200 shadow-2xs">
-                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                  Retail Selling Value
+              <div className="bg-white p-3.5 rounded-2xl border border-[#d6ddce] shadow-2xs">
+                <div className="text-[11px] font-bold text-[#526359] uppercase tracking-wider">
+                  Gross Realized Margin
                 </div>
-                <div className="text-xl font-black text-emerald-800 mt-1">
-                  ₹{totalSellingValuation}
+                <div className="text-2xl font-serif font-black text-[#1d5a3e] mt-1">
+                  {overallMarginPercent}%
                 </div>
-                <div className="text-[10px] text-emerald-600 font-bold mt-0.5">
-                  At active customer pricing
-                </div>
-              </div>
-
-              <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-2xl shadow-2xs">
-                <div className="text-[10px] font-black text-emerald-900 uppercase tracking-wider flex items-center gap-1">
-                  <TrendingUp className="w-3.5 h-3.5 text-emerald-700" />
-                  Projected Net Profit
-                </div>
-                <div className="text-xl font-black text-emerald-950 mt-1">
-                  ₹{totalPotentialProfit}
-                </div>
-                <div className="text-[11px] text-emerald-700 font-black mt-0.5">
-                  {overallMarginPercent}% avg profit margin
-                </div>
-              </div>
-
-              <div className="bg-white p-3.5 rounded-2xl border border-gray-200 shadow-2xs">
-                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                  Storefront Status
-                </div>
-                <div className="text-sm font-bold text-gray-900 mt-1 flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1 text-emerald-700 font-black">
-                    🟢 {liveCount} Live
-                  </span>
-                  <span className="text-gray-300">|</span>
-                  <span className="inline-flex items-center gap-1 text-rose-600 font-black">
-                    ⚪ {outOfStockCount} Out
-                  </span>
-                </div>
-                <div className="text-[10px] text-gray-400 mt-0.5">
-                  Strict Auto-Hide at 0 stock
+                <div className="text-[10px] text-[#1d5a3e] mt-1 font-semibold">
+                  +₹{totalPotentialProfit} Estimated Profit
                 </div>
               </div>
             </div>
 
-            {/* Inventory Controls Bar */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-2xs space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2 flex-1 min-w-[240px]">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-                    <input
-                      type="text"
-                      value={searchFilter}
-                      onChange={(e) => setSearchFilter(e.target.value)}
-                      placeholder="Search inventory SKU or brand..."
-                      className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-gray-200 focus:outline-none focus:ring-1 focus:ring-emerald-600"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => setShowAddModal(true)}
-                  className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-2xs transition-all active:scale-95"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Add New Medicine
-                </button>
+            {/* Filter / Search Bar */}
+            <div className="bg-white p-3 rounded-2xl border border-[#d6ddce] flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xs">
+              <div className="relative w-full sm:w-72">
+                <Search className="w-4 h-4 text-[#718277] absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  value={searchFilter}
+                  onChange={(e) => setSearchFilter(e.target.value)}
+                  placeholder="Search medicines, brand, category..."
+                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-[#f8f8f3] border border-[#d6ddce] rounded-xl text-[#143d29] placeholder:text-[#718277] focus:outline-none focus:ring-1 focus:ring-[#1d5a3e]"
+                />
               </div>
 
-              {/* Table */}
-              <div className="overflow-x-auto rounded-xl border border-gray-100">
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className="px-3 py-1.5 text-xs bg-[#f8f8f3] border border-[#d6ddce] rounded-xl text-[#143d29] font-medium focus:outline-none"
+                >
+                  <option value="ALL">All Categories ({products.length})</option>
+                  <option value="Joint & Muscle Pain">Joint & Muscle Pain</option>
+                  <option value="Digestion & Acidity">Digestion & Acidity</option>
+                  <option value="Immunity & Cold">Immunity & Cold</option>
+                  <option value="Skin & Hair">Skin & Hair</option>
+                  <option value="Daily Wellness">Daily Wellness</option>
+                </select>
+
+                <button
+                  onClick={handleResetCatalog}
+                  className="px-3 py-1.5 text-xs font-semibold text-[#1d5a3e] hover:bg-[#e9efdf] rounded-xl border border-[#d6ddce] flex items-center gap-1.5 transition-colors"
+                  title="Reset to 20 Verified Real Stock SKUs"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Reset Real Catalog</span>
+                </button>
+              </div>
+            </div>
+
+            {resetToast && (
+              <div className="p-3 bg-[#e9efdf] border border-[#d6ddce] text-[#143d29] rounded-xl text-xs font-bold flex items-center gap-2">
+                <Check className="w-4 h-4 text-[#1d5a3e]" />
+                <span>Catalog successfully reset to verified 20 real Ayurvedic products with initial stock!</span>
+              </div>
+            )}
+
+            {/* Inventory Table */}
+            <div className="bg-white rounded-2xl border border-[#d6ddce] shadow-2xs overflow-hidden">
+              <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] tracking-wider border-b border-gray-200">
+                  <thead className="bg-[#e9efdf] border-b border-[#d6ddce] text-[#143d29] font-serif font-bold uppercase tracking-wider text-[10.5px]">
                     <tr>
-                      <th className="py-2.5 px-3">Medicine & Brand</th>
-                      <th className="py-2.5 px-2">Pack Form</th>
-                      <th className="py-2.5 px-2 text-right">Agency Cost</th>
-                      <th className="py-2.5 px-2 text-right">MRP</th>
-                      <th className="py-2.5 px-2 text-right">Sell Price</th>
-                      <th className="py-2.5 px-2 text-right">Profit (₹ / %)</th>
-                      <th className="py-2.5 px-3 text-center">Stock Stepper</th>
-                      <th className="py-2.5 px-3 text-center">Storefront View</th>
+                      <th className="py-3 px-3">Medicine & Brand</th>
+                      <th className="py-3 px-2">Pack</th>
+                      <th className="py-3 px-2 text-right">Cost</th>
+                      <th className="py-3 px-2 text-right">MRP</th>
+                      <th className="py-3 px-2 text-right">Sell</th>
+                      <th className="py-3 px-2 text-right">Margin</th>
+                      <th className="py-3 px-3 text-center">Stock</th>
+                      <th className="py-3 px-3 text-center">Visibility</th>
+                      <th className="py-3 px-3 text-center">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-[#e9efdf]">
                     {filteredProducts.map((product) => {
                       const unitProfit = product.sellingPrice - product.agencyCostPrice;
-                      const marginPercent = Math.round(
-                        (unitProfit / product.sellingPrice) * 100
-                      );
+                      const marginPercent =
+                        product.sellingPrice > 0
+                          ? Math.round((unitProfit / product.sellingPrice) * 100)
+                          : 0;
                       const isOutOfStock = product.stockQuantity === 0;
 
                       return (
                         <tr
                           key={product.id}
-                          className={`hover:bg-gray-50 transition-colors ${
-                            isOutOfStock ? 'bg-gray-50/70 opacity-60' : ''
+                          className={`hover:bg-[#f8f8f3] transition-colors ${
+                            isOutOfStock ? 'bg-amber-50/30 opacity-70' : ''
                           }`}
                         >
                           <td className="py-2.5 px-3">
-                            <div className="font-bold text-gray-900 line-clamp-1">
-                              {product.name}
-                            </div>
-                            <div className="text-[10px] text-emerald-700 font-bold uppercase">
-                              {product.brand} • <span className="text-gray-400 font-normal">{product.category}</span>
+                            <div className="flex items-center gap-2.5">
+                              {product.imageUrl ? (
+                                <img
+                                  src={product.imageUrl}
+                                  alt={product.name}
+                                  className="w-8 h-8 object-contain rounded border border-[#d6ddce] bg-[#f8f8f3] shrink-0 p-0.5"
+                                />
+                              ) : (
+                                <div className="w-8 h-8 rounded border border-[#d6ddce] bg-[#e9efdf] flex items-center justify-center text-[10px] text-[#1d5a3e] font-bold shrink-0">
+                                  🌿
+                                </div>
+                              )}
+                              <div>
+                                <div className="font-bold text-[#143d29] line-clamp-1">
+                                  {product.name}
+                                </div>
+                                <div className="text-[10px] text-[#1d5a3e] font-semibold uppercase">
+                                  {product.brand} • <span className="text-[#526359] font-normal">{product.category}</span>
+                                </div>
+                              </div>
                             </div>
                           </td>
 
-                          <td className="py-2.5 px-2 text-gray-600 font-medium">
+                          <td className="py-2.5 px-2 text-[#526359] font-medium whitespace-nowrap">
                             {product.packSize}
                           </td>
 
-                          <td className="py-2.5 px-2 text-right font-medium text-gray-700">
+                          <td className="py-2.5 px-2 text-right font-medium text-[#526359]">
                             ₹{product.agencyCostPrice}
                           </td>
 
@@ -473,40 +616,42 @@ export function AdminDashboard() {
                             ₹{product.mrp}
                           </td>
 
-                          <td className="py-2.5 px-2 text-right font-black text-gray-900">
+                          <td className="py-2.5 px-2 text-right font-bold text-[#143d29]">
                             ₹{product.sellingPrice}
                           </td>
 
                           <td className="py-2.5 px-2 text-right">
-                            <span className="font-black text-emerald-700">
+                            <span className="font-bold text-[#1d5a3e]">
                               +₹{unitProfit}
                             </span>
-                            <span className="block text-[10px] font-bold text-emerald-600">
-                              {marginPercent}% margin
+                            <span className="block text-[10px] font-semibold text-[#1d5a3e]">
+                              {marginPercent}%
                             </span>
                           </td>
 
                           {/* Quick Stepper */}
                           <td className="py-2.5 px-3 text-center">
-                            <div className="inline-flex items-center bg-gray-100 rounded-lg border border-gray-200">
+                            <div className="inline-flex items-center bg-[#f8f8f3] rounded-lg border border-[#d6ddce]">
                               <button
                                 onClick={() => handleStockChange(product.id, -1)}
-                                className="p-1 hover:bg-gray-200 text-gray-700"
+                                className="p-1 hover:bg-[#e9efdf] text-[#143d29] transition-colors"
+                                title="Decrease Stock"
                               >
                                 <Minus className="w-3 h-3" />
                               </button>
                               <span
-                                className={`px-2 font-black text-xs min-w-[28px] ${
+                                className={`px-2 font-bold text-xs min-w-[28px] ${
                                   product.stockQuantity === 0
                                     ? 'text-rose-600'
-                                    : 'text-gray-900'
+                                    : 'text-[#143d29]'
                                 }`}
                               >
                                 {product.stockQuantity}
                               </span>
                               <button
                                 onClick={() => handleStockChange(product.id, 1)}
-                                className="p-1 hover:bg-gray-200 text-gray-700"
+                                className="p-1 hover:bg-[#e9efdf] text-[#143d29] transition-colors"
+                                title="Increase Stock"
                               >
                                 <Plus className="w-3 h-3" />
                               </button>
@@ -517,21 +662,21 @@ export function AdminDashboard() {
                           <td className="py-2.5 px-3 text-center">
                             {product.stockQuantity === 0 ? (
                               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-200 text-gray-600">
-                                ⚪ Auto-Hidden (Stock 0)
+                                ⚪ Hidden (Stock 0)
                               </span>
                             ) : (
                               <button
                                 onClick={() => handleToggleLive(product.id)}
                                 className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all ${
                                   product.isLive
-                                    ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                                    ? 'bg-[#e9efdf] text-[#1d5a3e] hover:bg-[#dfe7d2]'
                                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                 }`}
                               >
                                 {product.isLive ? (
                                   <>
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                                    Live in Store
+                                    <span className="w-1.5 h-1.5 rounded-full bg-[#1d5a3e]" />
+                                    Live
                                   </>
                                 ) : (
                                   <>
@@ -541,6 +686,26 @@ export function AdminDashboard() {
                                 )}
                               </button>
                             )}
+                          </td>
+
+                          {/* Edit / Delete Actions */}
+                          <td className="py-2.5 px-3 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => handleOpenEditModal(product)}
+                                className="p-1.5 text-[#526359] hover:text-[#1d5a3e] hover:bg-[#e9efdf] rounded-lg transition-colors"
+                                title="Edit Medicine Details & Image"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteProduct(product.id)}
+                                className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                title="Delete SKU"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -555,23 +720,23 @@ export function AdminDashboard() {
         {/* TAB 2: RAPIDO DISPATCH TOOL */}
         {activeTab === 'RAPIDO' && (
           <div className="space-y-4">
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
-              <Zap className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="bg-[#e9efdf] border border-[#d6ddce] rounded-2xl p-4 flex items-start gap-3">
+              <Zap className="w-5 h-5 text-[#c86326] shrink-0 mt-0.5" />
               <div>
-                <h3 className="font-bold text-amber-950 text-sm">
+                <h3 className="font-serif font-bold text-[#143d29] text-sm">
                   Rapido Parcel 1-Tap Rider Dispatch
                 </h3>
-                <p className="text-xs text-amber-900/90 leading-relaxed mt-0.5">
+                <p className="text-xs text-[#526359] leading-relaxed mt-0.5">
                   Click <strong>&quot;1-Click Copy for Rapido&quot;</strong> on any in-city order. It formats the customer name, phone number, drop address, and COD/Prepaid info cleanly so you can paste it directly into the Rapido app to book a bike parcel pickup in seconds.
                 </p>
               </div>
             </div>
 
             {orders.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center space-y-2">
+              <div className="bg-white rounded-2xl border border-[#d6ddce] p-12 text-center space-y-2">
                 <Truck className="w-12 h-12 text-gray-300 mx-auto" />
-                <h3 className="font-bold text-gray-800 text-sm">No Orders Yet</h3>
-                <p className="text-xs text-gray-500">
+                <h3 className="font-serif font-bold text-[#143d29] text-sm">No Orders Yet</h3>
+                <p className="text-xs text-[#526359]">
                   When customers place orders from the storefront, they appear here instantly.
                 </p>
               </div>
@@ -579,122 +744,100 @@ export function AdminDashboard() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {orders.map((order) => {
                   const isCopied = copiedOrderId === order.id;
+                  const isRapido = order.deliveryType === 'RAPIDO_CITY';
 
                   return (
                     <div
                       key={order.id}
-                      className="bg-white rounded-2xl border border-gray-200 p-4 shadow-2xs space-y-3"
+                      className="bg-white rounded-2xl border border-[#d6ddce] p-4 shadow-2xs space-y-3"
                     >
-                      {/* Header */}
-                      <div className="flex items-center justify-between border-b border-gray-100 pb-2.5">
+                      <div className="flex items-center justify-between border-b border-[#e9efdf] pb-2">
                         <div className="flex items-center gap-2">
-                          <span className="font-black text-sm text-gray-900">
+                          <span className="font-bold text-xs bg-[#e9efdf] text-[#1d5a3e] px-2 py-0.5 rounded-md">
                             {order.id}
                           </span>
                           <span
                             className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                              order.deliveryType === 'RAPIDO_CITY'
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-blue-50 text-blue-800'
+                              isRapido
+                                ? 'bg-amber-100 text-amber-900'
+                                : 'bg-blue-100 text-blue-900'
                             }`}
                           >
-                            {order.deliveryType === 'RAPIDO_CITY'
-                              ? '⚡ Rapido In-City'
-                              : '📦 Courier'}
+                            {isRapido ? '⚡ Rapido 30-45m' : '📦 Courier'}
                           </span>
                         </div>
-
-                        <select
-                          value={order.orderStatus}
-                          onChange={(e) =>
-                            handleUpdateOrderStatus(
-                              order.id,
-                              e.target.value as Order['orderStatus']
-                            )
-                          }
-                          className="text-[11px] font-bold py-1 px-2 rounded-lg bg-gray-100 border border-gray-200 text-gray-800 focus:outline-none"
-                        >
-                          <option value="NEW">🟢 New Order</option>
-                          <option value="PACKED">📦 Packed</option>
-                          <option value="DISPATCHED">⚡ Dispatched</option>
-                          <option value="DELIVERED">✓ Delivered</option>
-                          <option value="CANCELLED">✕ Cancelled</option>
-                        </select>
+                        <span className="text-[10px] text-gray-400">
+                          {new Date(order.createdAt).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
                       </div>
 
-                      {/* Customer Details */}
-                      <div className="space-y-1 text-xs text-gray-700">
-                        <div className="flex justify-between font-bold">
-                          <span className="text-gray-900">{order.customerName}</span>
-                          <span className="text-emerald-700 font-mono">
-                            {order.customerPhone}
-                          </span>
+                      <div className="text-xs space-y-1 text-gray-700">
+                        <div>
+                          <strong>{order.customerName}</strong> ({order.customerPhone})
                         </div>
-                        <p className="text-[11px] text-gray-600 bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                        <div className="text-gray-500 text-[11px] leading-tight">
                           {order.deliveryAddress}
-                          {order.landmark ? `, Landmark: ${order.landmark}` : ''}
-                          <br />
-                          <strong>{order.city} - {order.pincode}</strong>
-                        </p>
+                          {order.landmark ? `, Near ${order.landmark}` : ''}, {order.city} - {order.pincode}
+                        </div>
                       </div>
 
-                      {/* Items */}
-                      <div className="text-[11px] text-gray-600 space-y-0.5 border-t border-gray-100 pt-2">
-                        {order.items.map((i) => (
-                          <div key={i.productId} className="flex justify-between">
+                      <div className="p-2.5 bg-[#f8f8f3] rounded-xl text-xs space-y-1 border border-[#d6ddce]">
+                        <div className="text-[10.5px] font-bold text-[#526359] uppercase">Items to Pack:</div>
+                        {order.items.map((item, idx) => (
+                          <div key={idx} className="flex justify-between text-gray-800">
                             <span>
-                              {i.name} ({i.packSize}) x {i.quantity}
+                              {item.quantity}x {item.name} ({item.packSize})
                             </span>
-                            <span className="font-bold text-gray-800">
-                              ₹{i.totalPrice}
-                            </span>
+                            <span className="font-bold">₹{item.totalPrice}</span>
                           </div>
                         ))}
-                      </div>
-
-                      {/* Total */}
-                      <div className="flex items-center justify-between border-t border-gray-100 pt-2 text-xs">
-                        <div>
-                          <span className="text-[10px] text-gray-400 block uppercase">
-                            Payment
-                          </span>
-                          <span className="font-bold text-gray-800">
-                            {order.paymentMethod === 'COD' ? '💵 COD' : '📱 UPI'}
-                          </span>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-[10px] text-gray-400 block uppercase">
-                            Total Payable
-                          </span>
-                          <span className="font-black text-sm text-emerald-800">
-                            ₹{order.totalAmount}
+                        <div className="border-t border-[#d6ddce] pt-1 flex justify-between font-bold text-gray-900 text-xs">
+                          <span>Total to Collect:</span>
+                          <span className="text-[#1d5a3e]">
+                            ₹{order.totalAmount} ({order.paymentMethod})
                           </span>
                         </div>
                       </div>
 
-                      {/* 1-Click Copy for Rapido Button */}
-                      {order.deliveryType === 'RAPIDO_CITY' && (
+                      <div className="flex items-center justify-between gap-2 pt-1">
                         <button
                           onClick={() => handleCopyForRapido(order)}
-                          className={`w-full py-2 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all shadow-2xs active:scale-98 ${
+                          className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-2xs ${
                             isCopied
                               ? 'bg-emerald-700 text-white'
-                              : 'bg-amber-400 hover:bg-amber-500 text-gray-950'
+                              : 'bg-[#1d5a3e] hover:bg-[#143d29] text-white'
                           }`}
                         >
                           {isCopied ? (
                             <>
-                              <Check className="w-4 h-4" />
-                              <span>✓ Copied Drop Info for Rapido!</span>
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Copied for Rapido!</span>
                             </>
                           ) : (
                             <>
-                              <Copy className="w-4 h-4" />
-                              <span>1-Click Copy for Rapido App</span>
+                              <Copy className="w-3.5 h-3.5" />
+                              <span>1-Click Copy for Rapido</span>
                             </>
                           )}
                         </button>
-                      )}
+
+                        <select
+                          value={order.orderStatus}
+                          onChange={(e) =>
+                            handleUpdateOrderStatus(order.id, e.target.value as Order['orderStatus'])
+                          }
+                          className="text-xs border border-[#d6ddce] rounded-xl px-2 py-2 bg-white text-gray-800 font-semibold focus:outline-none"
+                        >
+                          <option value="NEW">New</option>
+                          <option value="PACKED">Packed</option>
+                          <option value="DISPATCHED">Dispatched</option>
+                          <option value="DELIVERED">Delivered</option>
+                          <option value="CANCELLED">Cancelled</option>
+                        </select>
+                      </div>
                     </div>
                   );
                 })}
@@ -703,38 +846,36 @@ export function AdminDashboard() {
           </div>
         )}
 
-        {/* TAB 3: SETTINGS & UPI */}
+        {/* TAB 3: SETTINGS */}
         {activeTab === 'SETTINGS' && (
-          <div className="max-w-2xl bg-white rounded-2xl border border-gray-200 p-5 shadow-2xs space-y-4">
-            <div>
-              <h2 className="font-bold text-base text-gray-900">
-                AyurSwift Store & Direct UPI Configuration
-              </h2>
-              <p className="text-xs text-gray-500">
-                Direct bank settlement via UPI QR (zero transaction fees)
+          <div className="bg-white rounded-2xl border border-[#d6ddce] p-5 shadow-2xs max-w-xl mx-auto space-y-4">
+            <div className="border-b border-[#e9efdf] pb-3">
+              <h2 className="font-serif font-bold text-base text-[#143d29]">Storefront & UPI Settings</h2>
+              <p className="text-xs text-[#526359] mt-0.5">
+                Update payment destination and delivery charges
               </p>
             </div>
 
             <form onSubmit={handleSaveSettings} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-bold text-[#526359] mb-1">
+                  Merchant WhatsApp Number (with country code, no +)
+                </label>
+                <input
+                  type="text"
+                  value={settings.merchantWhatsApp}
+                  onChange={(e) =>
+                    setSettings({ ...settings, merchantWhatsApp: e.target.value })
+                  }
+                  className="w-full px-3 py-2 text-xs bg-[#f8f8f3] border border-[#d6ddce] rounded-xl text-[#143d29] focus:ring-1 focus:ring-[#1d5a3e]"
+                  required
+                />
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
-                    Store WhatsApp Number (with 91)
-                  </label>
-                  <input
-                    type="text"
-                    value={settings.merchantWhatsApp}
-                    onChange={(e) =>
-                      setSettings({ ...settings, merchantWhatsApp: e.target.value })
-                    }
-                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:ring-1 focus:ring-emerald-700"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
-                    Merchant UPI ID (VPA)
+                  <label className="block text-xs font-bold text-[#526359] mb-1">
+                    Store UPI ID
                   </label>
                   <input
                     type="text"
@@ -742,7 +883,22 @@ export function AdminDashboard() {
                     onChange={(e) =>
                       setSettings({ ...settings, merchantUpiId: e.target.value })
                     }
-                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:ring-1 focus:ring-emerald-700 font-mono"
+                    className="w-full px-3 py-2 text-xs bg-[#f8f8f3] border border-[#d6ddce] rounded-xl text-[#143d29] focus:ring-1 focus:ring-[#1d5a3e]"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#526359] mb-1">
+                    UPI Account Holder Name
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.merchantUpiName}
+                    onChange={(e) =>
+                      setSettings({ ...settings, merchantUpiName: e.target.value })
+                    }
+                    className="w-full px-3 py-2 text-xs bg-[#f8f8f3] border border-[#d6ddce] rounded-xl text-[#143d29] focus:ring-1 focus:ring-[#1d5a3e]"
                     required
                   />
                 </div>
@@ -750,7 +906,7 @@ export function AdminDashboard() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                  <label className="block text-xs font-bold text-[#526359] mb-1">
                     In-City Rapid Delivery Fee (₹)
                   </label>
                   <input
@@ -762,13 +918,13 @@ export function AdminDashboard() {
                         cityDeliveryFee: Number(e.target.value),
                       })
                     }
-                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:ring-1 focus:ring-emerald-700"
+                    className="w-full px-3 py-2 text-xs bg-[#f8f8f3] border border-[#d6ddce] rounded-xl text-[#143d29] focus:ring-1 focus:ring-[#1d5a3e]"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                  <label className="block text-xs font-bold text-[#526359] mb-1">
                     Free In-City Delivery Above (₹)
                   </label>
                   <input
@@ -780,7 +936,7 @@ export function AdminDashboard() {
                         cityFreeDeliveryAbove: Number(e.target.value),
                       })
                     }
-                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:ring-1 focus:ring-emerald-700"
+                    className="w-full px-3 py-2 text-xs bg-[#f8f8f3] border border-[#d6ddce] rounded-xl text-[#143d29] focus:ring-1 focus:ring-[#1d5a3e]"
                     required
                   />
                 </div>
@@ -788,7 +944,7 @@ export function AdminDashboard() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                  <label className="block text-xs font-bold text-[#526359] mb-1">
                     Outside-City Courier Fee (₹)
                   </label>
                   <input
@@ -800,13 +956,13 @@ export function AdminDashboard() {
                         courierDeliveryFee: Number(e.target.value),
                       })
                     }
-                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:ring-1 focus:ring-emerald-700"
+                    className="w-full px-3 py-2 text-xs bg-[#f8f8f3] border border-[#d6ddce] rounded-xl text-[#143d29] focus:ring-1 focus:ring-[#1d5a3e]"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                  <label className="block text-xs font-bold text-[#526359] mb-1">
                     Admin Portal PIN
                   </label>
                   <input
@@ -816,7 +972,7 @@ export function AdminDashboard() {
                     onChange={(e) =>
                       setSettings({ ...settings, adminPin: e.target.value })
                     }
-                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:ring-1 focus:ring-emerald-700"
+                    className="w-full px-3 py-2 text-xs bg-[#f8f8f3] border border-[#d6ddce] rounded-xl text-[#143d29] focus:ring-1 focus:ring-[#1d5a3e]"
                     required
                   />
                 </div>
@@ -825,12 +981,12 @@ export function AdminDashboard() {
               <div className="pt-2 flex items-center justify-between">
                 <button
                   type="submit"
-                  className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs py-2 px-4 rounded-xl shadow-2xs transition-colors"
+                  className="bg-[#1d5a3e] hover:bg-[#143d29] text-white font-bold text-xs py-2 px-4 rounded-xl shadow-2xs transition-colors"
                 >
                   Save Store Settings
                 </button>
                 {settingsSavedToast && (
-                  <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                  <span className="text-xs font-bold text-[#1d5a3e] flex items-center gap-1">
                     <Check className="w-4 h-4" /> Settings updated!
                   </span>
                 )}
@@ -840,45 +996,119 @@ export function AdminDashboard() {
         )}
       </main>
 
-      {/* ADD SKU MODAL */}
+      {/* ADD / EDIT SKU MODAL WITH IMAGE UPLOAD */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl p-5 border border-gray-200 space-y-3.5">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-              <h3 className="font-bold text-base text-gray-900">
-                Add New Ayurvedic Medicine / SKU
+        <div className="fixed inset-0 z-70 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150">
+          <div className="w-full max-w-lg bg-[#f8f8f3] rounded-3xl shadow-2xl border border-[#d6ddce] overflow-hidden my-auto max-h-[92vh] flex flex-col animate-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-4 border-b border-[#d6ddce] flex items-center justify-between bg-[#e9efdf] shrink-0">
+              <h3 className="font-serif font-bold text-base text-[#143d29]">
+                {editingProductId ? 'Edit Medicine SKU' : 'Add New Ayurvedic Medicine SKU'}
               </h3>
               <button
                 onClick={() => setShowAddModal(false)}
-                className="text-gray-400 hover:text-gray-700 p-1"
+                className="w-8 h-8 rounded-full bg-white text-gray-500 hover:text-gray-900 flex items-center justify-center transition-colors shadow-2xs border border-[#d6ddce]"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleAddProductSubmit} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+            {/* Modal Form Scrollable */}
+            <form onSubmit={handleSaveProductSubmit} className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5">
+              {/* Product Packshot Image Upload Section */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-[#143d29]">
+                  Product Packshot Image
+                </label>
+
+                {imagePreview ? (
+                  <div className="relative bg-white rounded-2xl border border-[#d6ddce] p-3 flex items-center gap-3">
+                    <img
+                      src={imagePreview}
+                      alt="Product Preview"
+                      className="w-16 h-16 object-contain rounded-xl border border-[#d6ddce] bg-[#f8f8f3] p-1"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-[#143d29] truncate">
+                        Packshot Image Selected
+                      </p>
+                      <p className="text-[10px] text-[#526359]">
+                        Will display on product cards and detail views
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRemoveImage}
+                      className="px-2.5 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-lg border border-rose-200 transition-colors"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-[#d6ddce] hover:border-[#1d5a3e] bg-white rounded-2xl p-4 text-center cursor-pointer transition-colors group"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-[#e9efdf] text-[#1d5a3e] flex items-center justify-center mx-auto mb-2 group-hover:scale-105 transition-transform">
+                      <Upload className="w-5 h-5" />
+                    </div>
+                    <p className="text-xs font-bold text-[#143d29]">
+                      Click to Upload Packshot Image
+                    </p>
+                    <p className="text-[10.5px] text-[#526359] mt-0.5">
+                      PNG, JPG, or WebP (up to 5MB)
+                    </p>
+                  </div>
+                )}
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png, image/jpeg, image/webp"
+                  onChange={handleImageFileChange}
+                  className="hidden"
+                />
+
+                {/* Optional Image URL Input */}
+                <div className="pt-1">
+                  <div className="text-[10px] font-semibold text-[#526359] mb-1">
+                    Or paste Image URL directly:
+                  </div>
+                  <input
+                    type="url"
+                    value={newProd.imageUrl || ''}
+                    onChange={(e) => {
+                      setNewProd({ ...newProd, imageUrl: e.target.value });
+                      setImagePreview(e.target.value || null);
+                    }}
+                    placeholder="https://example.com/product-packshot.png"
+                    className="w-full px-3 py-1.5 text-xs bg-white border border-[#d6ddce] rounded-xl text-[#143d29] focus:outline-none focus:ring-1 focus:ring-[#1d5a3e]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-1">
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                  <label className="block text-[11px] font-bold text-[#526359] mb-1">
                     Medicine Name *
                   </label>
                   <input
                     type="text"
                     value={newProd.name}
                     onChange={(e) => setNewProd({ ...newProd, name: e.target.value })}
-                    placeholder="e.g. Zandu Balm Fast Relief"
-                    className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-xl focus:ring-1 focus:ring-emerald-700"
+                    placeholder="e.g. Zandu Balm Ultra Fast Relief"
+                    className="w-full px-3 py-1.5 text-xs bg-white border border-[#d6ddce] rounded-xl text-[#143d29] focus:ring-1 focus:ring-[#1d5a3e]"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                  <label className="block text-[11px] font-bold text-[#526359] mb-1">
                     Brand
                   </label>
                   <select
                     value={newProd.brand}
                     onChange={(e) => setNewProd({ ...newProd, brand: e.target.value })}
-                    className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-xl focus:ring-1 focus:ring-emerald-700"
+                    className="w-full px-3 py-1.5 text-xs bg-white border border-[#d6ddce] rounded-xl text-[#143d29] focus:ring-1 focus:ring-[#1d5a3e]"
                   >
                     <option value="Dabur">Dabur</option>
                     <option value="Zandu">Zandu</option>
@@ -886,6 +1116,8 @@ export function AdminDashboard() {
                     <option value="Baidyanath">Baidyanath</option>
                     <option value="Patanjali">Patanjali</option>
                     <option value="Dr. Ortho">Dr. Ortho</option>
+                    <option value="Vicco">Vicco</option>
+                    <option value="Hamdard">Hamdard</option>
                     <option value="Other">Other</option>
                   </select>
                 </div>
@@ -893,13 +1125,45 @@ export function AdminDashboard() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                  <label className="block text-[11px] font-bold text-[#526359] mb-1">
+                    Category
+                  </label>
+                  <select
+                    value={newProd.category}
+                    onChange={(e) => setNewProd({ ...newProd, category: e.target.value })}
+                    className="w-full px-3 py-1.5 text-xs bg-white border border-[#d6ddce] rounded-xl text-[#143d29] focus:ring-1 focus:ring-[#1d5a3e]"
+                  >
+                    <option value="Joint & Muscle Pain">Joint & Muscle Pain</option>
+                    <option value="Digestion & Acidity">Digestion & Acidity</option>
+                    <option value="Immunity & Cold">Immunity & Cold</option>
+                    <option value="Skin & Hair">Skin & Hair</option>
+                    <option value="Daily Wellness">Daily Wellness</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#526359] mb-1">
+                    Pack Size *
+                  </label>
+                  <input
+                    type="text"
+                    value={newProd.packSize}
+                    onChange={(e) => setNewProd({ ...newProd, packSize: e.target.value })}
+                    placeholder="e.g. 25g Jar, 100ml Bottle"
+                    className="w-full px-3 py-1.5 text-xs bg-white border border-[#d6ddce] rounded-xl text-[#143d29] focus:ring-1 focus:ring-[#1d5a3e]"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-[#526359] mb-1">
                     Dosage Form
                   </label>
                   <select
                     value={newProd.form}
                     onChange={(e) => setNewProd({ ...newProd, form: e.target.value as Product['form'] })}
-                    className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-xl focus:ring-1 focus:ring-emerald-700"
+                    className="w-full px-3 py-1.5 text-xs bg-white border border-[#d6ddce] rounded-xl text-[#143d29] focus:ring-1 focus:ring-[#1d5a3e]"
                   >
                     <option value="Balm">Balm (Jar)</option>
                     <option value="Tablets">Tablets (Bottle)</option>
@@ -912,23 +1176,22 @@ export function AdminDashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-700 mb-1">
-                    Pack Size *
+                  <label className="block text-[11px] font-bold text-[#526359] mb-1">
+                    Manufacturer
                   </label>
                   <input
                     type="text"
-                    value={newProd.packSize}
-                    onChange={(e) => setNewProd({ ...newProd, packSize: e.target.value })}
-                    placeholder="e.g. 25g Jar, 100ml Bottle"
-                    className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-xl focus:ring-1 focus:ring-emerald-700"
-                    required
+                    value={newProd.manufacturer}
+                    onChange={(e) => setNewProd({ ...newProd, manufacturer: e.target.value })}
+                    placeholder="e.g. Dabur India Ltd."
+                    className="w-full px-3 py-1.5 text-xs bg-white border border-[#d6ddce] rounded-xl text-[#143d29] focus:ring-1 focus:ring-[#1d5a3e]"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 gap-2 bg-gray-50 p-2.5 rounded-xl border border-gray-200">
+              <div className="grid grid-cols-4 gap-2 bg-white p-3 rounded-2xl border border-[#d6ddce]">
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-600 mb-0.5">
+                  <label className="block text-[10px] font-bold text-[#526359] mb-0.5">
                     Agency Cost (₹)
                   </label>
                   <input
@@ -940,12 +1203,12 @@ export function AdminDashboard() {
                         agencyCostPrice: Number(e.target.value),
                       })
                     }
-                    className="w-full px-2 py-1 text-xs border border-gray-200 rounded-lg bg-white"
+                    className="w-full px-2 py-1 text-xs border border-[#d6ddce] rounded-lg bg-[#f8f8f3]"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-600 mb-0.5">
+                  <label className="block text-[10px] font-bold text-[#526359] mb-0.5">
                     MRP (₹)
                   </label>
                   <input
@@ -954,12 +1217,12 @@ export function AdminDashboard() {
                     onChange={(e) =>
                       setNewProd({ ...newProd, mrp: Number(e.target.value) })
                     }
-                    className="w-full px-2 py-1 text-xs border border-gray-200 rounded-lg bg-white"
+                    className="w-full px-2 py-1 text-xs border border-[#d6ddce] rounded-lg bg-[#f8f8f3]"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-600 mb-0.5">
+                  <label className="block text-[10px] font-bold text-[#526359] mb-0.5">
                     Sell Price (₹)
                   </label>
                   <input
@@ -971,12 +1234,12 @@ export function AdminDashboard() {
                         sellingPrice: Number(e.target.value),
                       })
                     }
-                    className="w-full px-2 py-1 text-xs border border-gray-200 rounded-lg bg-white"
+                    className="w-full px-2 py-1 text-xs border border-[#d6ddce] rounded-lg bg-[#f8f8f3]"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-600 mb-0.5">
+                  <label className="block text-[10px] font-bold text-[#526359] mb-0.5">
                     Stock
                   </label>
                   <input
@@ -988,38 +1251,65 @@ export function AdminDashboard() {
                         stockQuantity: Number(e.target.value),
                       })
                     }
-                    className="w-full px-2 py-1 text-xs border border-gray-200 rounded-lg bg-white"
+                    className="w-full px-2 py-1 text-xs border border-[#d6ddce] rounded-lg bg-[#f8f8f3]"
                     required
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-gray-700 mb-1">
-                  Clinical Indications / Benefits
+                <label className="block text-[11px] font-bold text-[#526359] mb-1">
+                  Primary Indications & Benefits
                 </label>
                 <input
                   type="text"
                   value={newProd.indications}
                   onChange={(e) => setNewProd({ ...newProd, indications: e.target.value })}
-                  placeholder="e.g. Fast relief from headaches & body ache"
-                  className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-xl"
+                  placeholder="e.g. Fast relief from tension headaches & body aches"
+                  className="w-full px-3 py-1.5 text-xs bg-white border border-[#d6ddce] rounded-xl text-[#143d29]"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-[#526359] mb-1">
+                    Dosage
+                  </label>
+                  <input
+                    type="text"
+                    value={newProd.dosage}
+                    onChange={(e) => setNewProd({ ...newProd, dosage: e.target.value })}
+                    placeholder="e.g. Apply 2-3 times daily"
+                    className="w-full px-3 py-1.5 text-xs bg-white border border-[#d6ddce] rounded-xl text-[#143d29]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#526359] mb-1">
+                    Composition
+                  </label>
+                  <input
+                    type="text"
+                    value={newProd.composition}
+                    onChange={(e) => setNewProd({ ...newProd, composition: e.target.value })}
+                    placeholder="e.g. Mentha Satva, Gaultheria Oil"
+                    className="w-full px-3 py-1.5 text-xs bg-white border border-[#d6ddce] rounded-xl text-[#143d29]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-[#d6ddce]">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-3 py-1.5 text-xs font-semibold text-gray-600 hover:text-gray-900"
+                  className="px-4 py-2 text-xs font-semibold text-[#526359] hover:text-[#143d29]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs px-4 py-1.5 rounded-xl shadow-2xs"
+                  className="bg-[#1d5a3e] hover:bg-[#143d29] text-white font-bold text-xs px-5 py-2 rounded-xl shadow-xs transition-colors"
                 >
-                  Save Medicine
+                  {editingProductId ? 'Update Medicine SKU' : 'Save New Medicine'}
                 </button>
               </div>
             </form>

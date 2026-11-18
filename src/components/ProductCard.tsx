@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Plus, Minus, Zap, Eye } from 'lucide-react';
 import { Product } from '@/types';
 import { MedicinePackVisual } from '@/components/MedicinePackVisual';
@@ -20,6 +20,7 @@ export function ProductCard({
   onUpdateQuantity,
   onViewDetails,
 }: ProductCardProps) {
+  const [imageError, setImageError] = useState(false);
   const discountPercent = Math.round(
     ((product.mrp - product.sellingPrice) / product.mrp) * 100
   );
@@ -46,7 +47,7 @@ export function ProductCard({
           </span>
         </div>
 
-        {/* Product Visual Container (Using Existing MedicinePackVisual Art System) */}
+        {/* Product Visual Container (Uploaded Packshot or Form-Accurate Art) */}
         <div
           onClick={() => onViewDetails(product)}
           className="w-full h-36 sm:h-38 bg-[#f8f8f3] rounded-xl flex items-center justify-center p-2 cursor-pointer relative overflow-hidden group-hover:bg-[#e9efdf]/40 transition-colors"
@@ -60,10 +61,20 @@ export function ProductCard({
           }}
           aria-label={`View details for ${product.name}`}
         >
-          <MedicinePackVisual
-            product={product}
-            className="w-full h-full transform group-hover:scale-105 transition-transform duration-200"
-          />
+          {product.imageUrl && !imageError ? (
+            <img
+              src={product.imageUrl}
+              alt={product.name}
+              loading="lazy"
+              onError={() => setImageError(true)}
+              className="w-full h-full object-contain p-1 transform group-hover:scale-105 transition-transform duration-200"
+            />
+          ) : (
+            <MedicinePackVisual
+              product={product}
+              className="w-full h-full transform group-hover:scale-105 transition-transform duration-200"
+            />
+          )}
 
           {/* Quick-view icon overlay on hover */}
           <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 p-1.5 rounded-full shadow-xs text-gray-700">

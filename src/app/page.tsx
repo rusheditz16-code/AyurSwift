@@ -364,13 +364,20 @@ export default function StorefrontPage() {
   };
 
   const scrollToCatalog = () => {
+    if (typeof window === 'undefined') return;
     if (catalogRef.current) {
-      catalogRef.current.scrollIntoView({ behavior: 'smooth' });
+      const headerOffset = 150;
+      const elementPosition = catalogRef.current.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+      window.scrollTo({
+        top: Math.max(0, offsetPosition),
+        behavior: 'smooth',
+      });
     }
   };
 
   // Top 4 Bestsellers for the dedicated row (Zandu Balm, Pudin Hara, Mahanarayan Tel, Liv.52)
-  const bestsellerIds = ['prod-001', 'prod-005', 'prod-003', 'prod-012'];
+  const bestsellerIds = ['prod-001', 'prod-006', 'prod-002', 'prod-018'];
   const bestsellerProducts = useMemo(() => {
     return products.filter(
       (p) => bestsellerIds.includes(p.id) && p.isLive && p.stockQuantity > 0
@@ -378,7 +385,7 @@ export default function StorefrontPage() {
   }, [products]);
 
   return (
-    <div className="min-h-screen bg-[#f8f8f3] text-[#1c2820] flex flex-col font-sans pb-16 sm:pb-0">
+    <div className="min-h-screen bg-[#f8f8f3] text-[#1c2820] flex flex-col font-sans pb-20 md:pb-0">
       {/* 1. Refined Header */}
       <Header
         cartCount={cartCount}
@@ -403,7 +410,7 @@ export default function StorefrontPage() {
       />
 
       {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6 flex-1 w-full space-y-6 sm:space-y-8 overflow-hidden">
+      <main className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6 flex-1 w-full space-y-6 sm:space-y-8">
         {/* ============================================================== */}
         {/* EDITORIAL PALE SAGE HERO (#e9efdf) WITH WELLNESS STILL LIFE   */}
         {/* ============================================================== */}
@@ -667,7 +674,7 @@ export default function StorefrontPage() {
         {/* ============================================================== */}
         {/* COMPLETE MEDICINE CATALOG (Reference 2: Filters & Grid)         */}
         {/* ============================================================== */}
-        <div ref={catalogRef} className="pt-6 border-t border-[#d6ddce]">
+        <div ref={catalogRef} className="pt-6 border-t border-[#d6ddce] scroll-mt-44 sm:scroll-mt-36">
           {/* Breadcrumb */}
           <nav
             aria-label="Breadcrumb"
@@ -1023,7 +1030,7 @@ export default function StorefrontPage() {
 
       {/* Floating Zepto / Blinkit Bottom Sticky Cart Bar */}
       {cartCount > 0 && (
-        <div className="fixed bottom-16 sm:bottom-4 inset-x-0 z-40 p-3 sm:p-4 pointer-events-none">
+        <div className="fixed bottom-16 md:bottom-4 inset-x-0 z-40 p-3 sm:p-4 pointer-events-none">
           <div className="max-w-2xl mx-auto pointer-events-auto">
             <div className="bg-[#1d5a3e] text-white p-3 sm:p-3.5 rounded-2xl shadow-xl flex items-center justify-between gap-3 animate-in slide-in-from-bottom duration-200">
               <div className="flex items-center gap-3">
@@ -1065,24 +1072,31 @@ export default function StorefrontPage() {
       {/* ============================================================== */}
       <nav
         aria-label="Mobile Navigation"
-        className="fixed bottom-0 inset-x-0 z-50 bg-[#f8f8f3]/95 backdrop-blur-md border-t border-[#d6ddce] py-1.5 px-6 flex justify-between items-center sm:hidden shadow-lg"
+        className="fixed bottom-0 inset-x-0 z-50 bg-[#f8f8f3]/95 backdrop-blur-md border-t border-[#d6ddce] py-1 px-4 flex justify-around items-center md:hidden shadow-lg touch-manipulation"
       >
         {/* 1. Shop */}
         <button
+          type="button"
           onClick={() => {
             handleResetFilters();
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          className="flex flex-col items-center justify-center text-center text-[10px] font-bold text-[#1d5a3e] active:scale-95 transition-transform"
+          className="flex flex-col items-center justify-center text-center text-[10.5px] font-bold text-[#1d5a3e] active:scale-95 transition-transform min-w-[56px] min-h-[48px] p-1.5 cursor-pointer"
+          aria-label="Shop Home"
         >
           <Home className="w-5 h-5 mb-0.5" />
           <span>Shop</span>
         </button>
 
-        {/* 2. Browse (Opens Filter Drawer) */}
+        {/* 2. Browse (Scrolls to Catalog & Opens Filter Drawer) */}
         <button
-          onClick={() => setIsMobileFilterOpen(true)}
-          className="flex flex-col items-center justify-center text-center text-[10px] font-medium text-gray-600 hover:text-[#1d5a3e] active:scale-95 transition-transform"
+          type="button"
+          onClick={() => {
+            scrollToCatalog();
+            setIsMobileFilterOpen(true);
+          }}
+          className="flex flex-col items-center justify-center text-center text-[10.5px] font-medium text-[#526359] hover:text-[#1d5a3e] active:scale-95 transition-transform min-w-[56px] min-h-[48px] p-1.5 cursor-pointer"
+          aria-label="Browse Categories & Catalog"
         >
           <Compass className="w-5 h-5 mb-0.5" />
           <span>Browse</span>
@@ -1090,8 +1104,10 @@ export default function StorefrontPage() {
 
         {/* 3. Basket (Opens Cart Drawer) */}
         <button
+          type="button"
           onClick={() => setIsCartOpen(true)}
-          className="flex flex-col items-center justify-center text-center text-[10px] font-medium text-gray-600 hover:text-[#1d5a3e] relative active:scale-95 transition-transform"
+          className="flex flex-col items-center justify-center text-center text-[10.5px] font-medium text-[#526359] hover:text-[#1d5a3e] relative active:scale-95 transition-transform min-w-[56px] min-h-[48px] p-1.5 cursor-pointer"
+          aria-label="View Basket"
         >
           <div className="relative">
             <ShoppingBag className="w-5 h-5 mb-0.5" />
@@ -1106,8 +1122,10 @@ export default function StorefrontPage() {
 
         {/* 4. Account (Opens AccountModal) */}
         <button
+          type="button"
           onClick={() => setIsAccountModalOpen(true)}
-          className="flex flex-col items-center justify-center text-center text-[10px] font-medium text-gray-600 hover:text-[#1d5a3e] active:scale-95 transition-transform"
+          className="flex flex-col items-center justify-center text-center text-[10.5px] font-medium text-[#526359] hover:text-[#1d5a3e] active:scale-95 transition-transform min-w-[56px] min-h-[48px] p-1.5 cursor-pointer"
+          aria-label="Store & Account Help"
         >
           <User className="w-5 h-5 mb-0.5" />
           <span>Account</span>

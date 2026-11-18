@@ -53,7 +53,7 @@ export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/45 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+    <div className="fixed inset-0 z-70 overflow-y-auto bg-black/45 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
       <div className="w-full max-w-md bg-[#f8f8f3] text-[#1c2e24] rounded-2xl shadow-2xl border border-[#d6ddce] overflow-hidden animate-in zoom-in-95 duration-200">
         {/* Success Header */}
         <div className="bg-[#e9efdf] p-6 text-center border-b border-[#d6ddce] relative">
