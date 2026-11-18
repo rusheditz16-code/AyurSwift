@@ -151,12 +151,8 @@ export function AdminDashboard() {
       if (nextAttempts >= 5) {
         setLockoutSeconds(30);
         setAuthError('Too many failed attempts. Security lockout active for 30 seconds.');
-      } else if (!isEmailValid && !isPinValid) {
-        setAuthError('Invalid Gmail address and Security PIN. Both are required for login.');
-      } else if (!isEmailValid) {
-        setAuthError(`Unauthorized email. Access is strictly restricted to ${targetEmail}.`);
       } else {
-        setAuthError('Incorrect Security PIN. Please verify your 4-digit PIN.');
+        setAuthError('Invalid email address or security PIN. Access denied.');
       }
     }
   };
@@ -459,7 +455,7 @@ export function AdminDashboard() {
                   type="email"
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
-                  placeholder="rushirajdabhi16@gmail.com"
+                  placeholder="Enter admin Gmail address"
                   autoFocus
                   required
                   disabled={lockoutSeconds > 0}
@@ -467,7 +463,7 @@ export function AdminDashboard() {
                 />
               </div>
               <p className="text-[10px] text-[#526359]">
-                Only <strong>rushirajdabhi16@gmail.com</strong> is authorized for dark store access.
+                Enter the authorized administrator Gmail account.
               </p>
             </div>
 
@@ -485,7 +481,7 @@ export function AdminDashboard() {
                   maxLength={6}
                   value={pinInput}
                   onChange={(e) => setPinInput(e.target.value)}
-                  placeholder="•••• (1602)"
+                  placeholder="••••"
                   required
                   disabled={lockoutSeconds > 0}
                   className="w-full pl-9 pr-10 py-2.5 bg-[#f8f8f3] border border-[#d6ddce] rounded-xl text-sm font-bold tracking-widest text-[#143d29] focus:outline-none focus:ring-2 focus:ring-[#1d5a3e]"
@@ -501,7 +497,7 @@ export function AdminDashboard() {
                 </button>
               </div>
               <p className="text-[10px] text-[#526359]">
-                Both Gmail and PIN (1602) are required to unlock dashboard.
+                Both authorized Gmail and private 4-digit PIN are required.
               </p>
             </div>
 
@@ -570,7 +566,7 @@ export function AdminDashboard() {
             {/* Authenticated Admin Account Badge */}
             <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#f8f8f3] border border-[#d6ddce] text-xs text-[#143d29]">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="font-mono text-[11px] font-medium">rushirajdabhi16@gmail.com</span>
+              <span className="font-mono text-[11px] font-medium">Admin: r•••16@gmail.com</span>
             </div>
 
             <button
@@ -1205,10 +1201,10 @@ export function AdminDashboard() {
 
                 <div>
                   <label className="block text-xs font-bold text-[#526359] mb-1">
-                    Admin Security PIN (Default: 1602)
+                    Admin Security PIN
                   </label>
                   <input
-                    type="text"
+                    type="password"
                     maxLength={6}
                     value={settings.adminPin}
                     onChange={(e) =>
@@ -1220,7 +1216,7 @@ export function AdminDashboard() {
                 </div>
               </div>
 
-              {/* Authorized Admin Gmail Notice Card */}
+              {/* Authorized Admin Notice Card */}
               <div className="bg-[#e9efdf] border border-[#d6ddce] rounded-xl p-3 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-lg bg-[#1d5a3e] text-white flex items-center justify-center">
@@ -1228,10 +1224,10 @@ export function AdminDashboard() {
                   </div>
                   <div>
                     <div className="text-xs font-bold text-[#143d29]">
-                      Authorized Administrator Gmail
+                      Authorized Administrator Account
                     </div>
                     <div className="text-[11px] text-[#526359] font-mono">
-                      {settings.adminEmail || 'rushirajdabhi16@gmail.com'}
+                      r••••••••••16@gmail.com
                     </div>
                   </div>
                 </div>
