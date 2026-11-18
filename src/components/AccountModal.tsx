@@ -11,7 +11,6 @@ import {
   ShieldCheck,
   ExternalLink,
   Package,
-  FileText,
   Truck,
   ArrowRight,
 } from 'lucide-react';
@@ -26,7 +25,6 @@ interface AccountModalProps {
   currentLocation: LocationInfo;
   onOpenLocationModal: () => void;
   onOpenOrderTracking: () => void;
-  onOpenPrescriptionModal: () => void;
 }
 
 export function AccountModal({
@@ -36,7 +34,6 @@ export function AccountModal({
   currentLocation,
   onOpenLocationModal,
   onOpenOrderTracking,
-  onOpenPrescriptionModal,
 }: AccountModalProps) {
   if (!isOpen) return null;
 
@@ -111,26 +108,6 @@ export function AccountModal({
               <ArrowRight className="w-4 h-4 text-[#718277]" />
             </button>
           )}
-
-          {/* Quick Prescription Upload Shortcut */}
-          <button
-            onClick={() => {
-              onClose();
-              onOpenPrescriptionModal();
-            }}
-            className="w-full bg-white rounded-2xl p-3.5 border border-[#d6ddce] shadow-2xs flex items-center justify-between hover:border-[#1d5a3e] transition-colors text-left"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-[#e9efdf] text-[#1d5a3e] flex items-center justify-center">
-                <FileText className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="font-bold text-[#143d29]">Upload Prescription / Slip</div>
-                <div className="text-[10.5px] text-[#526359]">Instant WhatsApp order in 30 mins</div>
-              </div>
-            </div>
-            <ArrowRight className="w-4 h-4 text-[#718277]" />
-          </button>
 
           {/* Delivery Location card */}
           <div className="bg-white rounded-2xl p-3.5 border border-[#d6ddce] shadow-2xs space-y-2">

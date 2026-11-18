@@ -154,7 +154,7 @@ export function QuickBuyModal({
               <span>Or Order Any Remedy via WhatsApp</span>
             </h4>
             <p className="text-xs text-gray-500 mb-2.5">
-              Have a doctor’s slip or specific brand in mind? Type names below:
+              Looking for a specific Ayurvedic remedy or medicine? Type names below:
             </p>
 
             <form onSubmit={handleSendCustomList} className="space-y-2">
