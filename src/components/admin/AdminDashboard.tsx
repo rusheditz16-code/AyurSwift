@@ -24,6 +24,9 @@ import {
   Edit2,
   Trash2,
   RotateCcw,
+  QrCode,
+  Star,
+  Images,
 } from 'lucide-react';
 import { Product, Order, MerchantSettings } from '@/types';
 import {
@@ -79,7 +82,8 @@ export function AdminDashboard() {
   };
 
   const [newProd, setNewProd] = useState<Partial<Product>>(defaultNewProd);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+  const [imageUrlInput, setImageUrlInput] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -136,7 +140,8 @@ export function AdminDashboard() {
   const handleOpenAddModal = () => {
     setEditingProductId(null);
     setNewProd(defaultNewProd);
-    setImagePreview(null);
+    setUploadedImages([]);
+    setImageUrlInput('');
     setShowAddModal(true);
   };
 
@@ -144,7 +149,11 @@ export function AdminDashboard() {
   const handleOpenEditModal = (product: Product) => {
     setEditingProductId(product.id);
     setNewProd({ ...product });
-    setImagePreview(product.imageUrl || null);
+    const existing = product.images && product.images.length > 0
+      ? [...product.images]
+      : (product.imageUrl ? [product.imageUrl] : []);
+    setUploadedImages(existing);
+    setImageUrlInput('');
     setShowAddModal(true);
   };
 
@@ -157,29 +166,53 @@ export function AdminDashboard() {
     }
   };
 
-  // Handle image upload from file picker
-  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Handle multiple image uploads from file picker
+  const handleMultipleImageFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Please upload an image smaller than 5MB.');
-      return;
-    }
+    Array.from(files).forEach((file) => {
+      if (file.size > 5 * 1024 * 1024) {
+        alert(`File ${file.name} is larger than 5MB. Please choose a smaller image.`);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        setUploadedImages((prev) => {
+          if (prev.includes(result)) return prev;
+          return [...prev, result];
+        });
+      };
+      reader.readAsDataURL(file);
+    });
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const result = reader.result as string;
-      setImagePreview(result);
-      setNewProd((prev) => ({ ...prev, imageUrl: result }));
-    };
-    reader.readAsDataURL(file);
+    if (e.target) e.target.value = '';
   };
 
-  const handleRemoveImage = () => {
-    setImagePreview(null);
-    setNewProd((prev) => ({ ...prev, imageUrl: '' }));
-    if (fileInputRef.current) fileInputRef.current.value = '';
+  // Append image URL
+  const handleAddImageUrl = () => {
+    if (!imageUrlInput.trim()) return;
+    const url = imageUrlInput.trim();
+    setUploadedImages((prev) => {
+      if (prev.includes(url)) return prev;
+      return [...prev, url];
+    });
+    setImageUrlInput('');
+  };
+
+  // Set selected image as cover (#1)
+  const handleSetPrimaryImage = (index: number) => {
+    setUploadedImages((prev) => {
+      const target = prev[index];
+      const rest = prev.filter((_, i) => i !== index);
+      return [target, ...rest];
+    });
+  };
+
+  // Remove individual image
+  const handleRemoveImageAtIndex = (index: number) => {
+    setUploadedImages((prev) => prev.filter((_, i) => i !== index));
   };
 
   // Save new or edited product
@@ -189,6 +222,9 @@ export function AdminDashboard() {
       alert('Please fill in product name and pack size.');
       return;
     }
+
+    const finalImages = uploadedImages.filter(Boolean);
+    const primaryImageUrl = finalImages[0] || newProd.imageUrl || undefined;
 
     if (editingProductId) {
       // Update existing
@@ -210,7 +246,8 @@ export function AdminDashboard() {
             indications: newProd.indications || p.indications,
             dosage: newProd.dosage || p.dosage,
             composition: newProd.composition || p.composition,
-            imageUrl: newProd.imageUrl || undefined,
+            imageUrl: primaryImageUrl,
+            images: finalImages.length > 0 ? finalImages : undefined,
           };
           syncProductToSupabase(updatedItem);
           return updatedItem;
@@ -241,7 +278,8 @@ export function AdminDashboard() {
         dosage: newProd.dosage || 'As directed on pack',
         composition: newProd.composition || 'Herbal Ayurvedic Formulation',
         safetyAdvice: 'Store in a cool dry place away from sunlight.',
-        imageUrl: newProd.imageUrl || undefined,
+        imageUrl: primaryImageUrl,
+        images: finalImages.length > 0 ? finalImages : undefined,
       };
 
       const updated = [created, ...products];
@@ -582,17 +620,24 @@ export function AdminDashboard() {
                         >
                           <td className="py-2.5 px-3">
                             <div className="flex items-center gap-2.5">
-                              {product.imageUrl ? (
-                                <img
-                                  src={product.imageUrl}
-                                  alt={product.name}
-                                  className="w-8 h-8 object-contain rounded border border-[#d6ddce] bg-[#f8f8f3] shrink-0 p-0.5"
-                                />
-                              ) : (
-                                <div className="w-8 h-8 rounded border border-[#d6ddce] bg-[#e9efdf] flex items-center justify-center text-[10px] text-[#1d5a3e] font-bold shrink-0">
-                                  🌿
-                                </div>
-                              )}
+                              <div className="relative shrink-0">
+                                {product.imageUrl ? (
+                                  <img
+                                    src={product.imageUrl}
+                                    alt={product.name}
+                                    className="w-8 h-8 object-contain rounded border border-[#d6ddce] bg-[#f8f8f3] shrink-0 p-0.5"
+                                  />
+                                ) : (
+                                  <div className="w-8 h-8 rounded border border-[#d6ddce] bg-[#e9efdf] flex items-center justify-center text-[10px] text-[#1d5a3e] font-bold shrink-0">
+                                    🌿
+                                  </div>
+                                )}
+                                {product.images && product.images.length > 1 && (
+                                  <span className="absolute -top-1 -right-1 bg-[#1d5a3e] text-white text-[8px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center shadow-2xs" title={`${product.images.length} photos attached`}>
+                                    {product.images.length}
+                                  </span>
+                                )}
+                              </div>
                               <div>
                                 <div className="font-bold text-[#143d29] line-clamp-1">
                                   {product.name}
@@ -904,6 +949,56 @@ export function AdminDashboard() {
                 </div>
               </div>
 
+              {/* Dynamic Live UPI QR Code Card according to UPI ID */}
+              <div className="bg-[#f8f8f3] border border-[#d6ddce] rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-[#1d5a3e] text-white flex items-center justify-center">
+                      <QrCode className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="font-serif font-bold text-xs sm:text-sm text-[#143d29]">
+                        Live UPI QR Code ({settings.merchantUpiId})
+                      </h4>
+                      <p className="text-[10.5px] text-[#526359]">
+                        Auto-generated for Bharat QR &amp; NPCI UPI apps
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-300">
+                    Active
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center gap-4 bg-white p-3 rounded-xl border border-[#d6ddce]">
+                  <div className="bg-white p-2 rounded-xl border border-[#d6ddce] shadow-2xs shrink-0">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=6&data=${encodeURIComponent(
+                        `upi://pay?pa=${settings.merchantUpiId.trim()}&pn=${encodeURIComponent(
+                          settings.merchantUpiName.trim() || 'AyurSwift'
+                        )}&cu=INR&tn=AyurSwift%20Payment`
+                      )}`}
+                      alt={`UPI QR for ${settings.merchantUpiId}`}
+                      className="w-28 h-28 object-contain"
+                    />
+                  </div>
+                  <div className="space-y-1.5 text-xs text-center sm:text-left">
+                    <div className="text-[11px] text-[#526359]">
+                      Payee VPA: <strong className="font-mono text-[#1d5a3e] bg-[#f8f8f3] px-1.5 py-0.5 rounded border border-[#d6ddce]">{settings.merchantUpiId}</strong>
+                    </div>
+                    <div className="text-[11px] text-[#526359]">
+                      Account Name: <strong className="text-gray-900">{settings.merchantUpiName}</strong>
+                    </div>
+                    <div className="text-[11px] text-[#526359]">
+                      Connected WhatsApp: <strong className="text-gray-900">+{settings.merchantWhatsApp}</strong>
+                    </div>
+                    <p className="text-[10px] text-gray-400 pt-0.5">
+                      Customers scan this exact QR with Google Pay, PhonePe, Paytm, or FamPay. Payments credit with zero fees.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-[#526359] mb-1">
@@ -1015,48 +1110,93 @@ export function AdminDashboard() {
 
             {/* Modal Form Scrollable */}
             <form onSubmit={handleSaveProductSubmit} className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5">
-              {/* Product Packshot Image Upload Section */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-[#143d29]">
-                  Product Packshot Image
-                </label>
+              {/* Product Packshot Images Upload Section (Multiple Images Supported) */}
+              <div className="space-y-2.5 bg-white rounded-2xl border border-[#d6ddce] p-3.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="block text-xs font-bold text-[#143d29]">
+                      Product Packshot Images ({uploadedImages.length} attached)
+                    </label>
+                    <p className="text-[10.5px] text-[#526359]">
+                      Upload multiple angles (front box, back label, ingredients). 1st photo is cover.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="bg-[#1d5a3e] hover:bg-[#143d29] text-white text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer active:scale-95"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Upload Images</span>
+                  </button>
+                </div>
 
-                {imagePreview ? (
-                  <div className="relative bg-white rounded-2xl border border-[#d6ddce] p-3 flex items-center gap-3">
-                    <img
-                      src={imagePreview}
-                      alt="Product Preview"
-                      className="w-16 h-16 object-contain rounded-xl border border-[#d6ddce] bg-[#f8f8f3] p-1"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-[#143d29] truncate">
-                        Packshot Image Selected
-                      </p>
-                      <p className="text-[10px] text-[#526359]">
-                        Will display on product cards and detail views
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleRemoveImage}
-                      className="px-2.5 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-lg border border-rose-200 transition-colors"
+                {/* Multiple Images Gallery / Thumbnail Grid */}
+                {uploadedImages.length > 0 ? (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 pt-1">
+                    {uploadedImages.map((imgSrc, idx) => (
+                      <div
+                        key={idx}
+                        className="relative group bg-[#f8f8f3] rounded-xl border border-[#d6ddce] p-1.5 flex flex-col items-center justify-center aspect-square overflow-hidden"
+                      >
+                        <img
+                          src={imgSrc}
+                          alt={`Packshot angle ${idx + 1}`}
+                          className="w-full h-full object-contain"
+                        />
+                        {/* Cover / Star Badge */}
+                        {idx === 0 ? (
+                          <span className="absolute top-1 left-1 bg-[#1d5a3e] text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs">
+                            ★ Cover
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleSetPrimaryImage(idx)}
+                            className="absolute top-1 left-1 opacity-0 group-hover:opacity-100 bg-white/95 hover:bg-white text-[#143d29] text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs border border-[#d6ddce] transition-opacity cursor-pointer"
+                            title="Set as Cover Image"
+                          >
+                            Set Cover
+                          </button>
+                        )}
+                        {/* Remove Image Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImageAtIndex(idx)}
+                          className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 bg-rose-600 hover:bg-rose-700 text-white p-1 rounded-full shadow-xs transition-opacity cursor-pointer"
+                          title="Remove this photo"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                        <span className="absolute bottom-1 right-1 text-[9px] font-mono bg-black/50 text-white px-1 rounded">
+                          #{idx + 1}
+                        </span>
+                      </div>
+                    ))}
+                    {/* Add more tile */}
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="border-2 border-dashed border-[#d6ddce] hover:border-[#1d5a3e] bg-[#f8f8f3] rounded-xl flex flex-col items-center justify-center p-2 cursor-pointer transition-colors aspect-square text-center group"
                     >
-                      Remove
-                    </button>
+                      <Plus className="w-5 h-5 text-[#526359] group-hover:text-[#1d5a3e]" />
+                      <span className="text-[10px] font-bold text-[#526359] group-hover:text-[#1d5a3e] mt-0.5">
+                        Add More
+                      </span>
+                    </div>
                   </div>
                 ) : (
                   <div
                     onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-[#d6ddce] hover:border-[#1d5a3e] bg-white rounded-2xl p-4 text-center cursor-pointer transition-colors group"
+                    className="border-2 border-dashed border-[#d6ddce] hover:border-[#1d5a3e] bg-[#f8f8f3] rounded-2xl p-4 text-center cursor-pointer transition-colors group"
                   >
                     <div className="w-10 h-10 rounded-xl bg-[#e9efdf] text-[#1d5a3e] flex items-center justify-center mx-auto mb-2 group-hover:scale-105 transition-transform">
                       <Upload className="w-5 h-5" />
                     </div>
                     <p className="text-xs font-bold text-[#143d29]">
-                      Click to Upload Packshot Image
+                      Click to Select or Upload Product Images
                     </p>
                     <p className="text-[10.5px] text-[#526359] mt-0.5">
-                      PNG, JPG, or WebP (up to 5MB)
+                      Select multiple images at once (PNG, JPG, WebP up to 5MB each)
                     </p>
                   </div>
                 )}
@@ -1064,26 +1204,28 @@ export function AdminDashboard() {
                 <input
                   ref={fileInputRef}
                   type="file"
+                  multiple
                   accept="image/png, image/jpeg, image/webp"
-                  onChange={handleImageFileChange}
+                  onChange={handleMultipleImageFiles}
                   className="hidden"
                 />
 
-                {/* Optional Image URL Input */}
-                <div className="pt-1">
-                  <div className="text-[10px] font-semibold text-[#526359] mb-1">
-                    Or paste Image URL directly:
-                  </div>
+                {/* Optional Direct URL Input */}
+                <div className="pt-1 flex items-center gap-2">
                   <input
                     type="url"
-                    value={newProd.imageUrl || ''}
-                    onChange={(e) => {
-                      setNewProd({ ...newProd, imageUrl: e.target.value });
-                      setImagePreview(e.target.value || null);
-                    }}
-                    placeholder="https://example.com/product-packshot.png"
-                    className="w-full px-3 py-1.5 text-xs bg-white border border-[#d6ddce] rounded-xl text-[#143d29] focus:outline-none focus:ring-1 focus:ring-[#1d5a3e]"
+                    value={imageUrlInput}
+                    onChange={(e) => setImageUrlInput(e.target.value)}
+                    placeholder="Or paste web image URL here..."
+                    className="flex-1 px-3 py-1.5 text-xs bg-[#f8f8f3] border border-[#d6ddce] rounded-xl text-[#143d29] focus:outline-none focus:ring-1 focus:ring-[#1d5a3e]"
                   />
+                  <button
+                    type="button"
+                    onClick={handleAddImageUrl}
+                    className="px-3 py-1.5 text-xs font-bold bg-[#e9efdf] hover:bg-[#dfe7d2] text-[#143d29] border border-[#d6ddce] rounded-xl transition-colors shrink-0 cursor-pointer"
+                  >
+                    + Add URL
+                  </button>
                 </div>
               </div>
 

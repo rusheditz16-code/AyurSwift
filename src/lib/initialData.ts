@@ -3,9 +3,9 @@ import { Product, MerchantSettings } from '@/types';
 export const DEFAULT_SETTINGS: MerchantSettings = {
   storeName: 'AyurSwift 🌿⚡',
   tagline: 'Genuine Ayurveda & Primary Health, Delivered Swiftly.',
-  merchantWhatsApp: '919876543210',
-  merchantUpiId: 'ayurswift@okhdfcbank',
-  merchantUpiName: 'AyurSwift Dark Store',
+  merchantWhatsApp: '919624766242',
+  merchantUpiId: '9624766242@fam',
+  merchantUpiName: 'AyurSwift',
   cityDeliveryFee: 35,
   cityFreeDeliveryAbove: 499,
   courierDeliveryFee: 60,
@@ -36,7 +36,11 @@ export const INITIAL_PRODUCTS: Product[] = [
     dosage: 'Massage gently over affected forehead or joint 2-3 times daily.',
     composition: 'Mentha Sp. Satva (14%), Gaultheria Oil (12%), Eucalyptus Oil (2%), Ointment base q.s.',
     safetyAdvice: 'For external application only. Do not apply on broken or irritated skin.',
-    imageUrl: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=600&auto=format&fit=crop&q=80'
+    imageUrl: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=600&auto=format&fit=crop&q=80',
+    images: [
+      'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=600&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1587854692152-cbe660dbde88?w=600&auto=format&fit=crop&q=80'
+    ]
   },
   {
     id: 'prod-002',
@@ -58,7 +62,11 @@ export const INITIAL_PRODUCTS: Product[] = [
     dosage: 'Gently warm a small quantity and massage in circular motion for 10-15 minutes.',
     composition: 'Bilva, Ashwagandha, Bala, Atibala, Patala, Agnimantha processed in Pure Til Taila.',
     safetyAdvice: 'Best used lukewarm. For external use only.',
-    imageUrl: 'https://images.unsplash.com/photo-1608248597359-54845585b4d7?w=600&auto=format&fit=crop&q=80'
+    imageUrl: 'https://images.unsplash.com/photo-1608248597359-54845585b4d7?w=600&auto=format&fit=crop&q=80',
+    images: [
+      'https://images.unsplash.com/photo-1608248597359-54845585b4d7?w=600&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?w=600&auto=format&fit=crop&q=80'
+    ]
   },
   {
     id: 'prod-003',
@@ -150,7 +158,11 @@ export const INITIAL_PRODUCTS: Product[] = [
     dosage: 'Adults: 1-2 pearls swallowed whole with a glass of water after food.',
     composition: 'Mentha Piperita (Pudina Satva) 0.037ml, Spearmint Oil 0.005ml.',
     safetyAdvice: 'Not recommended for children under 5 years.',
-    imageUrl: 'https://images.unsplash.com/photo-1550572017-edb79984244b?w=600&auto=format&fit=crop&q=80'
+    imageUrl: 'https://images.unsplash.com/photo-1550572017-edb79984244b?w=600&auto=format&fit=crop&q=80',
+    images: [
+      'https://images.unsplash.com/photo-1550572017-edb79984244b?w=600&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=600&auto=format&fit=crop&q=80'
+    ]
   },
   {
     id: 'prod-007',

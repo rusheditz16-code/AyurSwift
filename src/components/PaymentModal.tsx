@@ -102,30 +102,37 @@ export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
           {/* UPI Section */}
           {order.paymentMethod === 'UPI' ? (
             <div className="space-y-3 text-center">
-              <div className="bg-[#e9efdf] border border-[#d6ddce] rounded-xl p-4">
-                <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-[#143d29] mb-2.5">
+              <div className="bg-[#e9efdf] border border-[#d6ddce] rounded-2xl p-4">
+                <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-[#143d29] mb-2.5">
                   <QrCode className="w-4 h-4 text-[#1d5a3e]" />
-                  <span>Scan & Pay via Any UPI App (Zero Fee)</span>
+                  <span>Scan Universal UPI QR Code</span>
                 </div>
 
-                <div className="inline-block p-2 bg-white rounded-xl shadow-2xs border border-[#d6ddce]">
+                <div className="inline-block p-2.5 bg-white rounded-2xl shadow-sm border border-[#d6ddce]">
                   <img
                     src={qrImageUrl}
-                    alt="UPI Payment QR"
-                    className="w-44 h-44 mx-auto rounded-lg"
+                    alt={`UPI Payment QR for ${settings.merchantUpiId}`}
+                    className="w-44 h-44 mx-auto rounded-lg object-contain"
                   />
+                  <div className="mt-1 text-[10px] text-gray-500 font-semibold">
+                    Google Pay • PhonePe • Paytm • FamPay • BHIM
+                  </div>
                 </div>
 
-                <div className="mt-2.5 flex items-center justify-center gap-2">
-                  <span className="text-xs font-mono font-semibold text-[#143d29] bg-white px-2.5 py-1 rounded-lg border border-[#d6ddce]">
-                    {settings.merchantUpiId}
-                  </span>
+                <div className="mt-3 flex items-center justify-center gap-2">
+                  <div className="text-left bg-white px-3 py-1.5 rounded-xl border border-[#d6ddce]">
+                    <span className="text-[10px] text-gray-500 block leading-none font-semibold">Payee UPI ID:</span>
+                    <span className="text-xs font-mono font-bold text-[#143d29]">
+                      {settings.merchantUpiId}
+                    </span>
+                  </div>
                   <button
                     onClick={handleCopyUpi}
-                    className="text-xs bg-[#1d5a3e] hover:bg-[#143d29] text-white font-medium p-1.5 rounded-lg transition-colors flex items-center gap-1"
+                    className="text-xs bg-[#1d5a3e] hover:bg-[#143d29] text-white font-semibold px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
                     title="Copy UPI ID"
                   >
                     {copiedUpi ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedUpi ? 'Copied' : 'Copy UPI'}</span>
                   </button>
                 </div>
 
@@ -133,10 +140,10 @@ export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
                 <div className="mt-3">
                   <button
                     onClick={handleOpenUpiApp}
-                    className="w-full bg-[#1d5a3e] hover:bg-[#143d29] text-white font-semibold py-2 px-3 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
+                    className="w-full bg-[#1d5a3e] hover:bg-[#143d29] text-white font-semibold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-2xs active:scale-98 cursor-pointer"
                   >
                     <Smartphone className="w-4 h-4" />
-                    <span>Pay ₹{order.totalAmount} on PhonePe / GPay / Paytm</span>
+                    <span>Pay ₹{order.totalAmount} via GPay / PhonePe / Paytm</span>
                   </button>
                 </div>
               </div>

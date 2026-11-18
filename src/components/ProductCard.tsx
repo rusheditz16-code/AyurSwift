@@ -76,6 +76,13 @@ export function ProductCard({
             />
           )}
 
+          {/* Multiple Photos Badge */}
+          {product.images && product.images.length > 1 && (
+            <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-xs text-white text-[9.5px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1 shadow-2xs pointer-events-none">
+              <span>📷 {product.images.length}</span>
+            </div>
+          )}
+
           {/* Quick-view icon overlay on hover */}
           <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 p-1.5 rounded-full shadow-xs text-gray-700">
             <Eye className="w-3.5 h-3.5 text-[#1d5a3e]" />

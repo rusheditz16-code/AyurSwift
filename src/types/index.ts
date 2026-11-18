@@ -34,6 +34,7 @@ export interface Product {
   rating: number;                 // e.g. 4.8
   reviewCount: number;            // e.g. 1420
   imageUrl?: string;
+  images?: string[];              // Multiple packshot views (front, back, label, side)
   indications: string;            // Bullet point benefits
   dosage: string;                 // Dosage instructions
   composition: string;            // Key Ayurvedic herbs/ingredients

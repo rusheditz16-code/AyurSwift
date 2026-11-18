@@ -1219,7 +1219,9 @@ export default function StorefrontPage() {
             <span>•</span>
             <span>🛡️ Official Agency Billed Stock</span>
             <span>•</span>
-            <span>📱 Direct Bank UPI</span>
+            <span>📱 Direct UPI: 9624766242@fam</span>
+            <span>•</span>
+            <span>💬 WhatsApp: +91 96247 66242</span>
           </div>
         </div>
         <p className="text-[11px] text-gray-400 text-center max-w-xl mx-auto px-4">

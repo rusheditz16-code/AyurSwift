@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Zap,
@@ -11,6 +11,9 @@ import {
   Truck,
   HeartHandshake,
   AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  Images,
 } from 'lucide-react';
 import { Product } from '@/types';
 import { MedicinePackVisual } from '@/components/MedicinePackVisual';
@@ -30,9 +33,22 @@ export function MedicineDetailModal({
   onAddToCart,
   onUpdateQuantity,
 }: MedicineDetailModalProps) {
-  const [imageError, setImageError] = useState(false);
+  const [activeImageIdx, setActiveImageIdx] = useState(0);
+  const [failedImages, setFailedImages] = useState<Record<number, boolean>>({});
+
+  useEffect(() => {
+    setActiveImageIdx(0);
+    setFailedImages({});
+  }, [product?.id]);
 
   if (!product) return null;
+
+  const allImages: string[] = (product.images && product.images.length > 0)
+    ? product.images
+    : (product.imageUrl ? [product.imageUrl] : []);
+
+  const currentImage = allImages[activeImageIdx] || product.imageUrl;
+  const isCurrentFailed = failedImages[activeImageIdx];
 
   const discountPercent = Math.round(
     ((product.mrp - product.sellingPrice) / product.mrp) * 100
@@ -62,30 +78,94 @@ export function MedicineDetailModal({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-          {/* Medicine Packshot Showcase */}
-          <div className="relative bg-white rounded-2xl p-4 border border-[#d6ddce] flex items-center justify-center h-48 sm:h-52 overflow-hidden shadow-inner">
-            {product.imageUrl && !imageError ? (
-              <img
-                src={product.imageUrl}
-                alt={product.name}
-                onError={() => setImageError(true)}
-                className="max-h-full max-w-full object-contain p-2"
-              />
-            ) : (
-              <MedicinePackVisual
-                product={product}
-                className="w-full h-full transform scale-110"
-              />
+          {/* Medicine Packshot Showcase with Multiple Images Gallery */}
+          <div className="space-y-2">
+            <div className="relative bg-white rounded-2xl p-4 border border-[#d6ddce] flex items-center justify-center h-48 sm:h-56 overflow-hidden shadow-inner group">
+              {currentImage && !isCurrentFailed ? (
+                <img
+                  src={currentImage}
+                  alt={`${product.name} - View ${activeImageIdx + 1}`}
+                  onError={() => setFailedImages((prev) => ({ ...prev, [activeImageIdx]: true }))}
+                  className="max-h-full max-w-full object-contain p-2 transition-all duration-200"
+                />
+              ) : (
+                <MedicinePackVisual
+                  product={product}
+                  className="w-full h-full transform scale-110"
+                />
+              )}
+
+              <div className="absolute top-3 left-3 bg-[#1d5a3e] text-white text-[10px] font-bold px-2.5 py-0.5 rounded-md flex items-center gap-1 shadow-2xs">
+                <Zap className="w-3 h-3 fill-[#c86326] text-[#c86326]" />
+                <span>30–45M RAPIDO DISPATCH</span>
+              </div>
+
+              <div className="absolute bottom-3 right-3 bg-[#f8f8f3] text-gray-800 text-xs font-bold px-2.5 py-1 rounded-lg border border-[#d6ddce] shadow-2xs">
+                {product.packSize}
+              </div>
+
+              {/* Multiple Images Navigation Controls */}
+              {allImages.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveImageIdx((prev) => (prev > 0 ? prev - 1 : allImages.length - 1));
+                    }}
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/95 hover:bg-white text-[#143d29] shadow-md border border-[#d6ddce] flex items-center justify-center transition-all cursor-pointer opacity-90 group-hover:opacity-100"
+                    aria-label="Previous image"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveImageIdx((prev) => (prev < allImages.length - 1 ? prev + 1 : 0));
+                    }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/95 hover:bg-white text-[#143d29] shadow-md border border-[#d6ddce] flex items-center justify-center transition-all cursor-pointer opacity-90 group-hover:opacity-100"
+                    aria-label="Next image"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+
+                  <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+                    <Images className="w-3 h-3" />
+                    <span>{activeImageIdx + 1} / {allImages.length}</span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Multiple Images Thumbnail Strip */}
+            {allImages.length > 1 && (
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 px-1">
+                {allImages.map((img, idx) => {
+                  const isActive = idx === activeImageIdx;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setActiveImageIdx(idx)}
+                      className={`relative w-12 h-12 rounded-xl border bg-white p-1 shrink-0 overflow-hidden cursor-pointer transition-all ${
+                        isActive
+                          ? 'border-[#1d5a3e] ring-2 ring-[#1d5a3e] shadow-xs'
+                          : 'border-[#d6ddce] opacity-70 hover:opacity-100'
+                      }`}
+                      aria-label={`Switch to image ${idx + 1}`}
+                    >
+                      <img
+                        src={img}
+                        alt={`Thumbnail ${idx + 1}`}
+                        className="w-full h-full object-contain"
+                      />
+                    </button>
+                  );
+                })}
+              </div>
             )}
-
-            <div className="absolute top-3 left-3 bg-[#1d5a3e] text-white text-[10px] font-bold px-2.5 py-0.5 rounded-md flex items-center gap-1 shadow-2xs">
-              <Zap className="w-3 h-3 fill-[#c86326] text-[#c86326]" />
-              <span>30–45M RAPIDO DISPATCH</span>
-            </div>
-
-            <div className="absolute bottom-3 right-3 bg-[#f8f8f3] text-gray-800 text-xs font-bold px-2.5 py-1 rounded-lg border border-[#d6ddce] shadow-2xs">
-              {product.packSize}
-            </div>
           </div>
 
           {/* Title & Brand */}

@@ -5,9 +5,9 @@ import { INITIAL_PRODUCTS, DEFAULT_SETTINGS } from './initialData';
 import { supabase, isSupabaseConfigured } from './supabase';
 
 const STORAGE_KEYS = {
-  PRODUCTS: 'ayurswift_products_v2', // Updated key for real product catalog
+  PRODUCTS: 'ayurswift_products_v3', // Updated key for multiple image support & real catalog
   ORDERS: 'ayurswift_orders_v1',
-  SETTINGS: 'ayurswift_settings_v1',
+  SETTINGS: 'ayurswift_settings_v2', // Updated key for real WhatsApp (9624766242) & UPI (9624766242@fam)
   CART: 'ayurswift_cart_v1',
 };
 
@@ -16,8 +16,27 @@ export function getStoredSettings(): MerchantSettings {
   if (typeof window === 'undefined') return DEFAULT_SETTINGS;
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-    if (!raw) return DEFAULT_SETTINGS;
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    if (!raw) {
+      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(DEFAULT_SETTINGS));
+      return DEFAULT_SETTINGS;
+    }
+    const parsed = JSON.parse(raw);
+    // If old demo whatsapp or old upi is detected, automatically migrate to user's real details
+    if (
+      parsed.merchantUpiId === 'ayurswift@okhdfcbank' ||
+      parsed.merchantWhatsApp === '919876543210' ||
+      !parsed.merchantUpiId
+    ) {
+      const updated: MerchantSettings = {
+        ...parsed,
+        merchantWhatsApp: DEFAULT_SETTINGS.merchantWhatsApp,
+        merchantUpiId: DEFAULT_SETTINGS.merchantUpiId,
+        merchantUpiName: DEFAULT_SETTINGS.merchantUpiName,
+      };
+      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(updated));
+      return updated;
+    }
+    return { ...DEFAULT_SETTINGS, ...parsed };
   } catch {
     return DEFAULT_SETTINGS;
   }
@@ -95,16 +114,23 @@ export function generateUpiUri(params: {
   amount: number;
   orderId: string;
 }): string {
-  const cleanUpi = encodeURIComponent(params.upiId.trim());
+  // UPI VPA must preserve the '@' symbol (e.g. 9624766242@fam) for NPCI and mobile scanners
+  const cleanUpi = params.upiId.trim();
   const cleanName = encodeURIComponent(params.payeeName.trim() || 'AyurSwift');
-  const cleanAmount = params.amount.toFixed(2);
-  const note = encodeURIComponent(`Order ${params.orderId} - AyurSwift`);
-  return `upi://pay?pa=${cleanUpi}&pn=${cleanName}&am=${cleanAmount}&cu=INR&tn=${note}`;
+  const cleanAmount = params.amount > 0 ? params.amount.toFixed(2) : '';
+  const note = encodeURIComponent(`AyurSwift Order ${params.orderId}`);
+  if (cleanAmount) {
+    return `upi://pay?pa=${cleanUpi}&pn=${cleanName}&am=${cleanAmount}&cu=INR&tn=${note}`;
+  }
+  return `upi://pay?pa=${cleanUpi}&pn=${cleanName}&cu=INR&tn=${note}`;
 }
 
 // Format WhatsApp Order Message with direct intent link
 export function generateWhatsAppOrderUrl(order: Order, merchantWhatsApp: string): string {
-  const phone = merchantWhatsApp.replace(/\D/g, '');
+  let phone = merchantWhatsApp.replace(/\D/g, '');
+  if (phone.length === 10) {
+    phone = `91${phone}`;
+  }
   const itemsText = order.items
     .map(i => `• ${i.name} (${i.packSize}) x ${i.quantity} = ₹${i.totalPrice}`)
     .join('\n');

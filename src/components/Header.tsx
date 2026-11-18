@@ -112,13 +112,13 @@ export function Header({
             </Link>
             <span className="text-[#a8b89e] hidden sm:inline">•</span>
             <a
-              href={`https://wa.me/${settings.merchantWhatsApp}?text=Hi%20AyurSwift,%20I%20need%20quick%20medicine%20assistance.`}
+              href={`https://wa.me/${settings.merchantWhatsApp.replace(/\D/g, '')}?text=Hi%20AyurSwift,%20I%20need%20quick%20medicine%20assistance.`}
               target="_blank"
               rel="noreferrer"
               className="text-[#1d5a3e] hover:underline flex items-center gap-1 font-bold whitespace-nowrap"
             >
               <PhoneCall className="w-3 h-3" />
-              <span>WhatsApp</span>
+              <span>WhatsApp: 9624766242</span>
             </a>
           </div>
         </div>

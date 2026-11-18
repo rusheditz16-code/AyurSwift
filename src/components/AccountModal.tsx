@@ -163,14 +163,17 @@ export function AccountModal({
               Direct Assistance
             </span>
             <a
-              href={`https://wa.me/${settings.merchantWhatsApp}?text=Hello%20AyurSwift,%20I%20need%20help%20with%20an%20order.`}
+              href={`https://wa.me/${settings.merchantWhatsApp.replace(/\D/g, '')}?text=Hello%20AyurSwift,%20I%20need%20help%20with%20an%20order.`}
               target="_blank"
               rel="noreferrer"
               className="w-full flex items-center justify-between p-2.5 rounded-xl bg-[#e9efdf] hover:bg-[#dfe7d2] text-[#143d29] font-bold transition-colors"
             >
               <div className="flex items-center gap-2">
                 <PhoneCall className="w-4 h-4 text-[#1d5a3e]" />
-                <span>WhatsApp / Call Desk</span>
+                <div>
+                  <div className="font-bold">WhatsApp / Call Desk</div>
+                  <div className="text-[10px] text-[#526359]">+91 96247 66242</div>
+                </div>
               </div>
               <ExternalLink className="w-3.5 h-3.5 text-gray-500" />
             </a>
