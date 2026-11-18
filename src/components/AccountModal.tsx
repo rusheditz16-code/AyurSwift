@@ -2,9 +2,22 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { X, Lock, PhoneCall, MapPin, Clock, ShieldCheck, ExternalLink, HelpCircle } from 'lucide-react';
+import {
+  X,
+  Lock,
+  PhoneCall,
+  MapPin,
+  Clock,
+  ShieldCheck,
+  ExternalLink,
+  Package,
+  FileText,
+  Truck,
+  ArrowRight,
+} from 'lucide-react';
 import { MerchantSettings } from '@/types';
 import { LocationInfo } from '@/components/LocationModal';
+import { getStoredOrders } from '@/lib/store';
 
 interface AccountModalProps {
   isOpen: boolean;
@@ -12,6 +25,8 @@ interface AccountModalProps {
   settings: MerchantSettings;
   currentLocation: LocationInfo;
   onOpenLocationModal: () => void;
+  onOpenOrderTracking: () => void;
+  onOpenPrescriptionModal: () => void;
 }
 
 export function AccountModal({
@@ -20,14 +35,19 @@ export function AccountModal({
   settings,
   currentLocation,
   onOpenLocationModal,
+  onOpenOrderTracking,
+  onOpenPrescriptionModal,
 }: AccountModalProps) {
   if (!isOpen) return null;
 
+  const orders = getStoredOrders();
+  const latestOrder = orders[0] || null;
+
   return (
-    <div className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-[#f8f8f3] rounded-3xl max-w-sm w-full overflow-hidden shadow-2xl border border-[#d6ddce] animate-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-70 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="bg-[#f8f8f3] rounded-3xl max-w-sm w-full overflow-hidden shadow-2xl border border-[#d6ddce] animate-in zoom-in-95 duration-150 flex flex-col max-h-[92vh]">
         {/* Header */}
-        <div className="p-5 border-b border-[#d6ddce] bg-[#e9efdf] flex items-center justify-between">
+        <div className="p-4 sm:p-5 border-b border-[#d6ddce] bg-[#e9efdf] flex items-center justify-between shrink-0">
           <div>
             <span className="text-[10px] font-bold tracking-widest text-[#1d5a3e] uppercase">
               AyurSwift Bhavnagar
@@ -44,8 +64,75 @@ export function AccountModal({
         </div>
 
         {/* Content */}
-        <div className="p-5 space-y-4 text-xs text-gray-700">
-          {/* Location status card */}
+        <div className="p-4 sm:p-5 space-y-3.5 text-xs text-gray-700 overflow-y-auto flex-1">
+          {/* Active Order Snapshot */}
+          {latestOrder ? (
+            <div className="bg-white rounded-2xl p-3.5 border border-[#d6ddce] shadow-2xs space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                  <Package className="w-3.5 h-3.5 text-[#1d5a3e]" />
+                  <span>Latest Order</span>
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#e9efdf] text-[#143d29]">
+                  {latestOrder.id} • {latestOrder.orderStatus}
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-600">
+                {latestOrder.items.length} items • Total: <strong>₹{latestOrder.totalAmount}</strong>
+              </p>
+              <button
+                onClick={() => {
+                  onClose();
+                  onOpenOrderTracking();
+                }}
+                className="w-full bg-[#e9efdf] hover:bg-[#dfe7d2] text-[#143d29] font-bold text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <Truck className="w-3.5 h-3.5 text-[#1d5a3e]" />
+                <span>Track Live Rapido Dispatch</span>
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                onClose();
+                onOpenOrderTracking();
+              }}
+              className="w-full bg-white rounded-2xl p-3.5 border border-[#d6ddce] shadow-2xs flex items-center justify-between hover:border-[#1d5a3e] transition-colors text-left"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-[#e9efdf] text-[#1d5a3e] flex items-center justify-center">
+                  <Truck className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="font-bold text-[#143d29]">Order History &amp; Tracking</div>
+                  <div className="text-[10.5px] text-[#526359]">View past orders &amp; status</div>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-[#718277]" />
+            </button>
+          )}
+
+          {/* Quick Prescription Upload Shortcut */}
+          <button
+            onClick={() => {
+              onClose();
+              onOpenPrescriptionModal();
+            }}
+            className="w-full bg-white rounded-2xl p-3.5 border border-[#d6ddce] shadow-2xs flex items-center justify-between hover:border-[#1d5a3e] transition-colors text-left"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-[#e9efdf] text-[#1d5a3e] flex items-center justify-center">
+                <FileText className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="font-bold text-[#143d29]">Upload Prescription / Slip</div>
+                <div className="text-[10.5px] text-[#526359]">Instant WhatsApp order in 30 mins</div>
+              </div>
+            </div>
+            <ArrowRight className="w-4 h-4 text-[#718277]" />
+          </button>
+
+          {/* Delivery Location card */}
           <div className="bg-white rounded-2xl p-3.5 border border-[#d6ddce] shadow-2xs space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
@@ -65,7 +152,7 @@ export function AccountModal({
               <MapPin className="w-4 h-4 text-[#1d5a3e] shrink-0" />
               <div>
                 <div className="font-bold">{currentLocation.area}</div>
-                <div className="text-[11px] text-emerald-800">{currentLocation.estimate}</div>
+                <div className="text-[11px] text-[#1d5a3e] font-semibold">{currentLocation.estimate}</div>
               </div>
             </div>
           </div>
@@ -115,7 +202,7 @@ export function AccountModal({
           </div>
 
           {/* Note */}
-          <div className="flex items-center gap-2 text-[10.5px] text-gray-500 px-1">
+          <div className="flex items-center gap-2 text-[10.5px] text-gray-500 px-1 pt-1">
             <ShieldCheck className="w-3.5 h-3.5 text-[#1d5a3e] shrink-0" />
             <span>AyurSwift Home Dark Store • Bhavnagar, Gujarat</span>
           </div>

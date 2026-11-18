@@ -10,6 +10,8 @@ import { LocationModal, LocationInfo } from '@/components/LocationModal';
 import { QuickBuyModal } from '@/components/QuickBuyModal';
 import { MobileFilterDrawer } from '@/components/MobileFilterDrawer';
 import { AccountModal } from '@/components/AccountModal';
+import { PrescriptionUploadModal } from '@/components/PrescriptionUploadModal';
+import { OrderTrackingModal } from '@/components/OrderTrackingModal';
 import {
   Product,
   CartItem,
@@ -33,6 +35,7 @@ import {
   ArrowRight,
   PhoneCall,
   CheckCircle,
+  CheckCircle2,
   Truck,
   RotateCcw,
   SlidersHorizontal,
@@ -41,6 +44,7 @@ import {
   Home,
   Compass,
   User,
+  FileText,
 } from 'lucide-react';
 
 const DEFAULT_LOCATION: LocationInfo = {
@@ -92,11 +96,19 @@ export default function StorefrontPage() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [isQuickBuyModalOpen, setIsQuickBuyModalOpen] = useState(false);
+  const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
+  const [isOrderTrackingOpen, setIsOrderTrackingOpen] = useState(false);
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [selectedMedicineDetails, setSelectedMedicineDetails] = useState<Product | null>(null);
   const [currentLocation, setCurrentLocation] = useState<LocationInfo>(DEFAULT_LOCATION);
+  const [toastText, setToastText] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastText(msg);
+    setTimeout(() => setToastText(null), 3000);
+  };
 
   // Filters & Sorting
   const [searchQuery, setSearchQuery] = useState('');
@@ -259,6 +271,25 @@ export default function StorefrontPage() {
       updated = [...cart, { product, quantity: 1 }];
     }
     saveCart(updated);
+    showToast(`Added ${product.name} to basket`);
+  };
+
+  const handleReorder = (items: { productId: string; quantity: number }[]) => {
+    let updated = [...cart];
+    items.forEach(({ productId, quantity }) => {
+      const product = products.find((p) => p.id === productId);
+      if (product && product.stockQuantity > 0) {
+        const existing = updated.find((i) => i.product.id === productId);
+        if (existing) {
+          existing.quantity = Math.min(existing.quantity + quantity, product.stockQuantity);
+        } else {
+          updated.push({ product, quantity: Math.min(quantity, product.stockQuantity) });
+        }
+      }
+    });
+    saveCart(updated);
+    setIsCartOpen(true);
+    showToast('Items reloaded into your basket');
   };
 
   const handleUpdateQuantity = (productId: string, quantity: number) => {
@@ -405,6 +436,7 @@ export default function StorefrontPage() {
         currentLocation={currentLocation}
         onOpenLocationModal={() => setIsLocationModalOpen(true)}
         onOpenQuickBuyModal={() => setIsQuickBuyModalOpen(true)}
+        onOpenPrescriptionModal={() => setIsPrescriptionModalOpen(true)}
         products={products}
         onSelectProduct={(p) => setSelectedMedicineDetails(p)}
       />
@@ -446,6 +478,14 @@ export default function StorefrontPage() {
               >
                 <Zap className="w-3.5 h-3.5 fill-[#c86326] text-[#c86326]" />
                 <span>Quick Buy</span>
+              </button>
+
+              <button
+                onClick={() => setIsPrescriptionModalOpen(true)}
+                className="bg-white hover:bg-gray-50 text-[#143d29] border border-[#d6ddce] font-bold text-xs sm:text-sm px-5 py-3 rounded-2xl flex items-center gap-2 transition-all shadow-2xs cursor-pointer"
+              >
+                <FileText className="w-3.5 h-3.5 text-[#1d5a3e]" />
+                <span>Upload Slip</span>
               </button>
             </div>
           </div>
@@ -541,6 +581,37 @@ export default function StorefrontPage() {
               </div>
             </div>
           </div>
+        </section>
+
+        {/* ============================================================== */}
+        {/* DOCTOR PRESCRIPTION / MEDICINE SLIP BANNER                     */}
+        {/* ============================================================== */}
+        <section className="bg-gradient-to-r from-[#e9efdf] to-[#f8f8f3] border border-[#d6ddce] rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-2xs">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-[#1d5a3e] text-white flex items-center justify-center text-xl shrink-0 shadow-2xs">
+              📋
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-serif font-bold text-sm sm:text-base text-[#143d29]">
+                  Have a Doctor Prescription or Medicine Slip?
+                </span>
+                <span className="bg-[#1d5a3e]/10 text-[#1d5a3e] text-[10px] font-bold px-2 py-0.5 rounded-full border border-[#1d5a3e]/20 hidden sm:inline">
+                  30–45m Rapido
+                </span>
+              </div>
+              <p className="text-xs text-[#526359] mt-0.5">
+                Upload photo or type your list. Our dark store team prepares your order for instant rider dispatch.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setIsPrescriptionModalOpen(true)}
+            className="w-full sm:w-auto bg-[#1d5a3e] hover:bg-[#143d29] text-white text-xs font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-xs shrink-0 active:scale-95 cursor-pointer"
+          >
+            <FileText className="w-4 h-4" />
+            <span>Upload Prescription Slip</span>
+          </button>
         </section>
 
         {/* ============================================================== */}
@@ -1220,12 +1291,36 @@ export default function StorefrontPage() {
         totalFilteredCount={filteredProducts.length}
       />
 
+      {/* Floating Toast Notification */}
+      {toastText && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[80] bg-[#143d29] text-white px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 text-xs font-semibold animate-in fade-in slide-in-from-top-2 duration-150 border border-white/10 pointer-events-none">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{toastText}</span>
+        </div>
+      )}
+
       <AccountModal
         isOpen={isAccountModalOpen}
         onClose={() => setIsAccountModalOpen(false)}
         settings={settings}
         currentLocation={currentLocation}
         onOpenLocationModal={() => setIsLocationModalOpen(true)}
+        onOpenOrderTracking={() => setIsOrderTrackingOpen(true)}
+        onOpenPrescriptionModal={() => setIsPrescriptionModalOpen(true)}
+      />
+
+      <PrescriptionUploadModal
+        isOpen={isPrescriptionModalOpen}
+        onClose={() => setIsPrescriptionModalOpen(false)}
+        settings={settings}
+        currentLocation={currentLocation}
+      />
+
+      <OrderTrackingModal
+        isOpen={isOrderTrackingOpen}
+        onClose={() => setIsOrderTrackingOpen(false)}
+        settings={settings}
+        onReorder={handleReorder}
       />
     </div>
   );

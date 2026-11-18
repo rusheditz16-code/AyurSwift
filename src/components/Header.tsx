@@ -11,6 +11,7 @@ import {
   X,
   PhoneCall,
   Lock,
+  FileText,
 } from 'lucide-react';
 import { MerchantSettings, Product } from '@/types';
 
@@ -26,6 +27,7 @@ interface HeaderProps {
   currentLocation: { area: string; pincode: string; estimate: string };
   onOpenLocationModal: () => void;
   onOpenQuickBuyModal: () => void;
+  onOpenPrescriptionModal?: () => void;
   products: Product[];
   onSelectProduct: (p: Product) => void;
 }
@@ -51,6 +53,7 @@ export function Header({
   currentLocation,
   onOpenLocationModal,
   onOpenQuickBuyModal,
+  onOpenPrescriptionModal,
   products,
   onSelectProduct,
 }: HeaderProps) {
@@ -231,8 +234,19 @@ export function Header({
           )}
         </div>
 
-        {/* Action Buttons: Quick Buy & Cart */}
+        {/* Action Buttons: Quick Buy, Prescription & Cart */}
         <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+          {onOpenPrescriptionModal && (
+            <button
+              onClick={onOpenPrescriptionModal}
+              className="hidden lg:flex items-center gap-1.5 bg-white hover:bg-[#e9efdf] border border-[#d6ddce] text-[#143d29] px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95"
+              aria-label="Upload Doctor Prescription"
+            >
+              <FileText className="w-3.5 h-3.5 text-[#1d5a3e]" />
+              <span>Upload Slip</span>
+            </button>
+          )}
+
           <button
             onClick={onOpenQuickBuyModal}
             className="hidden sm:flex items-center gap-1.5 bg-[#e9efdf] hover:bg-[#dfe7d2] border border-[#d6ddce] text-[#143d29] px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95"
