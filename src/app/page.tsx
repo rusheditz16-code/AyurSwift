@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import Link from 'next/link';
 import { Header } from '@/components/Header';
 import { ProductCard } from '@/components/ProductCard';
 import { CartDrawer } from '@/components/CartDrawer';
@@ -43,6 +44,8 @@ import {
   Home,
   Compass,
   User,
+  MapPin,
+  Lock,
 } from 'lucide-react';
 
 const DEFAULT_LOCATION: LocationInfo = {
@@ -440,40 +443,35 @@ export default function StorefrontPage() {
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6 flex-1 w-full space-y-6 sm:space-y-8">
         {/* ============================================================== */}
-        {/* EDITORIAL PALE SAGE HERO (#e9efdf) WITH WELLNESS STILL LIFE   */}
+        {/* SIMPLE EDITORIAL HERO                                          */}
         {/* ============================================================== */}
         <section className="rounded-3xl bg-[#e9efdf] border border-[#d6ddce] p-6 sm:p-10 shadow-2xs relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 sm:gap-8">
           <div className="space-y-3.5 max-w-xl z-10">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/80 border border-[#d6ddce] text-[#1d5a3e] text-xs font-bold shadow-2xs">
-              <Zap className="w-3.5 h-3.5 fill-[#c86326] text-[#c86326]" />
-              <span>Bhavnagar Home Dark Store • 30–45 Mins Express</span>
-            </div>
-
             <h1 className="font-serif font-bold text-2xl sm:text-4xl text-[#143d29] tracking-tight leading-tight">
               Authentic Ayurvedic Remedies,
               <br />
-              <span className="text-[#1d5a3e]">Delivered to Your Doorstep.</span>
+              <span className="text-[#1d5a3e]">Delivered Swiftly.</span>
             </h1>
 
             <p className="text-xs sm:text-sm text-gray-700 leading-relaxed font-normal">
-              Procured from wholesale agencies with official GST invoices. Rapid 30–45 min Rapido bike dispatch across Bhavnagar, or dependable courier dispatch nationwide.
+              Genuine herbal oils, pain balms, and daily health products sourced directly from trusted Ayurvedic houses.
             </p>
 
             <div className="pt-2 flex flex-wrap items-center gap-3">
               <button
                 onClick={scrollToCatalog}
-                className="bg-[#1d5a3e] hover:bg-[#143d29] text-white font-bold text-xs sm:text-sm px-6 py-3 rounded-2xl flex items-center gap-2 transition-all shadow-sm active:scale-95"
+                className="bg-[#1d5a3e] hover:bg-[#143d29] text-white font-bold text-xs sm:text-sm px-6 py-3 rounded-2xl flex items-center gap-2 transition-all shadow-sm active:scale-95 cursor-pointer"
               >
-                <span>Shop in-stock products</span>
+                <span>Shop products</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
 
               <button
-                onClick={() => setIsQuickBuyModalOpen(true)}
-                className="bg-white hover:bg-gray-50 text-[#143d29] border border-[#d6ddce] font-bold text-xs sm:text-sm px-5 py-3 rounded-2xl flex items-center gap-2 transition-all shadow-2xs"
+                onClick={() => setIsLocationModalOpen(true)}
+                className="bg-white hover:bg-gray-50 text-[#143d29] border border-[#d6ddce] font-bold text-xs sm:text-sm px-5 py-3 rounded-2xl flex items-center gap-2 transition-all shadow-2xs cursor-pointer"
               >
-                <Zap className="w-3.5 h-3.5 fill-[#c86326] text-[#c86326]" />
-                <span>Quick Buy</span>
+                <MapPin className="w-3.5 h-3.5 text-[#1d5a3e]" />
+                <span>Check delivery</span>
               </button>
             </div>
           </div>
@@ -525,48 +523,48 @@ export default function StorefrontPage() {
         </section>
 
         {/* ============================================================== */}
-        {/* COMPACT WHITE DELIVERY-PROMISE CARDS (3 Clean Cards)           */}
+        {/* CONCISE DELIVERY INFORMATION BLOCK                             */}
         {/* ============================================================== */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="bg-white border border-[#d6ddce] rounded-2xl p-4 shadow-2xs flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-[#e9efdf] text-[#1d5a3e] flex items-center justify-center shrink-0">
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+          <div className="bg-white border border-[#d6ddce] rounded-2xl p-4 shadow-2xs flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-[#e9efdf] text-[#1d5a3e] flex items-center justify-center shrink-0 mt-0.5">
               <Zap className="w-5 h-5 fill-[#c86326] text-[#c86326]" />
             </div>
-            <div>
-              <div className="font-bold text-xs text-gray-900 leading-tight">
-                Nearby Rapido Delivery
+            <div className="space-y-0.5">
+              <div className="font-serif font-bold text-sm text-[#143d29]">
+                Local Express Delivery
               </div>
-              <div className="text-[11px] text-gray-600 mt-0.5">
-                30–45 min bike dispatch across Bhavnagar
-              </div>
+              <p className="text-xs text-gray-600 leading-relaxed">
+                30–45 min doorstep delivery in Bhavnagar. ₹{settings.cityDeliveryFee} fee (Free for orders over ₹{settings.cityFreeDeliveryAbove}).
+              </p>
             </div>
           </div>
 
-          <div className="bg-white border border-[#d6ddce] rounded-2xl p-4 shadow-2xs flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-[#e9efdf] text-[#1d5a3e] flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-5 h-5" />
+          <div className="bg-white border border-[#d6ddce] rounded-2xl p-4 shadow-2xs flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-[#e9efdf] text-[#1d5a3e] flex items-center justify-center shrink-0 mt-0.5">
+              <Truck className="w-5 h-5 text-[#1d5a3e]" />
             </div>
-            <div>
-              <div className="font-bold text-xs text-gray-900 leading-tight">
-                Trusted Brands
+            <div className="space-y-0.5">
+              <div className="font-serif font-bold text-sm text-[#143d29]">
+                All-India Courier
               </div>
-              <div className="text-[11px] text-gray-600 mt-0.5">
-                Dabur, Zandu, Himalaya &amp; Baidyanath agency stock
-              </div>
+              <p className="text-xs text-gray-600 leading-relaxed">
+                Carefully packed parcels dispatched nationwide for a flat ₹{settings.courierDeliveryFee}.
+              </p>
             </div>
           </div>
 
-          <div className="bg-white border border-[#d6ddce] rounded-2xl p-4 shadow-2xs flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-[#e9efdf] text-[#1d5a3e] flex items-center justify-center shrink-0">
-              <Truck className="w-5 h-5" />
+          <div className="bg-white border border-[#d6ddce] rounded-2xl p-4 shadow-2xs flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-[#e9efdf] text-[#1d5a3e] flex items-center justify-center shrink-0 mt-0.5">
+              <ShieldCheck className="w-5 h-5 text-[#1d5a3e]" />
             </div>
-            <div>
-              <div className="font-bold text-xs text-gray-900 leading-tight">
-                Courier Delivery
+            <div className="space-y-0.5">
+              <div className="font-serif font-bold text-sm text-[#143d29]">
+                100% Genuine Pharmacy Stock
               </div>
-              <div className="text-[11px] text-gray-600 mt-0.5">
-                Safe bubble-wrapped parcels across India
-              </div>
+              <p className="text-xs text-gray-600 leading-relaxed">
+                Direct authorized agency procurement with verified GST billing from India's trusted Ayurvedic houses.
+              </p>
             </div>
           </div>
         </section>
@@ -662,21 +660,21 @@ export default function StorefrontPage() {
         </section>
 
         {/* ============================================================== */}
-        {/* DAILY BESTSELLERS (Featured Once)                              */}
+        {/* FEATURED REMEDIES (Featured Once)                              */}
         {/* ============================================================== */}
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="font-serif font-bold text-base sm:text-lg text-[#143d29] tracking-tight">
-                Daily Bestsellers
+                Featured Remedies
               </h2>
               <p className="text-xs text-gray-500 mt-0.5">
-                Top requested Ayurvedic remedies ready for 30–45 min dispatch
+                Popular Ayurvedic essentials ready for immediate dispatch
               </p>
             </div>
             <button
               onClick={scrollToCatalog}
-              className="text-xs font-bold text-[#1d5a3e] hover:underline"
+              className="text-xs font-bold text-[#1d5a3e] hover:underline cursor-pointer"
             >
               Browse Complete Catalog ({products.filter((p) => p.isLive && p.stockQuantity > 0).length})
             </button>
@@ -930,7 +928,7 @@ export default function StorefrontPage() {
                       : selectedCategory}
                   </h2>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    Showing {filteredProducts.length} remedies in stock at Bhavnagar dark store
+                    Showing {filteredProducts.length} in-stock remedies
                   </p>
                 </div>
 
@@ -1024,7 +1022,7 @@ export default function StorefrontPage() {
                 Order by Phone or WhatsApp
               </div>
               <div className="text-xs text-gray-600 mt-0.5">
-                Have a medicine list or carry-bag flyer? Enter your number for immediate dispatch in Bhavnagar.
+                Looking for a specific Ayurvedic medicine? Enter your number for instant order support.
               </div>
             </div>
           </div>
@@ -1078,7 +1076,7 @@ export default function StorefrontPage() {
                     )}
                   </div>
                   <span className="text-[10px] text-emerald-100 block">
-                    {cartCount} remedy{cartCount === 1 ? '' : 'ies'} ready for Rapido dispatch
+                    {cartCount} item{cartCount === 1 ? '' : 's'} in basket
                   </span>
                 </div>
               </div>
@@ -1160,30 +1158,41 @@ export default function StorefrontPage() {
         </button>
       </nav>
 
-      {/* Refined Footer */}
-      <footer className="mt-14 bg-white border-t border-[#d6ddce] py-10 text-xs text-gray-600 space-y-4">
+      {/* Concise Footer with Contact & Owner Access */}
+      <footer className="mt-14 bg-white border-t border-[#d6ddce] py-8 text-xs text-gray-600">
         <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2 font-serif font-bold text-[#143d29] text-sm">
-            <span>AyurSwift 🌿⚡</span>
-            <span className="text-[#a8b89e]">•</span>
-            <span className="font-sans font-normal text-gray-500">Bhavnagar Home Dark Store</span>
+          <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3 text-center sm:text-left">
+            <span className="font-serif font-bold text-[#143d29] text-sm">
+              AyurSwift 🌿⚡
+            </span>
+            <span className="text-[#a8b89e] hidden sm:inline">•</span>
+            <span className="text-gray-500 text-[11.5px]">
+              Authentic Ayurveda &amp; Everyday Health
+            </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-[11px] text-gray-500">
-            <span>⚡ Bhavnagar 30-45m Rapido Parcel</span>
-            <span>•</span>
-            <span>📦 All-India Courier</span>
-            <span>•</span>
-            <span>🛡️ Official Agency Billed Stock</span>
-            <span>•</span>
-            <span>📱 Direct UPI: 9624766242@fam</span>
-            <span>•</span>
-            <span>💬 WhatsApp: +91 96247 66242</span>
+          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-xs text-[#526359]">
+            <a
+              href={`https://wa.me/${settings.merchantWhatsApp.replace(/\D/g, '')}?text=Hi%20AyurSwift,%20I%20have%20an%20inquiry.`}
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-[#1d5a3e] font-medium"
+            >
+              WhatsApp: +91 96247 66242
+            </a>
+            <span className="text-[#d6ddce]">•</span>
+            <span>Bhavnagar, Gujarat</span>
+            <span className="text-[#d6ddce]">•</span>
+            <Link
+              href="/admin"
+              className="text-[#1d5a3e] hover:underline font-bold flex items-center gap-1 cursor-pointer"
+              title="Store Owner & Admin Access"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>Merchant Hub</span>
+            </Link>
           </div>
         </div>
-        <p className="text-[11px] text-gray-400 text-center max-w-xl mx-auto px-4">
-          AyurSwift operates as a home-based micro-fulfillment dark store for authentic Ayurvedic &amp; primary OTC medicines with verified GST billing.
-        </p>
       </footer>
 
       {/* Modals & Drawers */}

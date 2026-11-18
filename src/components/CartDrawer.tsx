@@ -182,7 +182,7 @@ export function CartDrawer({
               </div>
               <h3 className="font-serif font-bold text-[#143d29] text-base">Your basket is empty</h3>
               <p className="text-xs text-[#526359] max-w-xs mx-auto">
-                Explore authentic Ayurvedic medicines dispatched directly from our Bhavnagar dark store.
+                Explore authentic Ayurvedic medicines and everyday wellness remedies.
               </p>
             </div>
           ) : (
@@ -194,9 +194,9 @@ export function CartDrawer({
                     <span className="font-semibold text-[#143d29] flex items-center gap-1.5">
                       <Zap className="w-3.5 h-3.5 fill-[#c86326] text-[#c86326]" />
                       {amountToFreeDelivery === 0 ? (
-                        <span>Unlocked: <strong>FREE 30–45m Rapido delivery</strong></span>
+                        <span>Unlocked: <strong>FREE local delivery</strong></span>
                       ) : (
-                        <span>Add <strong>₹{amountToFreeDelivery}</strong> more for <strong>FREE Rapido delivery</strong></span>
+                        <span>Add <strong>₹{amountToFreeDelivery}</strong> more for <strong>FREE local delivery</strong></span>
                       )}
                     </span>
                     <span className="text-[11px] font-semibold text-[#1d5a3e]">
@@ -290,14 +290,14 @@ export function CartDrawer({
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-[#143d29] flex items-center gap-1">
-                        <Zap className="w-3.5 h-3.5 fill-[#c86326] text-[#c86326]" /> Bhavnagar Local
+                        <Zap className="w-3.5 h-3.5 fill-[#c86326] text-[#c86326]" /> Local Delivery
                       </span>
                       {deliveryType === 'RAPIDO_CITY' && (
                         <CheckCircle2 className="w-4 h-4 text-[#1d5a3e]" />
                       )}
                     </div>
                     <div className="text-[11px] text-[#1d5a3e] font-semibold mt-1">
-                      30–45 Mins (Rapido)
+                      30–45 Mins Express
                     </div>
                     <div className="text-[10px] text-[#526359] mt-0.5">
                       {subtotal >= settings.cityFreeDeliveryAbove ? 'FREE' : `₹${settings.cityDeliveryFee}`} • COD or UPI

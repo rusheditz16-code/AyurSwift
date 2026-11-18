@@ -86,7 +86,7 @@ export function QuickBuyModal({
           <div>
             <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2.5 flex items-center justify-between">
               <span>⚡ Top In-Stock Essentials (1-Tap Add)</span>
-              <span className="text-[11px] text-[#1d5a3e] font-semibold">Ready in Bhavnagar</span>
+              <span className="text-[11px] text-[#1d5a3e] font-semibold">Ready to Dispatch</span>
             </h4>
 
             <div className="space-y-2">

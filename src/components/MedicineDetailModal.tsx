@@ -96,8 +96,7 @@ export function MedicineDetailModal({
               )}
 
               <div className="absolute top-3 left-3 bg-[#1d5a3e] text-white text-[10px] font-bold px-2.5 py-0.5 rounded-md flex items-center gap-1 shadow-2xs">
-                <Zap className="w-3 h-3 fill-[#c86326] text-[#c86326]" />
-                <span>30–45M RAPIDO DISPATCH</span>
+                <span>In Stock • Ready to Dispatch</span>
               </div>
 
               <div className="absolute bottom-3 right-3 bg-[#f8f8f3] text-gray-800 text-xs font-bold px-2.5 py-1 rounded-lg border border-[#d6ddce] shadow-2xs">
@@ -280,7 +279,7 @@ export function MedicineDetailModal({
             </div>
             <div className="flex items-center gap-1.5 p-2 bg-white rounded-xl border border-[#d6ddce]">
               <Truck className="w-4 h-4 text-[#1d5a3e]" />
-              <span>Rapido City Express</span>
+              <span>Doorstep Express</span>
             </div>
           </div>
         </div>

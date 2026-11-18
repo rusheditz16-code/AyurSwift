@@ -10,7 +10,6 @@ import {
   ChevronDown,
   X,
   PhoneCall,
-  Lock,
 } from 'lucide-react';
 import { MerchantSettings, Product } from '@/types';
 
@@ -84,40 +83,27 @@ export function Header({
 
   return (
     <header className="sticky top-0 z-40 bg-[#f8f8f3] border-b border-[#d6ddce] shadow-2xs w-full overflow-hidden">
-      {/* 1. Subtle Editorial Top Strip */}
-      <div className="bg-[#e9efdf] border-b border-[#d6ddce] px-3 sm:px-4 py-1 text-xs text-[#143d29] overflow-hidden">
+      {/* 1. Slim Announcement Line (Clear Customer Benefit) */}
+      <div className="bg-[#e9efdf] border-b border-[#d6ddce] px-3 sm:px-4 py-1.5 text-xs text-[#143d29] overflow-hidden">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 sm:gap-6 font-medium text-[10px] sm:text-xs truncate">
-            <span className="font-bold flex items-center gap-1 text-[#1d5a3e] shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#1d5a3e] animate-pulse" />
-              <span>BHAVNAGAR EXPRESS • 30–45M RAPIDO</span>
+          <div className="flex items-center gap-2 font-medium text-[11px] sm:text-xs truncate">
+            <span className="font-bold text-[#1d5a3e] flex items-center gap-1.5 shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#1d5a3e]" />
+              <span>Free local delivery on orders above ₹{settings.cityFreeDeliveryAbove || 499}</span>
             </span>
             <span className="text-[#a8b89e] hidden sm:inline">•</span>
-            <span className="hidden md:inline text-[#526359]">Genuine Agency Billed Stock</span>
-            <span className="text-[#a8b89e] hidden md:inline">•</span>
-            <span className="hidden lg:inline text-[#526359]">Direct Bank UPI (Zero Cuts)</span>
+            <span className="hidden sm:inline text-[#526359]">100% Genuine Ayurvedic Medicines</span>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-4 text-[10.5px] sm:text-[11px] font-medium shrink-0">
-            <Link
-              href="/admin"
-              className="text-[#143d29] hover:text-[#1d5a3e] flex items-center gap-1 transition-colors"
-              title="Merchant Admin Portal"
-            >
-              <Lock className="w-3 h-3 text-[#1d5a3e]" />
-              <span className="hidden sm:inline">Merchant Hub</span>
-            </Link>
-            <span className="text-[#a8b89e] hidden sm:inline">•</span>
-            <a
-              href={`https://wa.me/${settings.merchantWhatsApp.replace(/\D/g, '')}?text=Hi%20AyurSwift,%20I%20need%20quick%20medicine%20assistance.`}
-              target="_blank"
-              rel="noreferrer"
-              className="text-[#1d5a3e] hover:underline flex items-center gap-1 font-bold whitespace-nowrap"
-            >
-              <PhoneCall className="w-3 h-3" />
-              <span>WhatsApp: 9624766242</span>
-            </a>
-          </div>
+          <a
+            href={`https://wa.me/${settings.merchantWhatsApp.replace(/\D/g, '')}?text=Hi%20AyurSwift,%20I%20need%20medicine%20assistance.`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-[#1d5a3e] hover:underline flex items-center gap-1 font-bold text-[11px] whitespace-nowrap shrink-0"
+          >
+            <PhoneCall className="w-3 h-3" />
+            <span>Help: 9624766242</span>
+          </a>
         </div>
       </div>
 
@@ -128,35 +114,25 @@ export function Header({
           <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#1d5a3e] text-white flex items-center justify-center text-base sm:text-lg font-serif shadow-2xs group-hover:bg-[#143d29] transition-colors">
             🌿
           </div>
-          <div>
-            <div className="flex items-baseline gap-0.5">
-              <span className="font-serif font-black text-lg sm:text-xl tracking-tight text-[#143d29] leading-none">
-                Ayur<span className="text-[#1d5a3e]">Swift</span>
-              </span>
-              <span className="text-[#c86326] text-xs font-bold">⚡</span>
-            </div>
-            <p className="text-[8.5px] sm:text-[9px] font-bold text-[#526359] uppercase tracking-wider mt-0.5">
-              Bhavnagar Store
-            </p>
+          <div className="flex items-baseline gap-0.5">
+            <span className="font-serif font-black text-lg sm:text-xl tracking-tight text-[#143d29] leading-none">
+              Ayur<span className="text-[#1d5a3e]">Swift</span>
+            </span>
+            <span className="text-[#c86326] text-xs font-bold">⚡</span>
           </div>
         </Link>
 
-        {/* Location Selector Pill */}
+        {/* Simple Location Selector */}
         <button
           onClick={onOpenLocationModal}
           type="button"
-          className="flex items-center gap-1.5 bg-[#e9efdf] hover:bg-[#dfe7d2] border border-[#d6ddce] px-2 py-1 sm:px-3 sm:py-1.5 rounded-xl text-xs text-[#143d29] cursor-pointer shrink transition-colors text-left focus:outline-none focus:ring-1 focus:ring-[#1d5a3e] max-w-[125px] sm:max-w-none"
-          aria-label="Change delivery location"
+          className="flex items-center gap-1.5 bg-[#e9efdf] hover:bg-[#dfe7d2] border border-[#d6ddce] px-2.5 py-1.5 rounded-xl text-xs text-[#143d29] cursor-pointer shrink transition-colors text-left focus:outline-none focus:ring-1 focus:ring-[#1d5a3e] max-w-[150px] sm:max-w-xs"
+          aria-label="Set delivery location"
         >
           <MapPin className="w-3.5 h-3.5 text-[#1d5a3e] shrink-0" />
-          <div className="leading-tight truncate min-w-0">
-            <span className="font-bold text-[#143d29] block text-[10px] sm:text-[11px] truncate">
-              {currentLocation.area}
-            </span>
-            <span className="text-[9px] sm:text-[9.5px] text-[#1d5a3e] font-semibold truncate block">
-              {currentLocation.estimate}
-            </span>
-          </div>
+          <span className="font-bold text-[11px] sm:text-xs text-[#143d29] truncate">
+            {currentLocation.pincode ? `Deliver to ${currentLocation.pincode}` : 'Set delivery location'}
+          </span>
           <ChevronDown className="w-3 h-3 text-[#526359] shrink-0" />
         </button>
 
@@ -294,10 +270,10 @@ export function Header({
         </div>
       </div>
 
-      {/* 4. Category Subnav Row (No clipping on mobile, smooth scroll) */}
+      {/* 4. Desktop Category Subnav Row (Hidden on mobile where categories appear as hero tiles) */}
       <nav
         aria-label="Category Navigation"
-        className="border-t border-[#d6ddce] px-3 sm:px-4 overflow-x-auto no-scrollbar bg-[#f8f8f3] w-full"
+        className="hidden md:block border-t border-[#d6ddce] px-3 sm:px-4 overflow-x-auto no-scrollbar bg-[#f8f8f3] w-full"
       >
         <div className="max-w-7xl mx-auto flex items-center gap-2 sm:gap-3 py-2 text-xs font-semibold whitespace-nowrap">
           {CATEGORY_TABS.map((tab) => {

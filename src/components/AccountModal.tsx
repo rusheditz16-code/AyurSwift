@@ -47,7 +47,7 @@ export function AccountModal({
         <div className="p-4 sm:p-5 border-b border-[#d6ddce] bg-[#e9efdf] flex items-center justify-between shrink-0">
           <div>
             <span className="text-[10px] font-bold tracking-widest text-[#1d5a3e] uppercase">
-              AyurSwift Bhavnagar
+              AyurSwift Store
             </span>
             <h3 className="text-lg font-serif font-bold text-[#143d29]">Store &amp; Account</h3>
           </div>
@@ -85,7 +85,7 @@ export function AccountModal({
                 className="w-full bg-[#e9efdf] hover:bg-[#dfe7d2] text-[#143d29] font-bold text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-colors"
               >
                 <Truck className="w-3.5 h-3.5 text-[#1d5a3e]" />
-                <span>Track Live Rapido Dispatch</span>
+                <span>Track Order Dispatch</span>
               </button>
             </div>
           ) : (

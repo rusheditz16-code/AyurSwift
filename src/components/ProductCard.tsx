@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Plus, Minus, Zap, Eye } from 'lucide-react';
+import { Plus, Minus, Eye } from 'lucide-react';
 import { Product } from '@/types';
 import { MedicinePackVisual } from '@/components/MedicinePackVisual';
 
@@ -27,30 +27,29 @@ export function ProductCard({
 
   return (
     <article
-      className="h-full flex flex-col justify-between bg-white rounded-2xl border border-[#d6ddce] hover:border-[#1d5a3e] hover:shadow-sm transition-all duration-200 overflow-hidden group focus-within:ring-2 focus-within:ring-[#1d5a3e]"
+      className="h-full flex flex-col justify-between bg-white rounded-2xl border border-[#d6ddce] hover:border-[#1d5a3e] hover:shadow-xs transition-all duration-200 overflow-hidden group focus-within:ring-2 focus-within:ring-[#1d5a3e]"
       aria-label={`${product.name} by ${product.brand}`}
     >
       <div className="p-3 sm:p-3.5 flex flex-col flex-1">
-        {/* Top Meta Strip: Warm Orange Discount Badge + In-Stock Indicator */}
-        <div className="flex items-center justify-between min-h-[22px] mb-2 gap-1">
+        {/* Top Meta Strip: At most one useful badge */}
+        <div className="flex items-center justify-between min-h-[22px] mb-2">
           {discountPercent > 0 ? (
-            <span className="bg-[#c86326] text-white text-[9.5px] font-bold px-1.5 py-0.5 rounded tracking-wide uppercase">
+            <span className="bg-[#c86326] text-white text-[10px] font-bold px-2 py-0.5 rounded-md tracking-wide">
               {discountPercent}% OFF
+            </span>
+          ) : product.badgeText ? (
+            <span className="bg-[#e9efdf] text-[#1d5a3e] text-[10px] font-bold px-2 py-0.5 rounded-md border border-[#d6ddce]">
+              {product.badgeText}
             </span>
           ) : (
             <span />
           )}
-
-          {/* Factual Stock State Badge */}
-          <span className="text-[10px] font-semibold text-emerald-800 bg-[#e9efdf] px-1.5 py-0.5 rounded border border-[#d6ddce]">
-            ● In Stock
-          </span>
         </div>
 
         {/* Product Visual Container (Uploaded Packshot or Form-Accurate Art) */}
         <div
           onClick={() => onViewDetails(product)}
-          className="w-full h-36 sm:h-38 bg-[#f8f8f3] rounded-xl flex items-center justify-center p-2 cursor-pointer relative overflow-hidden group-hover:bg-[#e9efdf]/40 transition-colors"
+          className="w-full h-36 sm:h-40 bg-[#f8f8f3] rounded-xl flex items-center justify-center p-2 cursor-pointer relative overflow-hidden group-hover:bg-[#e9efdf]/40 transition-colors"
           tabIndex={0}
           role="button"
           onKeyDown={(e) => {
@@ -92,7 +91,7 @@ export function ProductCard({
         {/* Product Metadata */}
         <div className="pt-2.5 flex-1 flex flex-col justify-between space-y-1">
           <div>
-            <div className="text-[10.5px] text-gray-500 font-semibold uppercase tracking-wider truncate">
+            <div className="text-[11px] text-gray-500 font-semibold truncate">
               {product.brand} • {product.packSize}
             </div>
 
@@ -103,14 +102,6 @@ export function ProductCard({
             >
               {product.name}
             </h3>
-          </div>
-
-          {/* Dispatch Tag */}
-          <div className="pt-1">
-            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#143d29] bg-[#e9efdf] px-1.5 py-0.5 rounded">
-              <Zap className="w-2.5 h-2.5 fill-[#c86326] text-[#c86326]" />
-              <span>30–45m Rapido</span>
-            </span>
           </div>
         </div>
       </div>
@@ -133,7 +124,7 @@ export function ProductCard({
           {quantityInCart === 0 ? (
             <button
               onClick={() => onAddToCart(product)}
-              className="bg-white hover:bg-[#1d5a3e] text-[#1d5a3e] hover:text-white border border-[#1d5a3e] px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all shadow-2xs active:scale-95 flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1d5a3e]"
+              className="bg-white hover:bg-[#1d5a3e] text-[#1d5a3e] hover:text-white border border-[#1d5a3e] px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all shadow-2xs active:scale-95 flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1d5a3e] cursor-pointer"
               aria-label={`Add ${product.name} to cart`}
             >
               <Plus className="w-3.5 h-3.5" />
@@ -147,7 +138,7 @@ export function ProductCard({
             >
               <button
                 onClick={() => onUpdateQuantity(product.id, quantityInCart - 1)}
-                className="px-2.5 py-1.5 hover:bg-[#143d29] transition-colors active:scale-90 flex items-center justify-center focus:outline-none"
+                className="px-2.5 py-1.5 hover:bg-[#143d29] transition-colors active:scale-90 flex items-center justify-center focus:outline-none cursor-pointer"
                 aria-label="Decrease quantity"
               >
                 <Minus className="w-3 h-3" />
@@ -158,7 +149,7 @@ export function ProductCard({
               <button
                 onClick={() => onUpdateQuantity(product.id, quantityInCart + 1)}
                 disabled={quantityInCart >= product.stockQuantity}
-                className="px-2.5 py-1.5 hover:bg-[#143d29] disabled:opacity-40 transition-colors active:scale-90 flex items-center justify-center focus:outline-none"
+                className="px-2.5 py-1.5 hover:bg-[#143d29] disabled:opacity-40 transition-colors active:scale-90 flex items-center justify-center focus:outline-none cursor-pointer"
                 aria-label="Increase quantity"
               >
                 <Plus className="w-3 h-3" />

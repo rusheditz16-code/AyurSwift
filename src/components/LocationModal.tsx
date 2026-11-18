@@ -59,7 +59,7 @@ export function LocationModal({
                 Delivery Location
               </h3>
               <p className="text-[11px] text-[#1d5a3e] font-semibold">
-                Instant 30–45 min Rapido delivery in Bhavnagar
+                Select your area for local express or courier dispatch
               </p>
             </div>
           </div>
@@ -91,7 +91,7 @@ export function LocationModal({
           <div className="pb-1">
             <div className="text-[10.5px] font-bold text-gray-500 uppercase tracking-wider px-2 py-1 flex items-center gap-1">
               <Zap className="w-3 h-3 text-[#c86326] fill-[#c86326]" />
-              <span>Bhavnagar City (30–45 Mins Rapido)</span>
+              <span>Local Express Delivery (Bhavnagar)</span>
             </div>
 
             {filteredAreas.map((item) => {
