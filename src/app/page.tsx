@@ -1274,6 +1274,7 @@ export default function StorefrontPage() {
         currentLocation={currentLocation}
         onOpenLocationModal={() => setIsLocationModalOpen(true)}
         onOpenOrderTracking={() => setIsOrderTrackingOpen(true)}
+        onReorder={handleReorder}
       />
 
       <OrderTrackingModal
