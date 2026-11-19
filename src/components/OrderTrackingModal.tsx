@@ -173,15 +173,17 @@ export function OrderTrackingModal({
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-[#d6ddce] flex items-center justify-between bg-[#e9efdf] shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-[#1d5a3e] text-white flex items-center justify-center shadow-2xs">
-              <Truck className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="font-serif font-bold text-[#143d29] text-base">
+            <img
+              src="/ayurswift-logo.png"
+              alt="AyurSwift"
+              className="h-8 w-auto object-contain"
+            />
+            <div className="border-l border-[#d6ddce] pl-2.5">
+              <h3 className="font-serif font-bold text-[#143d29] text-base leading-tight">
                 Track Order &amp; Live Status
               </h3>
-              <p className="text-[11px] text-[#1d5a3e] font-semibold">
-                Live dispatch updates from Bhavnagar dark store
+              <p className="text-[10.5px] text-[#1d5a3e] font-semibold">
+                Live dispatch updates from Bhavnagar
               </p>
             </div>
           </div>

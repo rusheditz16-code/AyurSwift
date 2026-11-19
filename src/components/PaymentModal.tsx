@@ -68,8 +68,15 @@ export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
           >
             <X className="w-5 h-5" />
           </button>
-          <div className="w-12 h-12 bg-[#1d5a3e] text-white rounded-full flex items-center justify-center mx-auto mb-2.5 shadow-2xs">
-            <CheckCircle2 className="w-6 h-6" />
+          <div className="flex justify-center mb-3">
+            <img
+              src="/ayurswift-logo.png"
+              alt="AyurSwift"
+              className="h-8 w-auto object-contain"
+            />
+          </div>
+          <div className="w-10 h-10 bg-[#1d5a3e] text-white rounded-full flex items-center justify-center mx-auto mb-2 shadow-2xs">
+            <CheckCircle2 className="w-5 h-5" />
           </div>
           <span className="inline-block bg-[#1d5a3e]/10 text-[#1d5a3e] font-semibold text-xs px-3 py-0.5 rounded-full mb-1 border border-[#1d5a3e]/20">
             Order #{order.id}

@@ -74,36 +74,28 @@ export function numberToWordsINR(num: number): string {
 }
 
 /**
- * Standard Indian Pharmacy & Store Metadata
+ * AyurSwift Store & Billing Details
+ * (Simplified retail billing without GST/FSSAI, no store address)
  */
 export const PHARMACY_BILLING_INFO = {
-  storeName: 'AYURSWIFT AYURVEDIC PHARMACY & WELLNESS',
-  legalName: 'AyurSwift Healthcare & Ayurvedic Dark Store',
-  tagline: 'Licensed Retail Ayurvedic Medicaments & Primary Healthcare Store',
-  address: 'Opp. Sir Takhtasinhji Hospital Road, Waghawadi Area',
-  city: 'Bhavnagar',
-  state: 'Gujarat',
-  stateCode: '24 (Gujarat)',
-  pincode: '364002',
+  storeName: 'AyurSwift',
+  tagline: 'Tradition Meets Speed',
+  subTagline: 'Genuine Ayurveda & Everyday Health Quick Commerce',
+  location: 'Bhavnagar, Gujarat',
   phone: '+91 96247 66242',
   whatsapp: '919624766242',
   email: 'rushirajdabhi16@gmail.com',
   upiId: '9624766242@fam',
-  dlNumber: 'GJ-BVN-2024-AYUR-1602',
-  fssaiNumber: '20724031000123',
-  gstin: '24AABCA1234F1Z5', // Composite / Retail Ayurveda Exemption Scheme
-  hsnDefault: '3004.90', // Medicaments of Ayurvedic system
+  logoPath: '/ayurswift-logo.png',
 };
 
 /**
- * Generates formatted standard invoice number
- * e.g., INV/2026-27/AS-1025
+ * Generates formatted standard bill / cash memo number
+ * e.g., BILL/2026/AS-1025
  */
 export function formatInvoiceNumber(orderId: string, createdAt?: string): string {
   const cleanId = orderId.replace(/^#/, '');
   const date = createdAt ? new Date(createdAt) : new Date();
   const year = date.getFullYear();
-  const nextYearShort = String(year + 1).slice(-2);
-  const fy = `${year}-${nextYearShort}`;
-  return `INV/${fy}/${cleanId}`;
+  return `BILL/${year}/${cleanId}`;
 }

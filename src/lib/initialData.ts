@@ -1,8 +1,8 @@
 import { Product, MerchantSettings } from '@/types';
 
 export const DEFAULT_SETTINGS: MerchantSettings = {
-  storeName: 'AyurSwift 🌿⚡',
-  tagline: 'Genuine Ayurveda & Primary Health, Delivered Swiftly.',
+  storeName: 'AyurSwift',
+  tagline: 'Tradition Meets Speed',
   merchantWhatsApp: '919624766242',
   merchantUpiId: '9624766242@fam',
   merchantUpiName: 'AyurSwift',

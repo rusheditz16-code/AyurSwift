@@ -589,9 +589,13 @@ export function AdminDashboard() {
     return (
       <div className="min-h-screen bg-[#f8f8f3] flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-white text-[#1c2e24] rounded-3xl p-6 sm:p-8 border border-[#d6ddce] shadow-2xl space-y-6">
-          <div className="text-center space-y-2">
-            <div className="w-14 h-14 bg-[#e9efdf] text-[#1d5a3e] rounded-2xl flex items-center justify-center mx-auto border border-[#d6ddce] shadow-2xs">
-              <ShieldCheck className="w-7 h-7" />
+          <div className="text-center space-y-3">
+            <div className="flex justify-center">
+              <img
+                src="/ayurswift-logo.png"
+                alt="AyurSwift"
+                className="h-11 w-auto object-contain"
+              />
             </div>
             <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#1d5a3e]/10 text-[#1d5a3e] text-[10.5px] font-bold border border-[#1d5a3e]/20">
               <Lock className="w-3 h-3" />
@@ -715,12 +719,16 @@ export function AdminDashboard() {
             </Link>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-serif font-black text-lg text-[#143d29]">AyurSwift</span>
+                <img
+                  src="/ayurswift-logo.png"
+                  alt="AyurSwift"
+                  className="h-7 sm:h-8 w-auto object-contain"
+                />
                 <span className="text-[10px] font-bold bg-[#e9efdf] text-[#1d5a3e] px-2 py-0.5 rounded-full border border-[#d6ddce]">
                   Dark Store Hub
                 </span>
               </div>
-              <p className="text-[10px] text-[#526359]">
+              <p className="text-[10px] text-[#526359] mt-0.5">
                 Bhavnagar Home Fulfillment • Rapido Bike Dispatch
               </p>
             </div>

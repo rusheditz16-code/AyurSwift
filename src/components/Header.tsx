@@ -110,16 +110,12 @@ export function Header({
       {/* 2. Main Navigation Bar */}
       <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between gap-2 sm:gap-4">
         {/* Brand Logo */}
-        <Link href="/" className="flex items-center gap-2 shrink-0 group">
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#1d5a3e] text-white flex items-center justify-center text-base sm:text-lg font-serif shadow-2xs group-hover:bg-[#143d29] transition-colors">
-            🌿
-          </div>
-          <div className="flex items-baseline gap-0.5">
-            <span className="font-serif font-black text-lg sm:text-xl tracking-tight text-[#143d29] leading-none">
-              Ayur<span className="text-[#1d5a3e]">Swift</span>
-            </span>
-            <span className="text-[#c86326] text-xs font-bold">⚡</span>
-          </div>
+        <Link href="/" className="flex items-center gap-2 shrink-0 group py-0.5">
+          <img
+            src="/ayurswift-logo.png"
+            alt="AyurSwift - Tradition Meets Speed"
+            className="h-8 sm:h-9 w-auto object-contain transition-transform group-hover:scale-102"
+          />
         </Link>
 
         {/* Simple Location Selector */}

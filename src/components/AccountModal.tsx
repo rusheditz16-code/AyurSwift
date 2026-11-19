@@ -200,11 +200,18 @@ export function AccountModal({
       <div className="bg-[#f8f8f3] rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-[#d6ddce] animate-in zoom-in-95 duration-150 flex flex-col max-h-[92vh]">
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-[#d6ddce] bg-[#e9efdf] flex items-center justify-between shrink-0">
-          <div>
-            <span className="text-[10px] font-bold tracking-widest text-[#1d5a3e] uppercase">
-              AyurSwift Account
-            </span>
-            <h3 className="text-lg font-serif font-bold text-[#143d29]">Orders &amp; Live Tracking</h3>
+          <div className="flex items-center gap-2.5">
+            <img
+              src="/ayurswift-logo.png"
+              alt="AyurSwift"
+              className="h-8 w-auto object-contain"
+            />
+            <div className="border-l border-[#d6ddce] pl-2.5">
+              <span className="text-[10px] font-bold tracking-widest text-[#1d5a3e] uppercase block">
+                Account &amp; Orders
+              </span>
+              <h3 className="text-base font-serif font-bold text-[#143d29] leading-tight">Live Dispatch Desk</h3>
+            </div>
           </div>
           <button
             onClick={onClose}

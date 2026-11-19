@@ -1163,9 +1163,11 @@ export default function StorefrontPage() {
       <footer className="mt-14 bg-white border-t border-[#d6ddce] py-8 text-xs text-gray-600">
         <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3 text-center sm:text-left">
-            <span className="font-serif font-bold text-[#143d29] text-sm">
-              AyurSwift 🌿⚡
-            </span>
+            <img
+              src="/ayurswift-logo.png"
+              alt="AyurSwift - Tradition Meets Speed"
+              className="h-7 sm:h-8 w-auto object-contain"
+            />
             <span className="text-[#a8b89e] hidden sm:inline">•</span>
             <span className="text-gray-500 text-[11.5px]">
               Authentic Ayurveda &amp; Everyday Health
