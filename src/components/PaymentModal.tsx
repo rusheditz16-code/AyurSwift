@@ -174,6 +174,11 @@ export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
             </p>
           </div>
 
+          {/* Cancellation Policy Notice */}
+          <div className="p-2.5 bg-[#f8f8f3] rounded-xl border border-[#d6ddce] text-[10.5px] text-[#526359] text-center leading-relaxed">
+            🌿 <strong>Cancellation Policy:</strong> You can cancel this order from your <strong>Account</strong> menu anytime before dark store packing begins. Once packed, orders are sealed for safety.
+          </div>
+
           {/* Close */}
           <div className="pt-1">
             <button

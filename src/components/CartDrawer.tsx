@@ -528,8 +528,9 @@ export function CartDrawer({
               <span>Place Order • ₹{grandTotal}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
-            <p className="text-[10px] text-center text-[#526359]">
-              Generates Order ID & opens WhatsApp confirmation + Zero-Fee direct UPI QR
+            <p className="text-[10.5px] text-center text-[#526359] flex items-center justify-center gap-1 font-medium">
+              <ShieldCheck className="w-3.5 h-3.5 text-[#1d5a3e]" />
+              <span>Free cancellation anytime before dark store packing begins</span>
             </p>
           </div>
         )}
