@@ -235,7 +235,7 @@ export function Header({
               {matchedProducts.length > 0 && (
                 <div>
                   <div className="p-2 bg-[#e9efdf] text-[10px] font-bold text-[#143d29] uppercase tracking-wider px-3">
-                    In-Stock Remedies ({matchedProducts.length})
+                    In-Stock Remedies
                   </div>
                   {matchedProducts.map((item) => (
                     <div
@@ -390,7 +390,7 @@ export function Header({
             {matchedProducts.length > 0 && (
               <div>
                 <div className="p-2 bg-[#e9efdf] text-[10px] font-bold text-[#143d29] uppercase tracking-wider px-3">
-                  In-Stock Remedies ({matchedProducts.length})
+                  In-Stock Remedies
                 </div>
                 {matchedProducts.map((item) => (
                   <div

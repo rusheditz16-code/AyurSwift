@@ -45,14 +45,10 @@ export function ProductCard({
             <span />
           )}
 
-          {/* Real Stock Availability indicator */}
+          {/* Availability indicator (Privacy: no raw stock count) */}
           <span className="text-[10px] font-semibold text-emerald-800 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 inline-block" />
-            <span>
-              {product.stockQuantity <= 5
-                ? `Only ${product.stockQuantity} left`
-                : `In Stock (${product.stockQuantity})`}
-            </span>
+            <span>In Stock</span>
           </span>
         </div>
 

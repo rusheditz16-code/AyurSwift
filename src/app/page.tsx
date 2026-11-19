@@ -667,7 +667,7 @@ export default function StorefrontPage() {
                 onClick={scrollToCatalog}
                 className="text-xs font-bold text-[#1d5a3e] hover:underline cursor-pointer"
               >
-                View Full Catalog ({products.filter((p) => p.isLive && p.stockQuantity > 0).length})
+                View Full Catalog
               </button>
             </div>
 
@@ -772,14 +772,11 @@ export default function StorefrontPage() {
                           : 'text-gray-700'
                       }
                     >
-                      All Categories ({products.filter((p) => p.isLive && p.stockQuantity > 0).length})
+                      All Categories
                     </span>
                   </label>
 
                   {availableCategories.map((cat) => {
-                    const count = products.filter(
-                      (p) => p.isLive && p.stockQuantity > 0 && p.category === cat
-                    ).length;
                     return (
                       <label
                         key={cat}
@@ -800,7 +797,7 @@ export default function StorefrontPage() {
                               : 'text-gray-700'
                           }
                         >
-                          {cat} ({count})
+                          {cat}
                         </span>
                       </label>
                     );
@@ -922,7 +919,7 @@ export default function StorefrontPage() {
                       : selectedCategory}
                   </h2>
                   <p className="text-xs text-[#526359] mt-0.5">
-                    Showing {catalogProducts.length} in-stock remedies
+                    Showing in-stock remedies
                   </p>
                 </div>
 

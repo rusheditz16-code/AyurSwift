@@ -175,7 +175,7 @@ export function MedicineDetailModal({
             <div className="text-xs text-gray-600 flex flex-wrap items-center gap-2 pt-0.5">
               <span>Manufacturer: <strong className="text-gray-900">{product.manufacturer}</strong></span>
               <span>•</span>
-              <span className="text-emerald-800 font-semibold">● In Stock ({product.stockQuantity} available)</span>
+              <span className="text-emerald-800 font-semibold">● In Stock • Ready to Dispatch</span>
             </div>
           </div>
 

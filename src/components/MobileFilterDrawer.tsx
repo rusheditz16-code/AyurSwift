@@ -92,9 +92,6 @@ export function MobileFilterDrawer({
               </label>
 
               {availableCategories.map((cat) => {
-                const count = products.filter(
-                  (p) => p.isLive && p.stockQuantity > 0 && p.category === cat
-                ).length;
                 const isSelected = selectedCategory === cat;
 
                 return (
@@ -104,7 +101,7 @@ export function MobileFilterDrawer({
                     className="flex items-center justify-between p-1.5 rounded-lg hover:bg-[#e9efdf] cursor-pointer"
                   >
                     <span className={isSelected ? 'font-bold text-[#1d5a3e]' : 'text-gray-700'}>
-                      {cat} ({count})
+                      {cat}
                     </span>
                     {isSelected && <Check className="w-3.5 h-3.5 text-[#1d5a3e]" />}
                   </label>
@@ -202,7 +199,7 @@ export function MobileFilterDrawer({
         {/* Apply Footer */}
         <div className="p-3 bg-[#e9efdf] border-t border-[#d6ddce] flex items-center justify-between gap-2">
           <span className="text-xs font-semibold text-gray-700">
-            {totalFilteredCount} medicines
+            In-Stock Remedies
           </span>
           <button
             onClick={onClose}

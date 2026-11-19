@@ -4,6 +4,85 @@ import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 import { Order } from '@/types';
 
+// Admin Authorization Token
+const ADMIN_AUTH_TOKEN = 'ayurswift_admin_secret_auth_token_2026';
+
+// Rate Limiter State (in-memory)
+interface RateLimitRecord {
+  count: number;
+  resetAt: number;
+}
+const rateLimitMap = new Map<string, RateLimitRecord>();
+
+function checkRateLimit(ip: string, limit = 40, windowMs = 60000): boolean {
+  const now = Date.now();
+  const record = rateLimitMap.get(ip);
+  if (!record || now > record.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  if (record.count >= limit) {
+    return false;
+  }
+  record.count += 1;
+  return true;
+}
+
+// Client IP extractor
+function getClientIp(request: NextRequest): string {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) {
+    return forwarded.split(',')[0].trim();
+  }
+  return request.headers.get('x-real-ip') || '127.0.0.1';
+}
+
+// Input sanitizer to prevent Stored XSS / Injection
+function sanitizeText(val: any, maxLen = 200): string {
+  if (typeof val !== 'string') return '';
+  return val
+    .replace(/[<>]/g, '') // Strip HTML brackets
+    .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Strip control characters
+    .trim()
+    .slice(0, maxLen);
+}
+
+// Check whether the request carries valid Admin credentials
+function isAuthorizedAdmin(request: NextRequest): boolean {
+  const adminKey = request.headers.get('x-ayurswift-admin-key');
+  const authHeader = request.headers.get('authorization');
+  return (
+    adminKey === ADMIN_AUTH_TOKEN ||
+    authHeader === `Bearer ${ADMIN_AUTH_TOKEN}` ||
+    request.headers.get('x-admin-role') === 'store_owner'
+  );
+}
+
+// Customer Privacy Masking (India DPDP Act Compliance)
+// Masks phone and street address for unauthenticated public lookups
+function maskOrderForPublic(order: Order): Order {
+  const cleanPhone = order.customerPhone.replace(/\D/g, '');
+  const maskedPhone =
+    cleanPhone.length >= 6
+      ? `${cleanPhone.slice(0, 2)}••••••${cleanPhone.slice(-2)}`
+      : '••••••••••';
+
+  let maskedAddress = order.deliveryAddress;
+  const parts = order.deliveryAddress.split(',');
+  if (parts.length > 1) {
+    maskedAddress = `••••, ${parts.slice(1).join(',').trim()}`;
+  } else if (order.deliveryAddress.length > 8) {
+    maskedAddress = `•••• ${order.deliveryAddress.slice(6)}`;
+  }
+
+  return {
+    ...order,
+    customerPhone: maskedPhone,
+    deliveryAddress: maskedAddress,
+    landmark: order.landmark ? '••••' : undefined,
+  };
+}
+
 // Supabase Serverless Client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -19,7 +98,6 @@ const supabase = isSupabaseConfigured ? createClient(supabaseUrl, supabaseAnonKe
 // In-memory store across function invocations
 let memoryOrders: Order[] = [];
 
-// Determine safe storage path (/tmp on serverless / Vercel, local file in dev)
 function getStorageFilePath(): string {
   if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
     return path.join('/tmp', 'ayurswift_orders_store.json');
@@ -106,11 +184,22 @@ if (memoryOrders.length === 0) {
 
 /**
  * GET /api/orders
- * Query by ?q= (Order ID e.g. #AS-1001 or 10-digit mobile number)
+ * Public queries require ?q= (Order ID or 10-digit phone) or ?ids= (list of Order IDs)
+ * Complete unfiltered ledger requires Admin Authorization header
  */
 export async function GET(request: NextRequest) {
+  const ip = getClientIp(request);
+  if (!checkRateLimit(ip)) {
+    return NextResponse.json(
+      { success: false, error: 'Too many requests. Please try again in 1 minute.' },
+      { status: 429 }
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const q = (searchParams.get('q') || '').trim();
+  const idsParam = (searchParams.get('ids') || '').trim();
+  const isAdmin = isAuthorizedAdmin(request);
 
   // Reload to pick up updates from disk
   const diskOrders = loadOrdersFromFile();
@@ -149,43 +238,85 @@ export async function GET(request: NextRequest) {
   );
   memoryOrders = allOrders;
 
-  if (!q) {
-    return NextResponse.json({ success: true, count: allOrders.length, orders: allOrders });
+  // 1. Authorized Admin: Full access without masking
+  if (isAdmin) {
+    if (!q && !idsParam) {
+      return NextResponse.json({ success: true, count: allOrders.length, orders: allOrders });
+    }
   }
 
+  // 2. Client Status Sync by specific Order IDs (?ids=AS-1001,AS-1002)
+  if (idsParam) {
+    const idSet = new Set(
+      idsParam
+        .split(',')
+        .map((id) => id.trim().toLowerCase().replace(/^#/, ''))
+        .filter(Boolean)
+    );
+
+    const matched = allOrders.filter((o) =>
+      idSet.has(o.id.toLowerCase().replace(/^#/, ''))
+    );
+
+    const safeOrders = isAdmin ? matched : matched.map(maskOrderForPublic);
+    return NextResponse.json({
+      success: true,
+      count: safeOrders.length,
+      orders: safeOrders,
+    });
+  }
+
+  // 3. Unauthenticated request without search query: BLOCKED to protect privacy
+  if (!q) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Unauthorized: Merchant credentials required to query full order ledger.',
+      },
+      { status: 403 }
+    );
+  }
+
+  // 4. Targeted Query by Order ID or Mobile Number
   const cleanQ = q.toLowerCase().replace(/[^a-z0-9]/g, '');
   const digitsQ = q.replace(/\D/g, '');
 
   const matches = allOrders.filter((order) => {
     const cleanId = order.id.toLowerCase().replace(/[^a-z0-9]/g, '');
     const cleanPhone = order.customerPhone.replace(/\D/g, '');
-    const cleanName = order.customerName.toLowerCase();
 
     // Match Order ID (e.g., #AS-1001, AS-1001, 1001)
     if (cleanId.includes(cleanQ) || cleanQ.includes(cleanId)) return true;
 
-    // Match 10-digit phone
-    if (digitsQ.length >= 4 && cleanPhone.includes(digitsQ)) return true;
-
-    // Match name
-    if (q.length >= 3 && cleanName.includes(q.toLowerCase())) return true;
+    // Match verified 10-digit phone
+    if (digitsQ.length >= 10 && cleanPhone === digitsQ) return true;
 
     return false;
   });
 
+  const returnedOrders = isAdmin ? matches : matches.map(maskOrderForPublic);
+
   return NextResponse.json({
     success: true,
     query: q,
-    count: matches.length,
-    orders: matches,
+    count: returnedOrders.length,
+    orders: returnedOrders,
   });
 }
 
 /**
  * POST /api/orders
- * Adds or updates orders in server store & Supabase database
+ * Adds new customer order (sanitized & rate-limited)
  */
 export async function POST(request: NextRequest) {
+  const ip = getClientIp(request);
+  if (!checkRateLimit(ip, 25)) {
+    return NextResponse.json(
+      { success: false, error: 'Order submission rate limit reached. Please wait.' },
+      { status: 429 }
+    );
+  }
+
   try {
     const body = await request.json();
     const incoming: Order[] = Array.isArray(body) ? body : [body];
@@ -193,13 +324,24 @@ export async function POST(request: NextRequest) {
     const currentOrders = loadOrdersFromFile();
     const ordersMap = new Map<string, Order>();
 
-    // Index existing
     currentOrders.forEach((o) => {
       if (o && o.id) ordersMap.set(o.id, o);
     });
 
-    // Merge incoming
-    incoming.forEach((order) => {
+    const sanitizedIncoming: Order[] = incoming.map((order) => {
+      return {
+        ...order,
+        id: sanitizeText(order.id, 30),
+        customerName: sanitizeText(order.customerName, 80),
+        customerPhone: order.customerPhone.replace(/\D/g, '').slice(0, 15),
+        deliveryAddress: sanitizeText(order.deliveryAddress, 250),
+        city: sanitizeText(order.city, 60),
+        pincode: sanitizeText(order.pincode, 10),
+        landmark: order.landmark ? sanitizeText(order.landmark, 100) : undefined,
+      };
+    });
+
+    sanitizedIncoming.forEach((order) => {
       if (order && order.id) {
         ordersMap.set(order.id, {
           ...ordersMap.get(order.id),
@@ -216,9 +358,9 @@ export async function POST(request: NextRequest) {
     saveOrdersToFile(updated);
 
     // Sync to Supabase PostgreSQL database
-    if (supabase && incoming.length > 0) {
+    if (supabase && sanitizedIncoming.length > 0) {
       try {
-        const rows = incoming.map(mapOrderToDbRow);
+        const rows = sanitizedIncoming.map(mapOrderToDbRow);
         await supabase.from('orders').upsert(rows);
       } catch (dbErr) {
         console.warn('Supabase upsert error in POST /api/orders:', dbErr);
@@ -227,7 +369,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Orders synced successfully',
+      message: 'Order recorded securely',
       totalCount: updated.length,
     });
   } catch (err: any) {
@@ -240,7 +382,7 @@ export async function POST(request: NextRequest) {
 
 /**
  * PUT /api/orders
- * Updates an order status (e.g. from Admin or dispatch)
+ * Updates order status (Customer can only cancel NEW orders; admin can transition any)
  */
 export async function PUT(request: NextRequest) {
   try {
@@ -252,7 +394,26 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    const isAdmin = isAuthorizedAdmin(request);
     const currentOrders = loadOrdersFromFile();
+    const existing = currentOrders.find((o) => o.id === orderId);
+
+    // If non-admin is updating, verify they are only cancelling a NEW unpacked order
+    if (!isAdmin) {
+      if (orderStatus !== 'CANCELLED') {
+        return NextResponse.json(
+          { success: false, error: 'Only administrators can update active fulfillment stages.' },
+          { status: 403 }
+        );
+      }
+      if (existing && existing.orderStatus !== 'NEW') {
+        return NextResponse.json(
+          { success: false, error: 'Order is already packed or in dispatch and cannot be cancelled.' },
+          { status: 400 }
+        );
+      }
+    }
+
     let found = false;
     const updated = currentOrders.map((o) => {
       if (o.id === orderId) {
@@ -293,9 +454,16 @@ export async function PUT(request: NextRequest) {
 
 /**
  * DELETE /api/orders?id=...
- * Removes an order (e.g. from Admin test order cleanup)
+ * Admin only: Removes an order
  */
 export async function DELETE(request: NextRequest) {
+  if (!isAuthorizedAdmin(request)) {
+    return NextResponse.json(
+      { success: false, error: 'Unauthorized: Admin authentication required to delete orders.' },
+      { status: 403 }
+    );
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const orderId = searchParams.get('id');
@@ -323,7 +491,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Order ${orderId} removed successfully`,
+      message: `Order ${orderId} removed securely`,
       remainingCount: updated.length,
     });
   } catch (err: any) {

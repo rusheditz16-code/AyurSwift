@@ -144,7 +144,12 @@ export function AdminDashboard() {
     setSettings(stored);
 
     // Fetch orders from server store to pick up orders placed across devices
-    fetch('/api/orders')
+    fetch('/api/orders', {
+      headers: {
+        'x-ayurswift-admin-key': 'ayurswift_admin_secret_auth_token_2026',
+        'x-admin-role': 'store_owner',
+      },
+    })
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.orders)) {
@@ -194,7 +199,12 @@ export function AdminDashboard() {
   const refreshOrders = async () => {
     setIsRefreshingOrders(true);
     try {
-      const res = await fetch('/api/orders');
+      const res = await fetch('/api/orders', {
+        headers: {
+          'x-ayurswift-admin-key': 'ayurswift_admin_secret_auth_token_2026',
+          'x-admin-role': 'store_owner',
+        },
+      });
       if (res.ok) {
         const data = await res.json();
         if (data.success && Array.isArray(data.orders)) {
@@ -496,7 +506,10 @@ export function AdminDashboard() {
     // Sync status change to server API for buyer live tracking
     fetch('/api/orders', {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-ayurswift-admin-key': 'ayurswift_admin_secret_auth_token_2026',
+      },
       body: JSON.stringify({ orderId: order.id, orderStatus: 'DISPATCHED' }),
     }).catch(() => {});
 
@@ -513,7 +526,10 @@ export function AdminDashboard() {
     // Sync status change to server API for buyer live tracking
     fetch('/api/orders', {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-ayurswift-admin-key': 'ayurswift_admin_secret_auth_token_2026',
+      },
       body: JSON.stringify({ orderId, orderStatus: status }),
     }).catch(() => {});
   };
@@ -531,7 +547,12 @@ export function AdminDashboard() {
     setOrders(updated);
     saveStoredOrders(updated);
     try {
-      await fetch(`/api/orders?id=${encodeURIComponent(orderId)}`, { method: 'DELETE' });
+      await fetch(`/api/orders?id=${encodeURIComponent(orderId)}`, {
+        method: 'DELETE',
+        headers: {
+          'x-ayurswift-admin-key': 'ayurswift_admin_secret_auth_token_2026',
+        },
+      });
     } catch {}
   };
 

@@ -236,7 +236,8 @@ export async function syncOrderStatuses(): Promise<Order[]> {
   if (typeof window === 'undefined' || local.length === 0) return local;
 
   try {
-    const res = await fetch('/api/orders');
+    const ids = local.map((o) => o.id).filter(Boolean).join(',');
+    const res = await fetch(`/api/orders?ids=${encodeURIComponent(ids)}`);
     if (res.ok) {
       const data = await res.json();
       if (data.success && Array.isArray(data.orders)) {
