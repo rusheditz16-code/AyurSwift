@@ -84,7 +84,7 @@ export const PHARMACY_BILLING_INFO = {
   location: 'Bhavnagar, Gujarat',
   phone: '+91 96247 66242',
   whatsapp: '919624766242',
-  email: 'rushirajdabhi16@gmail.com',
+  email: 'ayurswift.care@gmail.com',
   upiId: '9624766242@fam',
   logoPath: '/ayurswift-logo.png',
 };

@@ -10,7 +10,7 @@ export const DEFAULT_SETTINGS: MerchantSettings = {
   cityFreeDeliveryAbove: 499,
   courierDeliveryFee: 60,
   adminPin: '1602',
-  adminEmail: 'rushirajdabhi16@gmail.com',
+  adminEmail: 'ayurswift.care@gmail.com',
 };
 
 export const INITIAL_PRODUCTS: Product[] = [

@@ -24,6 +24,7 @@ import {
   Receipt,
   Printer,
   FileText,
+  Mail,
 } from 'lucide-react';
 import { MerchantSettings, Order } from '@/types';
 import { LocationInfo } from '@/components/LocationModal';
@@ -700,6 +701,20 @@ export function AccountModal({
                     </div>
                   </div>
                   <ExternalLink className="w-3.5 h-3.5 text-gray-500" />
+                </a>
+
+                <a
+                  href="mailto:ayurswift.care@gmail.com?subject=Customer%20Assistance%20-%20AyurSwift"
+                  className="w-full flex items-center justify-between p-2.5 rounded-xl bg-[#f8f8f3] hover:bg-[#e9efdf] text-[#143d29] font-medium transition-colors border border-[#d6ddce]"
+                >
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-[#1d5a3e]" />
+                    <div>
+                      <div className="font-bold text-xs">Customer Care Email</div>
+                      <div className="text-[10px] text-[#526359]">ayurswift.care@gmail.com</div>
+                    </div>
+                  </div>
+                  <ExternalLink className="w-3.5 h-3.5 text-gray-400" />
                 </a>
 
                 <div className="flex items-center gap-2 text-[11px] text-gray-600 pt-1">

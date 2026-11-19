@@ -421,7 +421,7 @@ export function InvoiceModal({
                 <div className="font-bold text-xs tracking-wide">AYURSWIFT QUICK STORE</div>
                 <div className="text-[10px] text-gray-600">Tradition Meets Speed</div>
                 <div className="text-[9px] text-gray-500">Bhavnagar, Gujarat</div>
-                <div className="text-[9px] text-gray-500">Helpline: +91 96247 66242</div>
+                <div className="text-[9px] text-gray-500">Helpline: +91 96247 66242 • {PHARMACY_BILLING_INFO.email}</div>
                 
                 <div className="mt-2 py-0.5 bg-gray-100 border border-gray-300 font-bold text-xs">
                   CASH MEMO #{invoiceNo}
@@ -484,7 +484,7 @@ export function InvoiceModal({
               {/* Thermal Footer */}
               <div className="border-t border-dashed border-gray-400 pt-2 text-center text-[9px] text-gray-500 leading-tight">
                 <p>Thank you for shopping at AyurSwift!</p>
-                <p>For inquiries WhatsApp: +91 96247 66242</p>
+                <p>WhatsApp: +91 96247 66242 | {PHARMACY_BILLING_INFO.email}</p>
                 <p className="mt-1 font-bold text-gray-700">*** COMPUTER GENERATED CASH MEMO ***</p>
               </div>
             </div>

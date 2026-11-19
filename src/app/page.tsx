@@ -1176,6 +1176,13 @@ export default function StorefrontPage() {
 
           <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-xs text-[#526359]">
             <a
+              href="mailto:ayurswift.care@gmail.com"
+              className="hover:text-[#1d5a3e] font-medium"
+            >
+              ayurswift.care@gmail.com
+            </a>
+            <span className="text-[#d6ddce]">•</span>
+            <a
               href={`https://wa.me/${settings.merchantWhatsApp.replace(/\D/g, '')}?text=Hi%20AyurSwift,%20I%20have%20an%20inquiry.`}
               target="_blank"
               rel="noreferrer"

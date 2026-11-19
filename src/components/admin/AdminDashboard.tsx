@@ -64,7 +64,8 @@ import {
   exportOrdersToCsv,
 } from '@/lib/store';
 
-const AUTHORIZED_GMAIL = 'rushirajdabhi16@gmail.com';
+const PRIMARY_ADMIN_GMAIL = 'ayurswift.care@gmail.com';
+const BACKUP_ADMIN_GMAIL = 'rushirajdabhi16@gmail.com';
 const DEFAULT_PIN = '1602';
 
 export function AdminDashboard() {
@@ -251,9 +252,13 @@ export function AdminDashboard() {
     const cleanEmail = emailInput.trim().toLowerCase();
     const cleanPin = pinInput.trim();
     const targetPin = settings.adminPin || DEFAULT_PIN;
-    const targetEmail = (settings.adminEmail || AUTHORIZED_GMAIL).toLowerCase();
+    const configuredEmail = (settings.adminEmail || PRIMARY_ADMIN_GMAIL).toLowerCase();
 
-    const isEmailValid = cleanEmail === targetEmail;
+    // Accept both the official store email (ayurswift.care@gmail.com) and the owner's personal Gmail (rushirajdabhi16@gmail.com)
+    const isEmailValid =
+      cleanEmail === configuredEmail ||
+      cleanEmail === PRIMARY_ADMIN_GMAIL ||
+      cleanEmail === BACKUP_ADMIN_GMAIL;
     const isPinValid = cleanPin === targetPin;
 
     if (isEmailValid && isPinValid) {
@@ -1836,7 +1841,7 @@ export function AdminDashboard() {
                       Authorized Administrator Account
                     </div>
                     <div className="text-[11px] text-[#526359] font-mono">
-                      r••••••••••16@gmail.com
+                      ayurswift.care@gmail.com • (rushirajdabhi16@gmail.com)
                     </div>
                   </div>
                 </div>
