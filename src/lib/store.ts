@@ -93,7 +93,7 @@ export function getStoredOrders(): Order[] {
 export function saveStoredOrders(orders: Order[]) {
   if (typeof window === 'undefined') return;
   localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
-  // Asynchronously sync to server API for cross-device visibility
+  // 1. Asynchronously sync to server API for cross-device visibility
   try {
     fetch('/api/orders', {
       method: 'POST',
@@ -101,6 +101,89 @@ export function saveStoredOrders(orders: Order[]) {
       body: JSON.stringify(orders),
     }).catch(() => {});
   } catch {}
+
+  // 2. Asynchronously sync to Supabase database if configured
+  if (isSupabaseConfigured && supabase) {
+    orders.forEach((o) => {
+      syncOrderToSupabase(o).catch(() => {});
+    });
+  }
+}
+
+// Sync individual order to Supabase PostgreSQL database
+export async function syncOrderToSupabase(order: Order): Promise<boolean> {
+  if (!isSupabaseConfigured || !supabase) return false;
+  try {
+    const { error } = await supabase.from('orders').upsert({
+      id: order.id,
+      customer_name: order.customerName,
+      customer_phone: order.customerPhone,
+      delivery_type: order.deliveryType,
+      delivery_address: order.deliveryAddress,
+      city: order.city,
+      pincode: order.pincode,
+      landmark: order.landmark || null,
+      items: order.items,
+      subtotal: order.subtotal,
+      delivery_fee: order.deliveryFee,
+      total_amount: order.totalAmount,
+      payment_method: order.paymentMethod,
+      payment_status: order.paymentStatus,
+      order_status: order.orderStatus,
+      rapido_copied: order.rapidoCopied,
+      created_at: order.createdAt,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) {
+      console.warn('Supabase order upsert note:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Supabase order sync error:', err);
+    return false;
+  }
+}
+
+// Fetch orders directly from Supabase PostgreSQL database
+export async function fetchOrdersFromSupabase(): Promise<Order[] | null> {
+  if (!isSupabaseConfigured || !supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.warn('Supabase fetch orders notice:', error.message);
+      return null;
+    }
+
+    if (Array.isArray(data) && data.length > 0) {
+      return data.map((row: any) => ({
+        id: row.id,
+        customerName: row.customer_name,
+        customerPhone: row.customer_phone,
+        deliveryType: row.delivery_type,
+        deliveryAddress: row.delivery_address,
+        city: row.city,
+        pincode: row.pincode,
+        landmark: row.landmark || '',
+        items: row.items || [],
+        subtotal: Number(row.subtotal) || 0,
+        deliveryFee: Number(row.delivery_fee) || 0,
+        totalAmount: Number(row.total_amount) || 0,
+        paymentMethod: row.payment_method,
+        paymentStatus: row.payment_status,
+        orderStatus: row.order_status,
+        rapidoCopied: Boolean(row.rapido_copied),
+        createdAt: row.created_at,
+      }));
+    }
+  } catch (err) {
+    console.error('Supabase fetch orders error:', err);
+  }
+  return null;
 }
 
 // Cross-device order lookup by 10-digit phone number or Order ID (e.g. #AS-1001)
@@ -281,4 +364,169 @@ export async function syncProductToSupabase(product: Product) {
   } catch (err) {
     console.error('Supabase product sync error:', err);
   }
+}
+
+// -------------------------------------------------------------
+// DAY-BY-DAY ORDER MANAGEMENT & BOOKKEEPING HELPERS
+// -------------------------------------------------------------
+
+export interface DayGroupedOrders {
+  dateKey: string;          // 'YYYY-MM-DD'
+  displayDate: string;      // e.g. 'Thursday, 19 Nov 2026'
+  isToday: boolean;
+  isYesterday: boolean;
+  orders: Order[];
+  totalRevenue: number;
+  codAmount: number;
+  upiAmount: number;
+}
+
+export function groupOrdersByDate(orders: Order[]): DayGroupedOrders[] {
+  const groupsMap = new Map<string, Order[]>();
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+  orders.forEach((o) => {
+    const dateKey = (o.createdAt || new Date().toISOString()).split('T')[0];
+    if (!groupsMap.has(dateKey)) {
+      groupsMap.set(dateKey, []);
+    }
+    groupsMap.get(dateKey)!.push(o);
+  });
+
+  // Sort dates descending (newest day first)
+  const sortedDateKeys = Array.from(groupsMap.keys()).sort((a, b) => b.localeCompare(a));
+
+  return sortedDateKeys.map((dateKey) => {
+    const dayOrders = groupsMap.get(dateKey) || [];
+    // Sort orders inside day descending
+    dayOrders.sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    const dateObj = new Date(`${dateKey}T12:00:00Z`);
+    const displayDate = dateObj.toLocaleDateString('en-IN', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+
+    const isToday = dateKey === todayStr;
+    const isYesterday = dateKey === yesterdayStr;
+
+    const totalRevenue = dayOrders.reduce((sum, o) => sum + (o.orderStatus !== 'CANCELLED' ? o.totalAmount : 0), 0);
+    const codAmount = dayOrders
+      .filter((o) => o.paymentMethod === 'COD' && o.orderStatus !== 'CANCELLED')
+      .reduce((sum, o) => sum + o.totalAmount, 0);
+    const upiAmount = dayOrders
+      .filter((o) => o.paymentMethod === 'UPI' && o.orderStatus !== 'CANCELLED')
+      .reduce((sum, o) => sum + o.totalAmount, 0);
+
+    return {
+      dateKey,
+      displayDate,
+      isToday,
+      isYesterday,
+      orders: dayOrders,
+      totalRevenue,
+      codAmount,
+      upiAmount,
+    };
+  });
+}
+
+export function getDailyOrderStats(orders: Order[], filterDateKey?: string) {
+  const targetOrders = filterDateKey
+    ? orders.filter((o) => (o.createdAt || '').startsWith(filterDateKey))
+    : orders;
+
+  const validOrders = targetOrders.filter((o) => o.orderStatus !== 'CANCELLED');
+
+  const totalRevenue = validOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+  const codAmount = validOrders
+    .filter((o) => o.paymentMethod === 'COD')
+    .reduce((sum, o) => sum + o.totalAmount, 0);
+  const upiAmount = validOrders
+    .filter((o) => o.paymentMethod === 'UPI')
+    .reduce((sum, o) => sum + o.totalAmount, 0);
+
+  const newCount = targetOrders.filter((o) => o.orderStatus === 'NEW').length;
+  const packedCount = targetOrders.filter((o) => o.orderStatus === 'PACKED').length;
+  const dispatchedCount = targetOrders.filter((o) => o.orderStatus === 'DISPATCHED').length;
+  const deliveredCount = targetOrders.filter((o) => o.orderStatus === 'DELIVERED').length;
+  const cancelledCount = targetOrders.filter((o) => o.orderStatus === 'CANCELLED').length;
+
+  return {
+    totalOrders: targetOrders.length,
+    validOrdersCount: validOrders.length,
+    totalRevenue,
+    codAmount,
+    upiAmount,
+    pendingActionCount: newCount + packedCount,
+    newCount,
+    packedCount,
+    dispatchedCount,
+    deliveredCount,
+    cancelledCount,
+  };
+}
+
+// 1-Click Export Orders to CSV (Spreadsheet / Excel format)
+export function exportOrdersToCsv(orders: Order[]): string {
+  const headers = [
+    'Order ID',
+    'Date',
+    'Time',
+    'Customer Name',
+    'Customer Phone',
+    'Delivery Type',
+    'Address',
+    'Landmark',
+    'City',
+    'Pincode',
+    'Items Summary',
+    'Subtotal (INR)',
+    'Delivery Fee (INR)',
+    'Total Amount (INR)',
+    'Payment Method',
+    'Payment Status',
+    'Order Status',
+    'Rapido Copied',
+  ];
+
+  const rows = orders.map((o) => {
+    const d = new Date(o.createdAt);
+    const dateStr = d.toLocaleDateString('en-IN');
+    const timeStr = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    const itemsSummary = o.items
+      .map((i) => `${i.quantity}x ${i.name} (${i.packSize})`)
+      .join('; ');
+
+    return [
+      `"${o.id}"`,
+      `"${dateStr}"`,
+      `"${timeStr}"`,
+      `"${(o.customerName || '').replace(/"/g, '""')}"`,
+      `"${o.customerPhone}"`,
+      `"${o.deliveryType}"`,
+      `"${(o.deliveryAddress || '').replace(/"/g, '""')}"`,
+      `"${(o.landmark || '').replace(/"/g, '""')}"`,
+      `"${o.city}"`,
+      `"${o.pincode}"`,
+      `"${itemsSummary.replace(/"/g, '""')}"`,
+      o.subtotal,
+      o.deliveryFee,
+      o.totalAmount,
+      `"${o.paymentMethod}"`,
+      `"${o.paymentStatus}"`,
+      `"${o.orderStatus}"`,
+      o.rapidoCopied ? 'YES' : 'NO',
+    ].join(',');
+  });
+
+  return [headers.join(','), ...rows].join('\n');
 }

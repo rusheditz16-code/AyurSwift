@@ -33,6 +33,17 @@ import {
   EyeOff,
   LogOut,
   ShieldAlert,
+  Calendar,
+  Download,
+  RefreshCw,
+  Bell,
+  Printer,
+  MessageCircle,
+  CheckCircle2,
+  Filter,
+  Clock,
+  ExternalLink,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { Product, Order, MerchantSettings } from '@/types';
 import {
@@ -45,6 +56,9 @@ import {
   resetToInitialProducts,
   formatRapidoDropText,
   syncProductToSupabase,
+  groupOrdersByDate,
+  getDailyOrderStats,
+  exportOrdersToCsv,
 } from '@/lib/store';
 
 const AUTHORIZED_GMAIL = 'rushirajdabhi16@gmail.com';
@@ -72,6 +86,19 @@ export function AdminDashboard() {
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [settingsSavedToast, setSettingsSavedToast] = useState(false);
   const [resetToast, setResetToast] = useState(false);
+
+  // Day-by-Day Orders state & live synchronization
+  const [isLiveSync, setIsLiveSync] = useState(true);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  const [isRefreshingOrders, setIsRefreshingOrders] = useState(false);
+  const [newOrderBanner, setNewOrderBanner] = useState<Order | null>(null);
+  const prevOrderCountRef = useRef(0);
+
+  const [orderDateFilter, setOrderDateFilter] = useState<'ALL' | 'TODAY' | 'YESTERDAY' | 'CUSTOM'>('ALL');
+  const [orderCustomDate, setOrderCustomDate] = useState('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState<'ALL' | Order['orderStatus']>('ALL');
+  const [orderSearchQuery, setOrderSearchQuery] = useState('');
+  const [printingOrder, setPrintingOrder] = useState<Order | null>(null);
 
   // New / Edit Product Form state
   const defaultNewProd: Partial<Product> = {
@@ -131,6 +158,71 @@ export function AdminDashboard() {
       }
     } catch {}
   }, []);
+
+  // Polite Web Audio API chime on new order arrival
+  const playNewOrderSound = () => {
+    try {
+      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.18, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.5);
+    } catch {}
+  };
+
+  // Live order refresh function
+  const refreshOrders = async () => {
+    setIsRefreshingOrders(true);
+    try {
+      const res = await fetch('/api/orders');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.orders)) {
+          const currentLocal = getStoredOrders();
+          const map = new Map<string, Order>();
+          currentLocal.forEach((o) => map.set(o.id, o));
+          data.orders.forEach((o: Order) => map.set(o.id, o));
+          const merged = Array.from(map.values()).sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+
+          // Alert on new incoming order
+          if (prevOrderCountRef.current > 0 && merged.length > prevOrderCountRef.current) {
+            const newest = merged[0];
+            setNewOrderBanner(newest);
+            playNewOrderSound();
+          }
+          prevOrderCountRef.current = merged.length;
+
+          setOrders(merged);
+          saveStoredOrders(merged);
+          setLastSyncTime(new Date());
+        }
+      }
+    } catch (err) {
+      console.error('Failed to sync orders:', err);
+    } finally {
+      setIsRefreshingOrders(false);
+    }
+  };
+
+  // Auto-polling every 10 seconds when authenticated
+  useEffect(() => {
+    if (!isAuthenticated || !isLiveSync) return;
+    const timer = setInterval(() => {
+      refreshOrders();
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [isAuthenticated, isLiveSync]);
 
   // Lockout countdown timer
   useEffect(() => {
@@ -411,6 +503,36 @@ export function AdminDashboard() {
     }).catch(() => {});
   };
 
+  const handleWhatsAppCustomer = (order: Order) => {
+    const phone = order.customerPhone.replace(/\D/g, '');
+    const cleanPhone = phone.length === 10 ? `91${phone}` : phone;
+    const msg = `Hi ${order.customerName}! 🌿 Your AyurSwift order *${order.id}* has been verified & packed by our Bhavnagar dark store. Dispatch status: *${order.orderStatus}*! You can track your order live anytime here: https://ayurswift.vercel.app`;
+    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+  };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    if (!confirm(`Are you sure you want to delete order ${orderId}? This cannot be undone.`)) return;
+    const updated = orders.filter((o) => o.id !== orderId);
+    setOrders(updated);
+    saveStoredOrders(updated);
+    try {
+      await fetch(`/api/orders?id=${encodeURIComponent(orderId)}`, { method: 'DELETE' });
+    } catch {}
+  };
+
+  const handleExportCsv = (ordersToExport: Order[]) => {
+    const csvContent = exportOrdersToCsv(ordersToExport);
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const dateTag = orderDateFilter === 'TODAY' ? 'today' : orderDateFilter === 'YESTERDAY' ? 'yesterday' : orderDateFilter === 'CUSTOM' ? orderCustomDate : 'all';
+    link.setAttribute('download', `ayurswift_orders_${dateTag}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
     saveStoredSettings(settings);
@@ -636,14 +758,17 @@ export function AdminDashboard() {
           </button>
           <button
             onClick={() => setActiveTab('RAPIDO')}
-            className={`py-2.5 px-4 border-b-2 flex items-center gap-1.5 transition-colors ${
+            className={`py-2.5 px-4 border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer ${
               activeTab === 'RAPIDO'
                 ? 'border-[#1d5a3e] text-[#1d5a3e]'
                 : 'border-transparent text-[#526359] hover:text-[#143d29]'
             }`}
           >
             <Zap className="w-4 h-4 fill-[#c86326] text-[#c86326]" />
-            <span>Rapido Dispatch ({orders.length})</span>
+            <span>Orders &amp; Rapido ({orders.length})</span>
+            {orders.filter((o) => o.orderStatus === 'NEW').length > 0 && (
+              <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse ml-0.5" title="New unhandled orders awaiting packing!" />
+            )}
           </button>
           <button
             onClick={() => setActiveTab('SETTINGS')}
@@ -937,134 +1062,540 @@ export function AdminDashboard() {
           </div>
         )}
 
-        {/* TAB 2: RAPIDO DISPATCH TOOL */}
-        {activeTab === 'RAPIDO' && (
-          <div className="space-y-4">
-            <div className="bg-[#e9efdf] border border-[#d6ddce] rounded-2xl p-4 flex items-start gap-3">
-              <Zap className="w-5 h-5 text-[#c86326] shrink-0 mt-0.5" />
-              <div>
-                <h3 className="font-serif font-bold text-[#143d29] text-sm">
-                  Rapido Parcel 1-Tap Rider Dispatch
-                </h3>
-                <p className="text-xs text-[#526359] leading-relaxed mt-0.5">
-                  Click <strong>&quot;1-Click Copy for Rapido&quot;</strong> on any in-city order. It formats the customer name, phone number, drop address, and COD/Prepaid info cleanly so you can paste it directly into the Rapido app to book a bike parcel pickup in seconds.
-                </p>
-              </div>
-            </div>
+        {/* TAB 2: DAY-BY-DAY ORDERS & RAPIDO DISPATCH TOOL */}
+        {activeTab === 'RAPIDO' && (() => {
+          const todayStr = new Date().toISOString().split('T')[0];
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          const yesterdayStr = yesterday.toISOString().split('T')[0];
 
-            {orders.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-[#d6ddce] p-12 text-center space-y-2">
-                <Truck className="w-12 h-12 text-gray-300 mx-auto" />
-                <h3 className="font-serif font-bold text-[#143d29] text-sm">No Orders Yet</h3>
-                <p className="text-xs text-[#526359]">
-                  When customers place orders from the storefront, they appear here instantly.
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {orders.map((order) => {
-                  const isCopied = copiedOrderId === order.id;
-                  const isRapido = order.deliveryType === 'RAPIDO_CITY';
+          const effectiveDateKey =
+            orderDateFilter === 'TODAY'
+              ? todayStr
+              : orderDateFilter === 'YESTERDAY'
+              ? yesterdayStr
+              : orderDateFilter === 'CUSTOM'
+              ? orderCustomDate
+              : undefined;
 
-                  return (
-                    <div
-                      key={order.id}
-                      className="bg-white rounded-2xl border border-[#d6ddce] p-4 shadow-2xs space-y-3"
-                    >
-                      <div className="flex items-center justify-between border-b border-[#e9efdf] pb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-xs bg-[#e9efdf] text-[#1d5a3e] px-2 py-0.5 rounded-md">
-                            {order.id}
-                          </span>
-                          <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                              isRapido
-                                ? 'bg-amber-100 text-amber-900'
-                                : 'bg-blue-100 text-blue-900'
-                            }`}
-                          >
-                            {isRapido ? '⚡ Rapido 30-45m' : '📦 Courier'}
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-gray-400">
-                          {new Date(order.createdAt).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
+          const filteredOrders = orders.filter((o) => {
+            if (effectiveDateKey) {
+              const oDate = (o.createdAt || '').split('T')[0];
+              if (oDate !== effectiveDateKey) return false;
+            }
+            if (orderStatusFilter !== 'ALL' && o.orderStatus !== orderStatusFilter) {
+              return false;
+            }
+            if (orderSearchQuery.trim()) {
+              const q = orderSearchQuery.toLowerCase().trim();
+              const idMatch = o.id.toLowerCase().includes(q);
+              const nameMatch = o.customerName.toLowerCase().includes(q);
+              const phoneMatch = o.customerPhone.includes(q);
+              const cityMatch = o.city.toLowerCase().includes(q);
+              if (!idMatch && !nameMatch && !phoneMatch && !cityMatch) return false;
+            }
+            return true;
+          });
+
+          const dayGroups = groupOrdersByDate(filteredOrders);
+          const dailyStats = getDailyOrderStats(orders, effectiveDateKey);
+
+          const todayOrdersCount = orders.filter((o) => (o.createdAt || '').startsWith(todayStr)).length;
+          const yesterdayOrdersCount = orders.filter((o) => (o.createdAt || '').startsWith(yesterdayStr)).length;
+
+          return (
+            <div className="space-y-4">
+              {/* Floating Alert for New Incoming Order */}
+              {newOrderBanner && (
+                <div className="bg-[#143d29] text-white p-3.5 rounded-2xl shadow-xl flex items-center justify-between gap-3 border border-emerald-400/30 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                      <Bell className="w-4 h-4 animate-bounce" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold flex items-center gap-2">
+                        <span>New Order Received!</span>
+                        <span className="bg-emerald-400/20 text-emerald-300 px-2 py-0.5 rounded text-[10px]">
+                          {newOrderBanner.id}
                         </span>
                       </div>
-
-                      <div className="text-xs space-y-1 text-gray-700">
-                        <div>
-                          <strong>{order.customerName}</strong> ({order.customerPhone})
-                        </div>
-                        <div className="text-gray-500 text-[11px] leading-tight">
-                          {order.deliveryAddress}
-                          {order.landmark ? `, Near ${order.landmark}` : ''}, {order.city} - {order.pincode}
-                        </div>
-                      </div>
-
-                      <div className="p-2.5 bg-[#f8f8f3] rounded-xl text-xs space-y-1 border border-[#d6ddce]">
-                        <div className="text-[10.5px] font-bold text-[#526359] uppercase">Items to Pack:</div>
-                        {order.items.map((item, idx) => (
-                          <div key={idx} className="flex justify-between text-gray-800">
-                            <span>
-                              {item.quantity}x {item.name} ({item.packSize})
-                            </span>
-                            <span className="font-bold">₹{item.totalPrice}</span>
-                          </div>
-                        ))}
-                        <div className="border-t border-[#d6ddce] pt-1 flex justify-between font-bold text-gray-900 text-xs">
-                          <span>Total to Collect:</span>
-                          <span className="text-[#1d5a3e]">
-                            ₹{order.totalAmount} ({order.paymentMethod})
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between gap-2 pt-1">
-                        <button
-                          onClick={() => handleCopyForRapido(order)}
-                          className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-2xs ${
-                            isCopied
-                              ? 'bg-emerald-700 text-white'
-                              : 'bg-[#1d5a3e] hover:bg-[#143d29] text-white'
-                          }`}
-                        >
-                          {isCopied ? (
-                            <>
-                              <Check className="w-3.5 h-3.5" />
-                              <span>Copied for Rapido!</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3.5 h-3.5" />
-                              <span>1-Click Copy for Rapido</span>
-                            </>
-                          )}
-                        </button>
-
-                        <select
-                          value={order.orderStatus}
-                          onChange={(e) =>
-                            handleUpdateOrderStatus(order.id, e.target.value as Order['orderStatus'])
-                          }
-                          className="text-xs border border-[#d6ddce] rounded-xl px-2 py-2 bg-white text-gray-800 font-semibold focus:outline-none"
-                        >
-                          <option value="NEW">New</option>
-                          <option value="PACKED">Packed</option>
-                          <option value="DISPATCHED">Dispatched</option>
-                          <option value="DELIVERED">Delivered</option>
-                          <option value="CANCELLED">Cancelled</option>
-                        </select>
+                      <div className="text-[11px] text-gray-300">
+                        {newOrderBanner.customerName} ordered {newOrderBanner.items.length} items (₹{newOrderBanner.totalAmount}) • {newOrderBanner.deliveryType === 'RAPIDO_CITY' ? '⚡ Rapido In-City' : '📦 Courier'}
                       </div>
                     </div>
-                  );
-                })}
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => {
+                        setOrderSearchQuery(newOrderBanner.id);
+                        setNewOrderBanner(null);
+                      }}
+                      className="px-3 py-1 bg-white text-[#143d29] text-xs font-bold rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                    >
+                      View
+                    </button>
+                    <button
+                      onClick={() => setNewOrderBanner(null)}
+                      className="p-1 text-gray-400 hover:text-white transition-colors cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Top Banner & Cloud Database Status */}
+              <div className="bg-[#e9efdf] border border-[#d6ddce] rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#1d5a3e] text-white flex items-center justify-center shrink-0 shadow-2xs">
+                    <Zap className="w-5 h-5 text-amber-300 fill-amber-300" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-serif font-bold text-[#143d29] text-sm">
+                        Day-by-Day Orders &amp; Rapido Dispatch Desk
+                      </h3>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-[#143d29] flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                        <span>Cloud Database Live</span>
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#526359] leading-relaxed mt-0.5">
+                      Storefront orders synchronize in real time. 1-click formats Rapido parcel drops and updates live customer tracking timelines.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+                  {/* Live Sync Toggle */}
+                  <button
+                    onClick={() => setIsLiveSync(!isLiveSync)}
+                    className={`px-3 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                      isLiveSync
+                        ? 'bg-white text-[#1d5a3e] border-[#1d5a3e]/30 shadow-2xs'
+                        : 'bg-gray-100 text-gray-500 border-gray-300'
+                    }`}
+                    title="Toggle 10-second automatic background polling"
+                  >
+                    <span className={`w-2 h-2 rounded-full ${isLiveSync ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`} />
+                    <span>Live Sync: {isLiveSync ? 'ON (10s)' : 'PAUSED'}</span>
+                  </button>
+
+                  {/* Manual Refresh Button */}
+                  <button
+                    onClick={refreshOrders}
+                    disabled={isRefreshingOrders}
+                    className="px-3 py-1.5 bg-white text-[#143d29] hover:bg-[#dfe7d2] border border-[#d6ddce] rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
+                    title="Check database now"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingOrders ? 'animate-spin text-[#1d5a3e]' : ''}`} />
+                    <span>{isRefreshingOrders ? 'Syncing...' : 'Refresh'}</span>
+                  </button>
+
+                  {/* Export CSV Button */}
+                  <button
+                    onClick={() => handleExportCsv(filteredOrders)}
+                    className="px-3 py-1.5 bg-[#1d5a3e] hover:bg-[#143d29] text-white rounded-xl text-[11px] font-bold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer active:scale-95"
+                    title="Export filtered orders to Excel / CSV"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Export CSV</span>
+                  </button>
+                </div>
               </div>
-            )}
-          </div>
-        )}
+
+              {/* Daily KPI Financial & Dispatch Metric Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                <div className="bg-white rounded-2xl border border-[#d6ddce] p-3.5 shadow-2xs">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
+                    {effectiveDateKey ? 'Selected Day Revenue' : 'Total Orders Revenue'}
+                  </span>
+                  <div className="text-xl font-bold font-serif text-[#143d29] mt-0.5">
+                    ₹{dailyStats.totalRevenue.toLocaleString('en-IN')}
+                  </div>
+                  <span className="text-[10.5px] text-[#1d5a3e] font-semibold block mt-0.5">
+                    {dailyStats.validOrdersCount} active orders
+                  </span>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-[#d6ddce] p-3.5 shadow-2xs">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
+                    Total Orders Count
+                  </span>
+                  <div className="text-xl font-bold font-serif text-[#143d29] mt-0.5">
+                    {dailyStats.totalOrders}
+                  </div>
+                  <span className="text-[10.5px] text-[#526359] block mt-0.5">
+                    {effectiveDateKey ? 'For filtered date' : 'All time in store'}
+                  </span>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-[#d6ddce] p-3.5 shadow-2xs">
+                  <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">
+                    COD to Collect
+                  </span>
+                  <div className="text-xl font-bold font-serif text-amber-900 mt-0.5">
+                    ₹{dailyStats.codAmount.toLocaleString('en-IN')}
+                  </div>
+                  <span className="text-[10.5px] text-amber-700 block mt-0.5">
+                    Cash from riders/courier
+                  </span>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-[#d6ddce] p-3.5 shadow-2xs">
+                  <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">
+                    Prepaid UPI Received
+                  </span>
+                  <div className="text-xl font-bold font-serif text-emerald-900 mt-0.5">
+                    ₹{dailyStats.upiAmount.toLocaleString('en-IN')}
+                  </div>
+                  <span className="text-[10.5px] text-emerald-700 block mt-0.5">
+                    Direct on 9624766242@fam
+                  </span>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-[#d6ddce] p-3.5 shadow-2xs col-span-2 sm:col-span-1">
+                  <span className="text-[10px] font-bold text-rose-700 uppercase tracking-wider block">
+                    Awaiting Dispatch
+                  </span>
+                  <div className="text-xl font-bold font-serif text-rose-900 mt-0.5">
+                    {dailyStats.pendingActionCount}
+                  </div>
+                  <span className="text-[10.5px] text-rose-700 block mt-0.5">
+                    {dailyStats.newCount} New • {dailyStats.packedCount} Packed
+                  </span>
+                </div>
+              </div>
+
+              {/* Filters Toolbar: Day Picker & Status Filters */}
+              <div className="bg-white rounded-2xl border border-[#d6ddce] p-3.5 shadow-2xs space-y-3">
+                {/* Date Selection Row */}
+                <div className="flex flex-wrap items-center justify-between gap-2.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs font-bold text-[#143d29] mr-1 flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-[#1d5a3e]" />
+                      <span>Date Filter:</span>
+                    </span>
+                    <button
+                      onClick={() => setOrderDateFilter('ALL')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        orderDateFilter === 'ALL'
+                          ? 'bg-[#1d5a3e] text-white shadow-2xs'
+                          : 'bg-[#f8f8f3] text-gray-700 hover:bg-[#e9efdf] border border-[#d6ddce]'
+                      }`}
+                    >
+                      All Orders ({orders.length})
+                    </button>
+                    <button
+                      onClick={() => setOrderDateFilter('TODAY')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        orderDateFilter === 'TODAY'
+                          ? 'bg-[#1d5a3e] text-white shadow-2xs'
+                          : 'bg-[#f8f8f3] text-gray-700 hover:bg-[#e9efdf] border border-[#d6ddce]'
+                      }`}
+                    >
+                      Today ({todayOrdersCount})
+                    </button>
+                    <button
+                      onClick={() => setOrderDateFilter('YESTERDAY')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        orderDateFilter === 'YESTERDAY'
+                          ? 'bg-[#1d5a3e] text-white shadow-2xs'
+                          : 'bg-[#f8f8f3] text-gray-700 hover:bg-[#e9efdf] border border-[#d6ddce]'
+                      }`}
+                    >
+                      Yesterday ({yesterdayOrdersCount})
+                    </button>
+                  </div>
+
+                  {/* Specific Date Picker */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-[#526359] font-medium">Pick Day:</span>
+                    <input
+                      type="date"
+                      value={orderCustomDate}
+                      onChange={(e) => {
+                        setOrderCustomDate(e.target.value);
+                        setOrderDateFilter(e.target.value ? 'CUSTOM' : 'ALL');
+                      }}
+                      className="px-2.5 py-1 text-xs bg-[#f8f8f3] border border-[#d6ddce] rounded-lg text-[#143d29] font-medium focus:outline-none focus:ring-1 focus:ring-[#1d5a3e]"
+                    />
+                    {orderDateFilter === 'CUSTOM' && (
+                      <button
+                        onClick={() => {
+                          setOrderCustomDate('');
+                          setOrderDateFilter('ALL');
+                        }}
+                        className="text-[11px] text-gray-500 hover:text-gray-800 underline cursor-pointer"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Status & Search Row */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2 border-t border-[#e9efdf]">
+                  <div className="flex flex-wrap items-center gap-1">
+                    {(['ALL', 'NEW', 'PACKED', 'DISPATCHED', 'DELIVERED', 'CANCELLED'] as const).map((st) => (
+                      <button
+                        key={st}
+                        onClick={() => setOrderStatusFilter(st)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                          orderStatusFilter === st
+                            ? 'bg-[#143d29] text-white'
+                            : 'bg-[#f8f8f3] text-gray-600 hover:bg-[#e9efdf] border border-[#d6ddce]'
+                        }`}
+                      >
+                        {st === 'ALL'
+                          ? `All (${dailyStats.totalOrders})`
+                          : st === 'NEW'
+                          ? `New (${dailyStats.newCount})`
+                          : st === 'PACKED'
+                          ? `Packed (${dailyStats.packedCount})`
+                          : st === 'DISPATCHED'
+                          ? `Dispatched (${dailyStats.dispatchedCount})`
+                          : st === 'DELIVERED'
+                          ? `Delivered (${dailyStats.deliveredCount})`
+                          : `Cancelled (${dailyStats.cancelledCount})`}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Search Bar */}
+                  <div className="relative min-w-[220px]">
+                    <Search className="w-3.5 h-3.5 text-[#718277] absolute left-3 top-2.5 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={orderSearchQuery}
+                      onChange={(e) => setOrderSearchQuery(e.target.value)}
+                      placeholder="Search Order ID, name, phone..."
+                      className="w-full pl-8 pr-7 py-1.5 text-xs bg-[#f8f8f3] border border-[#d6ddce] rounded-xl text-[#143d29] focus:outline-none focus:ring-1 focus:ring-[#1d5a3e]"
+                    />
+                    {orderSearchQuery && (
+                      <button
+                        onClick={() => setOrderSearchQuery('')}
+                        className="absolute right-2 top-2 text-gray-400 hover:text-gray-700"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Day-by-Day Grouped Orders Display */}
+              {dayGroups.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-[#d6ddce] p-12 text-center space-y-2.5 shadow-2xs">
+                  <div className="w-12 h-12 bg-[#e9efdf] text-[#1d5a3e] rounded-full flex items-center justify-center mx-auto text-2xl">
+                    📦
+                  </div>
+                  <h3 className="font-serif font-bold text-[#143d29] text-base">No Orders Found</h3>
+                  <p className="text-xs text-[#526359] max-w-sm mx-auto">
+                    {orderSearchQuery || orderDateFilter !== 'ALL' || orderStatusFilter !== 'ALL'
+                      ? 'No orders match your selected day or status filter. Try clearing filters or picking another date.'
+                      : 'When customers place orders on the storefront, they appear here instantly with live cloud sync.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {dayGroups.map((group) => (
+                    <div key={group.dateKey} className="space-y-3">
+                      {/* Day Group Header */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 bg-[#f8f8f3] px-4 py-2.5 rounded-2xl border border-[#d6ddce]">
+                        <div className="flex items-center gap-2">
+                          <span className="font-serif font-bold text-sm text-[#143d29] flex items-center gap-1.5">
+                            <Calendar className="w-4 h-4 text-[#1d5a3e]" />
+                            <span>
+                              {group.isToday ? 'Today — ' : group.isYesterday ? 'Yesterday — ' : ''}
+                              {group.displayDate}
+                            </span>
+                          </span>
+                          <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-white text-[#1d5a3e] border border-[#d6ddce]">
+                            {group.orders.length} {group.orders.length === 1 ? 'order' : 'orders'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-3 text-xs text-[#526359]">
+                          <span className="font-bold text-[#143d29]">Day Total: ₹{group.totalRevenue}</span>
+                          <span className="text-[#d6ddce]">•</span>
+                          <span>COD: <strong className="text-amber-800">₹{group.codAmount}</strong></span>
+                          <span className="text-[#d6ddce]">•</span>
+                          <span>UPI: <strong className="text-emerald-800">₹{group.upiAmount}</strong></span>
+                        </div>
+                      </div>
+
+                      {/* Orders Cards Grid for this day */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {group.orders.map((order) => {
+                          const isCopied = copiedOrderId === order.id;
+                          const isRapido = order.deliveryType === 'RAPIDO_CITY';
+
+                          return (
+                            <div
+                              key={order.id}
+                              className="bg-white rounded-2xl border border-[#d6ddce] p-4 shadow-2xs space-y-3"
+                            >
+                              {/* Order Card Header */}
+                              <div className="flex items-center justify-between border-b border-[#e9efdf] pb-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-xs bg-[#e9efdf] text-[#1d5a3e] px-2 py-0.5 rounded-md">
+                                    {order.id}
+                                  </span>
+                                  <span
+                                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                      isRapido
+                                        ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                                        : 'bg-blue-100 text-blue-900 border border-blue-200'
+                                    }`}
+                                  >
+                                    {isRapido ? '⚡ Rapido 30-45m' : '📦 Courier'}
+                                  </span>
+                                  <span
+                                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                      order.paymentMethod === 'COD'
+                                        ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                                        : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                    }`}
+                                  >
+                                    {order.paymentMethod === 'COD' ? '💵 COD' : '📱 PREPAID UPI'}
+                                  </span>
+                                </div>
+                                <span className="text-[10.5px] text-[#526359] flex items-center gap-1 font-medium">
+                                  <Clock className="w-3 h-3" />
+                                  <span>
+                                    {new Date(order.createdAt).toLocaleTimeString([], {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                  </span>
+                                </span>
+                              </div>
+
+                              {/* Customer Information */}
+                              <div className="text-xs space-y-1 text-gray-700">
+                                <div className="flex justify-between items-start">
+                                  <div>
+                                    <strong className="text-[#143d29]">{order.customerName}</strong>
+                                    <a
+                                      href={`tel:${order.customerPhone}`}
+                                      className="text-[#1d5a3e] font-semibold hover:underline ml-1.5"
+                                    >
+                                      ({order.customerPhone})
+                                    </a>
+                                  </div>
+                                </div>
+                                <div className="text-gray-500 text-[11px] leading-tight">
+                                  {order.deliveryAddress}
+                                  {order.landmark ? `, Near ${order.landmark}` : ''}, {order.city} - {order.pincode}
+                                </div>
+                              </div>
+
+                              {/* Items to Pack */}
+                              <div className="p-2.5 bg-[#f8f8f3] rounded-xl text-xs space-y-1 border border-[#d6ddce]">
+                                <div className="text-[10px] font-bold text-[#526359] uppercase tracking-wider">
+                                  Items to Pack:
+                                </div>
+                                {order.items.map((item, idx) => (
+                                  <div key={idx} className="flex justify-between text-gray-800 text-[11px]">
+                                    <span>
+                                      {item.quantity}x {item.name} ({item.packSize})
+                                    </span>
+                                    <span className="font-bold">₹{item.totalPrice}</span>
+                                  </div>
+                                ))}
+                                <div className="border-t border-[#d6ddce] pt-1 flex justify-between font-bold text-gray-900 text-xs">
+                                  <span>Total to Collect:</span>
+                                  <span className="text-[#1d5a3e]">
+                                    ₹{order.totalAmount} ({order.paymentMethod})
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Action Row */}
+                              <div className="space-y-2 pt-1">
+                                <div className="flex items-center gap-2">
+                                  {/* 1-Click Copy for Rapido */}
+                                  <button
+                                    onClick={() => handleCopyForRapido(order)}
+                                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer ${
+                                      isCopied
+                                        ? 'bg-emerald-700 text-white'
+                                        : 'bg-[#1d5a3e] hover:bg-[#143d29] text-white active:scale-95'
+                                    }`}
+                                    title="Copy formatted details for Rapido bike booking"
+                                  >
+                                    {isCopied ? (
+                                      <>
+                                        <Check className="w-3.5 h-3.5" />
+                                        <span>Copied for Rapido!</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Copy className="w-3.5 h-3.5" />
+                                        <span>1-Click Copy for Rapido</span>
+                                      </>
+                                    )}
+                                  </button>
+
+                                  {/* Status Selector */}
+                                  <select
+                                    value={order.orderStatus}
+                                    onChange={(e) =>
+                                      handleUpdateOrderStatus(order.id, e.target.value as Order['orderStatus'])
+                                    }
+                                    className="text-xs border border-[#d6ddce] rounded-xl px-2.5 py-2 bg-white text-gray-800 font-bold focus:outline-none focus:ring-1 focus:ring-[#1d5a3e] cursor-pointer"
+                                  >
+                                    <option value="NEW">New (Unpacked)</option>
+                                    <option value="PACKED">Packed</option>
+                                    <option value="DISPATCHED">Dispatched</option>
+                                    <option value="DELIVERED">Delivered</option>
+                                    <option value="CANCELLED">Cancelled</option>
+                                  </select>
+                                </div>
+
+                                {/* Secondary Action Row: WhatsApp Customer Alert, Print Slip, Delete */}
+                                <div className="flex items-center justify-between gap-1.5 pt-1 border-t border-[#e9efdf]">
+                                  <button
+                                    onClick={() => handleWhatsAppCustomer(order)}
+                                    className="px-2.5 py-1 text-[11px] font-bold text-[#1d5a3e] hover:bg-[#e9efdf] rounded-lg border border-[#d6ddce] flex items-center gap-1 transition-colors cursor-pointer"
+                                    title="Notify customer on WhatsApp"
+                                  >
+                                    <MessageCircle className="w-3 h-3" />
+                                    <span>WhatsApp Customer</span>
+                                  </button>
+
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      onClick={() => setPrintingOrder(order)}
+                                      className="px-2.5 py-1 text-[11px] font-bold text-gray-700 hover:bg-[#e9efdf] rounded-lg border border-[#d6ddce] flex items-center gap-1 transition-colors cursor-pointer"
+                                      title="Print thermal packing slip"
+                                    >
+                                      <Printer className="w-3 h-3" />
+                                      <span>Print Slip</span>
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleDeleteOrder(order.id)}
+                                      className="p-1 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                      title="Delete order"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* TAB 3: SETTINGS */}
         {activeTab === 'SETTINGS' && (
@@ -1650,6 +2181,67 @@ export function AdminDashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Thermal Packing Slip Modal */}
+      {printingOrder && (
+        <div className="fixed inset-0 z-80 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-gray-300 font-mono text-xs text-gray-900 space-y-3">
+            <div className="text-center border-b border-dashed border-gray-400 pb-3">
+              <h3 className="font-bold text-sm">🌿 AYURSWIFT PHARMACY</h3>
+              <p className="text-[10px] text-gray-500">Home Dark Store • Bhavnagar, Gujarat</p>
+              <p className="text-[10px] text-gray-500">Helpline: +91 96247 66242</p>
+              <div className="mt-2 text-xs font-bold bg-gray-100 py-1 rounded">
+                ORDER #{printingOrder.id}
+              </div>
+            </div>
+
+            <div className="space-y-1 text-[11px]">
+              <div><strong>Date:</strong> {new Date(printingOrder.createdAt).toLocaleDateString()} {new Date(printingOrder.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+              <div><strong>Customer:</strong> {printingOrder.customerName}</div>
+              <div><strong>Phone:</strong> {printingOrder.customerPhone}</div>
+              <div><strong>Delivery:</strong> {printingOrder.deliveryType === 'RAPIDO_CITY' ? '⚡ Rapido City Bike' : '📦 Courier Outside'}</div>
+              <div><strong>Address:</strong> {printingOrder.deliveryAddress}{printingOrder.landmark ? `, Near ${printingOrder.landmark}` : ''}, {printingOrder.city} - {printingOrder.pincode}</div>
+            </div>
+
+            <div className="border-t border-b border-dashed border-gray-400 py-2 space-y-1">
+              <div className="font-bold text-[10px] uppercase">Items to Pack:</div>
+              {printingOrder.items.map((i, idx) => (
+                <div key={idx} className="flex justify-between text-[11px]">
+                  <span>{i.quantity}x {i.name} ({i.packSize})</span>
+                  <span>₹{i.totalPrice}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-1 text-right text-xs">
+              <div>Subtotal: ₹{printingOrder.subtotal}</div>
+              <div>Delivery Fee: ₹{printingOrder.deliveryFee}</div>
+              <div className="font-bold text-sm border-t border-gray-300 pt-1">
+                Total to Collect: ₹{printingOrder.totalAmount}
+              </div>
+              <div className="text-[10px] font-bold text-gray-600">
+                Payment: {printingOrder.paymentMethod === 'COD' ? '💵 CASH ON DELIVERY' : '📱 PREPAID UPI'}
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-3 border-t border-gray-300">
+              <button
+                onClick={() => setPrintingOrder(null)}
+                className="flex-1 py-2 text-xs font-bold border border-gray-300 rounded-xl hover:bg-gray-100 cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="flex-1 py-2 text-xs font-bold bg-[#1d5a3e] text-white rounded-xl hover:bg-[#143d29] flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Print Slip</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
