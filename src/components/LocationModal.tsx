@@ -91,7 +91,7 @@ export function LocationModal({
           <div className="pb-1">
             <div className="text-[10.5px] font-bold text-gray-500 uppercase tracking-wider px-2 py-1 flex items-center gap-1">
               <Zap className="w-3 h-3 text-[#c86326] fill-[#c86326]" />
-              <span>Local Express Delivery (Bhavnagar)</span>
+              <span>Local City Delivery</span>
             </div>
 
             {filteredAreas.map((item) => {
@@ -108,7 +108,7 @@ export function LocationModal({
                       city: 'Bhavnagar',
                       pincode: item.pincode,
                       dispatchType: 'RAPIDO_CITY',
-                      estimate: '30–45m Rapido',
+                      estimate: 'Local Express Delivery',
                     });
                     onClose();
                   }}
@@ -133,35 +133,35 @@ export function LocationModal({
 
           <div className="pt-2">
             <div className="text-[10.5px] font-bold text-gray-500 uppercase tracking-wider px-2 py-1 flex items-center gap-1">
-              <Truck className="w-3 h-3 text-blue-600" />
-              <span>Outside Bhavnagar / All-India</span>
+              <Truck className="w-3 h-3 text-[#1d5a3e]" />
+              <span>All-India Courier</span>
             </div>
 
             <button
               onClick={() => {
                 onSelectLocation({
-                  area: 'Outside Bhavnagar (Rest of India)',
+                  area: 'Rest of India',
                   city: 'All India',
                   pincode: 'Other',
                   dispatchType: 'COURIER_OUTSIDE',
-                  estimate: '2–4 Days Courier',
+                  estimate: 'Courier Dispatch (2–4 Days)',
                 });
                 onClose();
               }}
               className={`w-full text-left px-3 py-2.5 rounded-xl text-xs flex items-center justify-between transition-colors ${
                 currentLocation.dispatchType === 'COURIER_OUTSIDE'
-                  ? 'bg-blue-50 text-blue-900 font-bold border border-blue-200'
+                  ? 'bg-[#e9efdf] text-[#143d29] font-bold border border-[#1d5a3e]'
                   : 'hover:bg-white text-gray-800'
               }`}
             >
               <div>
                 <div className="font-semibold">All Other Cities &amp; Towns</div>
                 <div className="text-[10px] text-gray-500">
-                  Shipped via Speed Post / DTDC in bubble-wrapped boxes
+                  Shipped via Speed Post / Tracked Express Courier
                 </div>
               </div>
               {currentLocation.dispatchType === 'COURIER_OUTSIDE' && (
-                <Check className="w-4 h-4 text-blue-700" />
+                <Check className="w-4 h-4 text-[#1d5a3e]" />
               )}
             </button>
           </div>

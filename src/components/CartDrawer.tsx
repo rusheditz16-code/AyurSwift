@@ -444,7 +444,7 @@ export function CartDrawer({
                         📱 Direct Bank UPI
                       </div>
                       <div className="text-[10px] text-[#1d5a3e] font-semibold mt-0.5">
-                        Zero Gateway Cut • GPay / PhonePe
+                        Instant &amp; Secure • GPay, PhonePe, Paytm
                       </div>
                     </button>
 

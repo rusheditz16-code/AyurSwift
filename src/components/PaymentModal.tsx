@@ -81,15 +81,28 @@ export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
           <span className="inline-block bg-[#1d5a3e]/10 text-[#1d5a3e] font-semibold text-xs px-3 py-0.5 rounded-full mb-1 border border-[#1d5a3e]/20">
             Order #{order.id}
           </span>
-          <h2 className="font-serif text-2xl font-bold text-[#143d29]">Order Placed!</h2>
-          <p className="text-xs text-[#526359] mt-0.5">
-            {order.deliveryType === 'RAPIDO_CITY'
-              ? '⚡ 30–45 Mins Rapido Delivery • Bhavnagar Store'
-              : '📦 Courier Dispatch in 2–4 Days • All India'}
+          <h2 className="font-serif text-2xl font-bold text-[#143d29]">Order Received</h2>
+          <p className="text-xs text-[#526359] mt-1 max-w-xs mx-auto leading-relaxed">
+            Your order request is recorded. The dark store verifies in-stock inventory and courier route before packing.
           </p>
         </div>
 
         <div className="p-5 space-y-4">
+          {/* Order Status Notice */}
+          <div className="bg-[#e9efdf] border border-[#d6ddce] rounded-xl p-3 text-xs space-y-1">
+            <div className="flex items-center justify-between font-semibold text-[#143d29]">
+              <span>Current Status:</span>
+              <span className="bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-300">
+                Awaiting Merchant Confirmation
+              </span>
+            </div>
+            <p className="text-[11px] text-[#526359] leading-tight">
+              {order.paymentMethod === 'COD'
+                ? 'Cash on Delivery: Payment will be collected upon doorstep delivery once verified.'
+                : 'Prepaid UPI: Please complete UPI payment below for instant processing.'}
+            </p>
+          </div>
+
           {/* Order Summary Box */}
           <div className="bg-white rounded-xl p-3.5 text-xs space-y-1.5 border border-[#d6ddce]">
             <div className="flex justify-between text-[#526359]">

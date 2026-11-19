@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Plus, Minus, Eye } from 'lucide-react';
+import { Plus, Minus, Eye, Check } from 'lucide-react';
 import { Product } from '@/types';
 import { MedicinePackVisual } from '@/components/MedicinePackVisual';
 
@@ -44,6 +44,16 @@ export function ProductCard({
           ) : (
             <span />
           )}
+
+          {/* Real Stock Availability indicator */}
+          <span className="text-[10px] font-semibold text-emerald-800 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 inline-block" />
+            <span>
+              {product.stockQuantity <= 5
+                ? `Only ${product.stockQuantity} left`
+                : `In Stock (${product.stockQuantity})`}
+            </span>
+          </span>
         </div>
 
         {/* Product Visual Container (Uploaded Packshot or Form-Accurate Art) */}
@@ -66,12 +76,12 @@ export function ProductCard({
               alt={product.name}
               loading="lazy"
               onError={() => setImageError(true)}
-              className="w-full h-full object-contain p-1 transform group-hover:scale-105 transition-transform duration-200"
+              className="w-full h-full object-contain p-1 transform group-hover:scale-104 transition-transform duration-200"
             />
           ) : (
             <MedicinePackVisual
               product={product}
-              className="w-full h-full transform group-hover:scale-105 transition-transform duration-200"
+              className="w-full h-full transform group-hover:scale-104 transition-transform duration-200"
             />
           )}
 
@@ -91,13 +101,13 @@ export function ProductCard({
         {/* Product Metadata */}
         <div className="pt-2.5 flex-1 flex flex-col justify-between space-y-1">
           <div>
-            <div className="text-[11px] text-gray-500 font-semibold truncate">
+            <div className="text-[11px] text-[#526359] font-medium truncate">
               {product.brand} • {product.packSize}
             </div>
 
             <h3
               onClick={() => onViewDetails(product)}
-              className="font-serif font-bold text-[13px] sm:text-[14px] text-gray-900 line-clamp-2 leading-snug cursor-pointer hover:text-[#1d5a3e] transition-colors mt-0.5 min-h-[36px]"
+              className="font-serif font-bold text-[13px] sm:text-[14px] text-[#143d29] line-clamp-2 leading-snug cursor-pointer hover:text-[#1d5a3e] transition-colors mt-0.5 min-h-[36px]"
               title={product.name}
             >
               {product.name}
@@ -114,7 +124,7 @@ export function ProductCard({
               MRP ₹{product.mrp}
             </div>
           )}
-          <div className="font-bold text-sm sm:text-base text-gray-900 leading-none">
+          <div className="font-bold text-sm sm:text-base text-[#143d29] leading-none">
             ₹{product.sellingPrice}
           </div>
         </div>
@@ -125,7 +135,7 @@ export function ProductCard({
             <button
               onClick={() => onAddToCart(product)}
               className="bg-white hover:bg-[#1d5a3e] text-[#1d5a3e] hover:text-white border border-[#1d5a3e] px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all shadow-2xs active:scale-95 flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1d5a3e] cursor-pointer"
-              aria-label={`Add ${product.name} to cart`}
+              aria-label={`Add ${product.name} to basket`}
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Add</span>
@@ -134,9 +144,10 @@ export function ProductCard({
             <div
               className="flex items-center bg-[#1d5a3e] text-white rounded-xl shadow-xs overflow-hidden"
               role="group"
-              aria-label={`Quantity in cart for ${product.name}`}
+              aria-label={`Quantity in basket for ${product.name}`}
             >
               <button
+                type="button"
                 onClick={() => onUpdateQuantity(product.id, quantityInCart - 1)}
                 className="px-2.5 py-1.5 hover:bg-[#143d29] transition-colors active:scale-90 flex items-center justify-center focus:outline-none cursor-pointer"
                 aria-label="Decrease quantity"
@@ -147,6 +158,7 @@ export function ProductCard({
                 {quantityInCart}
               </span>
               <button
+                type="button"
                 onClick={() => onUpdateQuantity(product.id, quantityInCart + 1)}
                 disabled={quantityInCart >= product.stockQuantity}
                 className="px-2.5 py-1.5 hover:bg-[#143d29] disabled:opacity-40 transition-colors active:scale-90 flex items-center justify-center focus:outline-none cursor-pointer"

@@ -34,18 +34,15 @@ import {
   ShoppingBag,
   ArrowRight,
   PhoneCall,
-  CheckCircle,
-  CheckCircle2,
-  Truck,
-  RotateCcw,
   SlidersHorizontal,
   ChevronDown,
-  Sparkles,
+  RotateCcw,
   Home,
   Compass,
   User,
   MapPin,
   Lock,
+  Sparkles,
 } from 'lucide-react';
 
 const DEFAULT_LOCATION: LocationInfo = {
@@ -53,17 +50,17 @@ const DEFAULT_LOCATION: LocationInfo = {
   city: 'Bhavnagar',
   pincode: '364001',
   dispatchType: 'RAPIDO_CITY',
-  estimate: '30–45m Rapido',
+  estimate: 'Local Express Delivery',
 };
 
 type SortKey = 'FEATURED' | 'PRICE_ASC' | 'PRICE_DESC' | 'DISCOUNT_DESC' | 'RATING_DESC';
 
-// The 4 Main Health Concern Tiles
-const FOUR_MAIN_CONCERNS = [
+// Clear 5 Category Tiles (including Daily Wellness)
+const CATEGORY_TILES = [
   {
     id: 'Joint & Muscle Pain',
     title: 'Joint & Muscle Pain',
-    sub: 'Balms, sprays & liniments',
+    sub: 'Balms, oils & liniments',
     icon: '🦵',
   },
   {
@@ -83,6 +80,12 @@ const FOUR_MAIN_CONCERNS = [
     title: 'Skin & Hair',
     sub: 'Aloe vera gels & almond oils',
     icon: '💆',
+  },
+  {
+    id: 'Daily Wellness',
+    title: 'Daily Wellness',
+    sub: 'Herbal tonics & daily vitality',
+    icon: '🌿',
   },
 ];
 
@@ -118,11 +121,11 @@ export default function StorefrontPage() {
   const [selectedDispatch, setSelectedDispatch] = useState('ALL');
   const [sortBy, setSortBy] = useState<SortKey>('FEATURED');
 
-  // Callback form
+  // Callback / Assistance Form
   const [callbackPhone, setCallbackPhone] = useState('');
   const [callbackSent, setCallbackSent] = useState(false);
 
-  // Catalog anchor
+  // Catalog Anchor
   const catalogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -175,19 +178,19 @@ export default function StorefrontPage() {
     return Array.from(brands);
   }, [products]);
 
-  // Filtered & Sorted Products
+  // Filtered in-stock products
   const filteredProducts = useMemo(() => {
     let result = products.filter((p) => {
-      // Strict in-stock only
+      // Real positive stock only
       if (!p.isLive || p.stockQuantity <= 0) return false;
 
-      // Category
+      // Category filter
       if (selectedCategory !== 'ALL' && p.category !== selectedCategory) return false;
 
-      // Brand
+      // Brand filter
       if (selectedBrand !== 'ALL' && p.brand !== selectedBrand) return false;
 
-      // Price Range
+      // Price Range filter
       if (selectedPriceRange === 'UNDER_100' && p.sellingPrice >= 100) return false;
       if (
         selectedPriceRange === '100_TO_200' &&
@@ -246,6 +249,28 @@ export default function StorefrontPage() {
     searchQuery,
     sortBy,
   ]);
+
+  // Featured remedies: Distinct curated set (Zandu Balm, Pudin Hara, Mahanarayan Tel, Liv.52)
+  const featuredIds = useMemo(() => new Set(['prod-001', 'prod-006', 'prod-002', 'prod-018']), []);
+  const featuredProducts = useMemo(() => {
+    return products.filter((p) => featuredIds.has(p.id) && p.isLive && p.stockQuantity > 0);
+  }, [products, featuredIds]);
+
+  // Is any specific search or filter active?
+  const isFilterActive =
+    selectedCategory !== 'ALL' ||
+    selectedBrand !== 'ALL' ||
+    selectedPriceRange !== 'ALL' ||
+    selectedDispatch !== 'ALL' ||
+    searchQuery.trim().length > 0;
+
+  // Complete catalog items: When no filter is active, exclude featured items so NO item repeats!
+  const catalogProducts = useMemo(() => {
+    if (isFilterActive) {
+      return filteredProducts;
+    }
+    return filteredProducts.filter((p) => !featuredIds.has(p.id));
+  }, [filteredProducts, isFilterActive, featuredIds]);
 
   // Cart calculations
   const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
@@ -388,7 +413,7 @@ export default function StorefrontPage() {
     if (!callbackPhone.trim()) return;
     const clean = callbackPhone.replace(/\D/g, '');
     const message = encodeURIComponent(
-      `Hello AyurSwift! I want to order medicines via call/WhatsApp. My phone number is: ${clean}. Please confirm dispatch in Bhavnagar.`
+      `Hello AyurSwift! I want to order medicines via call/WhatsApp. My phone number is: ${clean}.`
     );
     window.open(`https://wa.me/${settings.merchantWhatsApp}?text=${message}`, '_blank');
     setCallbackSent(true);
@@ -398,7 +423,7 @@ export default function StorefrontPage() {
   const scrollToCatalog = () => {
     if (typeof window === 'undefined') return;
     if (catalogRef.current) {
-      const headerOffset = 150;
+      const headerOffset = 130;
       const elementPosition = catalogRef.current.getBoundingClientRect().top;
       const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
       window.scrollTo({
@@ -408,17 +433,9 @@ export default function StorefrontPage() {
     }
   };
 
-  // Top 4 Bestsellers for the dedicated row (Zandu Balm, Pudin Hara, Mahanarayan Tel, Liv.52)
-  const bestsellerIds = ['prod-001', 'prod-006', 'prod-002', 'prod-018'];
-  const bestsellerProducts = useMemo(() => {
-    return products.filter(
-      (p) => bestsellerIds.includes(p.id) && p.isLive && p.stockQuantity > 0
-    );
-  }, [products]);
-
   return (
     <div className="min-h-screen bg-[#f8f8f3] text-[#1c2820] flex flex-col font-sans pb-20 md:pb-0">
-      {/* 1. Refined Header */}
+      {/* 1. Header (Compact Mark, Location, Search with Autocomplete, Basket) */}
       <Header
         cartCount={cartCount}
         cartTotal={cartSubtotal}
@@ -434,6 +451,11 @@ export default function StorefrontPage() {
           setSelectedCategory(cat);
           scrollToCatalog();
         }}
+        selectedBrand={selectedBrand}
+        onSelectBrand={(brand) => {
+          setSelectedBrand(brand);
+          scrollToCatalog();
+        }}
         currentLocation={currentLocation}
         onOpenLocationModal={() => setIsLocationModalOpen(true)}
         onOpenQuickBuyModal={() => setIsQuickBuyModalOpen(true)}
@@ -441,27 +463,32 @@ export default function StorefrontPage() {
         onSelectProduct={(p) => setSelectedMedicineDetails(p)}
       />
 
-      {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6 flex-1 w-full space-y-6 sm:space-y-8">
+      {/* Main Content Area */}
+      <main className="max-w-7xl mx-auto px-3 sm:px-5 py-4 sm:py-6 flex-1 w-full space-y-6 sm:space-y-8">
         {/* ============================================================== */}
-        {/* SIMPLE EDITORIAL HERO                                          */}
+        {/* COMPACT HERO (Clear, calm, short promise + 2 clean actions)      */}
         {/* ============================================================== */}
-        <section className="rounded-3xl bg-[#e9efdf] border border-[#d6ddce] p-6 sm:p-10 shadow-2xs relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 sm:gap-8">
-          <div className="space-y-3.5 max-w-xl z-10">
-            <h1 className="font-serif font-bold text-2xl sm:text-4xl text-[#143d29] tracking-tight leading-tight">
-              Authentic Ayurvedic Remedies,
+        <section className="rounded-3xl bg-[#e9efdf] border border-[#d6ddce] p-5 sm:p-7 shadow-2xs relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-5 sm:gap-6">
+          <div className="space-y-2.5 max-w-xl z-10">
+            <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#1d5a3e] bg-white/70 px-2.5 py-1 rounded-full border border-[#d6ddce]">
+              <Sparkles className="w-3.5 h-3.5 text-[#c86326]" />
+              <span>100% Genuine Ayurvedic OTC Formulations</span>
+            </div>
+
+            <h1 className="font-serif font-bold text-2xl sm:text-3xl text-[#143d29] tracking-tight leading-snug">
+              Authentic Ayurvedic Care,
               <br />
-              <span className="text-[#1d5a3e]">Delivered Swiftly.</span>
+              <span className="text-[#1d5a3e]">Delivered Fresh to Your Door.</span>
             </h1>
 
             <p className="text-xs sm:text-sm text-gray-700 leading-relaxed font-normal">
-              Genuine herbal oils, pain balms, and daily health products sourced directly from trusted Ayurvedic houses.
+              Trusted classical oils, pain balms, digestive churna, and daily health essentials from India&apos;s leading Ayurvedic houses.
             </p>
 
-            <div className="pt-2 flex flex-wrap items-center gap-3">
+            <div className="pt-1.5 flex flex-wrap items-center gap-2.5">
               <button
                 onClick={scrollToCatalog}
-                className="bg-[#1d5a3e] hover:bg-[#143d29] text-white font-bold text-xs sm:text-sm px-6 py-3 rounded-2xl flex items-center gap-2 transition-all shadow-sm active:scale-95 cursor-pointer"
+                className="bg-[#1d5a3e] hover:bg-[#143d29] text-white font-bold text-xs sm:text-sm px-5 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-2xs active:scale-95 cursor-pointer"
               >
                 <span>Shop products</span>
                 <ArrowRight className="w-4 h-4" />
@@ -469,7 +496,7 @@ export default function StorefrontPage() {
 
               <button
                 onClick={() => setIsLocationModalOpen(true)}
-                className="bg-white hover:bg-gray-50 text-[#143d29] border border-[#d6ddce] font-bold text-xs sm:text-sm px-5 py-3 rounded-2xl flex items-center gap-2 transition-all shadow-2xs cursor-pointer"
+                className="bg-white hover:bg-gray-50 text-[#143d29] border border-[#d6ddce] font-semibold text-xs sm:text-sm px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
               >
                 <MapPin className="w-3.5 h-3.5 text-[#1d5a3e]" />
                 <span>Check delivery</span>
@@ -477,101 +504,63 @@ export default function StorefrontPage() {
             </div>
           </div>
 
-          {/* Tasteful Illustrated Wellness Still Life (Restrained botanical & apothecary art) */}
-          <div className="w-full md:w-72 h-44 sm:h-52 bg-white/85 rounded-2xl border border-[#d6ddce] flex items-center justify-center p-4 relative shadow-2xs shrink-0 overflow-hidden">
+          {/* Tasteful Restrained Botanical Illustration */}
+          <div className="w-full md:w-64 h-36 sm:h-44 bg-white/85 rounded-2xl border border-[#d6ddce] flex items-center justify-center p-3 relative shadow-2xs shrink-0 overflow-hidden">
             <svg
-              className="w-full h-full max-w-[240px]"
+              className="w-full h-full max-w-[210px]"
               viewBox="0 0 200 150"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
-              aria-label="Ayurvedic mortar, herbal oil jar and botanical leaves still life"
+              aria-label="Ayurvedic mortar and botanical leaves"
             >
-              {/* Soft decorative background circles */}
-              <circle cx="100" cy="75" r="50" fill="#e9efdf" opacity="0.6" />
-              <circle cx="140" cy="55" r="30" fill="#f8f8f3" />
-
-              {/* Apothecary Medicated Oil Jar */}
-              <rect x="110" y="55" width="42" height="60" rx="8" fill="#1d5a3e" />
-              <rect x="120" y="44" width="22" height="12" rx="3" fill="#c86326" />
-              <rect x="116" y="68" width="30" height="32" rx="4" fill="#ffffff" opacity="0.95" />
-              <line x1="122" y1="78" x2="140" y2="78" stroke="#1d5a3e" strokeWidth="2.5" strokeLinecap="round" />
-              <line x1="124" y1="86" x2="138" y2="86" stroke="#c86326" strokeWidth="2" strokeLinecap="round" />
-
-              {/* Traditional Mortar & Pestle */}
+              <circle cx="100" cy="75" r="48" fill="#e9efdf" opacity="0.6" />
+              <circle cx="140" cy="55" r="28" fill="#f8f8f3" />
+              <rect x="110" y="55" width="40" height="58" rx="8" fill="#1d5a3e" />
+              <rect x="120" y="44" width="20" height="12" rx="3" fill="#c86326" />
+              <rect x="116" y="68" width="28" height="30" rx="4" fill="#ffffff" opacity="0.95" />
+              <line x1="122" y1="78" x2="138" y2="78" stroke="#1d5a3e" strokeWidth="2.5" strokeLinecap="round" />
+              <line x1="124" y1="86" x2="136" y2="86" stroke="#c86326" strokeWidth="2" strokeLinecap="round" />
               <ellipse cx="65" cy="100" rx="36" ry="18" fill="#143d29" />
               <path d="M32 98 C34 116, 96 116, 98 98 Z" fill="#1d5a3e" />
               <ellipse cx="65" cy="98" rx="32" ry="12" fill="#dfe7d2" />
-              {/* Pestle */}
               <rect x="74" y="62" width="10" height="42" rx="5" transform="rotate(24 74 62)" fill="#c86326" />
-
-              {/* Botanical Ayurvedic Foliage */}
-              <path
-                d="M45 65 Q 40 40 60 48 Q 50 68 45 65 Z"
-                fill="#2e7d32"
-                opacity="0.8"
-              />
-              <path
-                d="M72 45 Q 85 28 92 46 Q 80 58 72 45 Z"
-                fill="#1d5a3e"
-              />
-              <path
-                d="M148 42 Q 165 30 162 48 Q 148 56 148 42 Z"
-                fill="#388e3c"
-                opacity="0.7"
-              />
+              <path d="M45 65 Q 40 40 60 48 Q 50 68 45 65 Z" fill="#2e7d32" opacity="0.8" />
+              <path d="M72 45 Q 85 28 92 46 Q 80 58 72 45 Z" fill="#1d5a3e" />
+              <path d="M148 42 Q 165 30 162 48 Q 148 56 148 42 Z" fill="#388e3c" opacity="0.7" />
             </svg>
           </div>
         </section>
 
         {/* ============================================================== */}
-        {/* CONCISE DELIVERY INFORMATION BLOCK                             */}
+        {/* SINGLE CONTEXTUAL DELIVERY DETAILS BAR                         */}
         {/* ============================================================== */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
-          <div className="bg-white border border-[#d6ddce] rounded-2xl p-4 shadow-2xs flex items-start gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-[#e9efdf] text-[#1d5a3e] flex items-center justify-center shrink-0 mt-0.5">
-              <Zap className="w-5 h-5 fill-[#c86326] text-[#c86326]" />
-            </div>
-            <div className="space-y-0.5">
-              <div className="font-serif font-bold text-sm text-[#143d29]">
-                Local Express Delivery
-              </div>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                30–45 min doorstep delivery in Bhavnagar. ₹{settings.cityDeliveryFee} fee (Free for orders over ₹{settings.cityFreeDeliveryAbove}).
-              </p>
-            </div>
+        <section className="bg-white border border-[#d6ddce] rounded-2xl px-4 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs text-[#143d29] shadow-2xs">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
+            <span>
+              {currentLocation.dispatchType === 'RAPIDO_CITY' ? (
+                <>
+                  Delivering to <strong>{currentLocation.pincode}</strong>: Local express doorstep delivery • Free on orders above ₹{settings.cityFreeDeliveryAbove} (₹{settings.cityDeliveryFee} below)
+                </>
+              ) : (
+                <>
+                  Delivering to <strong>{currentLocation.pincode}</strong>: All-India tracked courier delivery • Flat ₹{settings.courierDeliveryFee}
+                </>
+              )}
+            </span>
           </div>
 
-          <div className="bg-white border border-[#d6ddce] rounded-2xl p-4 shadow-2xs flex items-start gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-[#e9efdf] text-[#1d5a3e] flex items-center justify-center shrink-0 mt-0.5">
-              <Truck className="w-5 h-5 text-[#1d5a3e]" />
-            </div>
-            <div className="space-y-0.5">
-              <div className="font-serif font-bold text-sm text-[#143d29]">
-                All-India Courier
-              </div>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                Carefully packed parcels dispatched nationwide for a flat ₹{settings.courierDeliveryFee}.
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-white border border-[#d6ddce] rounded-2xl p-4 shadow-2xs flex items-start gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-[#e9efdf] text-[#1d5a3e] flex items-center justify-center shrink-0 mt-0.5">
-              <ShieldCheck className="w-5 h-5 text-[#1d5a3e]" />
-            </div>
-            <div className="space-y-0.5">
-              <div className="font-serif font-bold text-sm text-[#143d29]">
-                100% Genuine Pharmacy Stock
-              </div>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                Direct authorized agency procurement with verified GST billing from India's trusted Ayurvedic houses.
-              </p>
-            </div>
-          </div>
+          <button
+            onClick={() => setIsLocationModalOpen(true)}
+            className="text-[#1d5a3e] font-bold hover:underline shrink-0 text-xs cursor-pointer flex items-center gap-1"
+          >
+            <span>Change</span>
+            <MapPin className="w-3 h-3" />
+          </button>
         </section>
 
         {/* ============================================================== */}
-        {/* FOUR MAIN CONCERN TILES                                        */}
+        {/* 5 CLEAR CATEGORY TILES (Full Health Spectrum)                  */}
         {/* ============================================================== */}
         <section className="space-y-3">
           <div className="flex items-center justify-between">
@@ -581,15 +570,15 @@ export default function StorefrontPage() {
             {selectedCategory !== 'ALL' && (
               <button
                 onClick={() => setSelectedCategory('ALL')}
-                className="text-xs font-bold text-[#1d5a3e] hover:underline"
+                className="text-xs font-bold text-[#1d5a3e] hover:underline cursor-pointer"
               >
                 View All Categories
               </button>
             )}
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {FOUR_MAIN_CONCERNS.map((concern) => {
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 sm:gap-3">
+            {CATEGORY_TILES.map((concern) => {
               const isSelected = selectedCategory === concern.id;
               return (
                 <button
@@ -598,20 +587,22 @@ export default function StorefrontPage() {
                     setSelectedCategory(concern.id);
                     scrollToCatalog();
                   }}
-                  className={`p-4 rounded-2xl border text-left transition-all hover:shadow-sm cursor-pointer ${
+                  className={`p-3.5 rounded-2xl border text-left transition-all hover:shadow-2xs cursor-pointer flex flex-col justify-between ${
                     isSelected
                       ? 'border-[#1d5a3e] bg-[#e9efdf] ring-2 ring-[#1d5a3e]'
                       : 'bg-white border-[#d6ddce] hover:border-[#1d5a3e]'
                   }`}
                   aria-pressed={isSelected}
                 >
-                  <div className="w-10 h-10 rounded-xl bg-[#f8f8f3] border border-[#d6ddce] flex items-center justify-center text-xl mb-2.5">
-                    {concern.icon}
+                  <div>
+                    <div className="w-9 h-9 rounded-xl bg-[#f8f8f3] border border-[#d6ddce] flex items-center justify-center text-lg mb-2">
+                      {concern.icon}
+                    </div>
+                    <div className="font-serif font-bold text-xs sm:text-[13px] text-[#143d29] line-clamp-1">
+                      {concern.title}
+                    </div>
                   </div>
-                  <div className="font-serif font-bold text-xs sm:text-sm text-gray-900 line-clamp-1">
-                    {concern.title}
-                  </div>
-                  <div className="text-[10.5px] text-gray-500 mt-0.5 truncate">
+                  <div className="text-[10px] text-[#526359] mt-1 line-clamp-1">
                     {concern.sub}
                   </div>
                 </button>
@@ -621,91 +612,91 @@ export default function StorefrontPage() {
         </section>
 
         {/* ============================================================== */}
-        {/* COMPACT BRAND STRIP (Dabur, Zandu, Himalaya, Baidyanath)       */}
+        {/* SMALL BRAND ROW (Dabur, Zandu, Himalaya, Baidyanath)          */}
         {/* ============================================================== */}
-        <section className="bg-white border border-[#d6ddce] rounded-2xl p-3.5 sm:p-4 shadow-2xs">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="text-xs font-serif font-bold text-[#143d29]">
-              Featured Ayurvedic Houses:
-            </span>
-            <div className="flex flex-wrap items-center gap-2">
-              {COMPACT_BRANDS.map((brand) => {
-                const isSelected = selectedBrand === brand;
-                return (
-                  <button
-                    key={brand}
-                    onClick={() => {
-                      setSelectedBrand(isSelected ? 'ALL' : brand);
-                      scrollToCatalog();
-                    }}
-                    className={`px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all ${
-                      isSelected
-                        ? 'bg-[#1d5a3e] text-white border-[#1d5a3e] shadow-2xs'
-                        : 'bg-[#f8f8f3] text-gray-700 border-[#d6ddce] hover:border-[#1d5a3e] hover:text-[#1d5a3e]'
-                    }`}
-                  >
-                    {brand}
-                  </button>
-                );
-              })}
-              {selectedBrand !== 'ALL' && (
-                <button
-                  onClick={() => setSelectedBrand('ALL')}
-                  className="text-[11px] font-bold text-[#1d5a3e] hover:underline px-1"
-                >
-                  Clear Brand
-                </button>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* ============================================================== */}
-        {/* FEATURED REMEDIES (Featured Once)                              */}
-        {/* ============================================================== */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="font-serif font-bold text-base sm:text-lg text-[#143d29] tracking-tight">
-                Featured Remedies
-              </h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Popular Ayurvedic essentials ready for immediate dispatch
-              </p>
-            </div>
-            <button
-              onClick={scrollToCatalog}
-              className="text-xs font-bold text-[#1d5a3e] hover:underline cursor-pointer"
-            >
-              Browse Complete Catalog ({products.filter((p) => p.isLive && p.stockQuantity > 0).length})
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-            {bestsellerProducts.map((product) => {
-              const inCart = cart.find((i) => i.product.id === product.id);
+        <section className="bg-white border border-[#d6ddce] rounded-2xl p-3 sm:p-3.5 shadow-2xs flex flex-wrap items-center justify-between gap-2.5">
+          <span className="text-xs font-serif font-bold text-[#143d29]">
+            Ayurvedic Houses:
+          </span>
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+            {COMPACT_BRANDS.map((brand) => {
+              const isSelected = selectedBrand === brand;
               return (
-                <ProductCard
-                  key={`bestseller-${product.id}`}
-                  product={product}
-                  quantityInCart={inCart ? inCart.quantity : 0}
-                  onAddToCart={handleAddToCart}
-                  onUpdateQuantity={handleUpdateQuantity}
-                  onViewDetails={(p) => setSelectedMedicineDetails(p)}
-                />
+                <button
+                  key={brand}
+                  onClick={() => {
+                    setSelectedBrand(isSelected ? 'ALL' : brand);
+                    scrollToCatalog();
+                  }}
+                  className={`px-3 py-1 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                    isSelected
+                      ? 'bg-[#1d5a3e] text-white border-[#1d5a3e] shadow-2xs'
+                      : 'bg-[#f8f8f3] text-[#526359] border-[#d6ddce] hover:border-[#1d5a3e] hover:text-[#143d29]'
+                  }`}
+                >
+                  {brand}
+                </button>
               );
             })}
+            {selectedBrand !== 'ALL' && (
+              <button
+                onClick={() => setSelectedBrand('ALL')}
+                className="text-[11px] font-bold text-[#1d5a3e] hover:underline px-1 cursor-pointer"
+              >
+                Clear Brand
+              </button>
+            )}
           </div>
         </section>
 
         {/* ============================================================== */}
-        {/* COMPLETE MEDICINE CATALOG (Reference 2: Filters & Grid)         */}
+        {/* FEATURED REMEDIES (Displayed ONCE when browsing default)       */}
         {/* ============================================================== */}
-        <div ref={catalogRef} className="pt-6 border-t border-[#d6ddce] scroll-mt-44 sm:scroll-mt-36">
+        {!isFilterActive && featuredProducts.length > 0 && (
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-serif font-bold text-base sm:text-lg text-[#143d29] tracking-tight">
+                  Featured Remedies
+                </h2>
+                <p className="text-xs text-[#526359] mt-0.5">
+                  Popular daily remedies ready for immediate dispatch
+                </p>
+              </div>
+              <button
+                onClick={scrollToCatalog}
+                className="text-xs font-bold text-[#1d5a3e] hover:underline cursor-pointer"
+              >
+                View Full Catalog ({products.filter((p) => p.isLive && p.stockQuantity > 0).length})
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+              {featuredProducts.map((product) => {
+                const inCart = cart.find((i) => i.product.id === product.id);
+                return (
+                  <ProductCard
+                    key={`featured-${product.id}`}
+                    product={product}
+                    quantityInCart={inCart ? inCart.quantity : 0}
+                    onAddToCart={handleAddToCart}
+                    onUpdateQuantity={handleUpdateQuantity}
+                    onViewDetails={(p) => setSelectedMedicineDetails(p)}
+                  />
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* ============================================================== */}
+        {/* COMPLETE CATALOG FEED (Distinct items, never duplicated)       */}
+        {/* ============================================================== */}
+        <div ref={catalogRef} className="pt-4 border-t border-[#d6ddce] scroll-mt-36">
           {/* Breadcrumb */}
           <nav
             aria-label="Breadcrumb"
-            className="text-xs text-gray-500 mb-3 flex items-center gap-1.5 font-medium"
+            className="text-xs text-[#526359] mb-3 flex items-center gap-1.5 font-medium"
           >
             <span
               className="hover:text-gray-900 cursor-pointer"
@@ -740,7 +731,7 @@ export default function StorefrontPage() {
                 {activeFilterCount > 0 && (
                   <button
                     onClick={handleResetFilters}
-                    className="text-xs font-bold text-[#1d5a3e] hover:underline flex items-center gap-1"
+                    className="text-xs font-bold text-[#1d5a3e] hover:underline flex items-center gap-1 cursor-pointer"
                   >
                     <RotateCcw className="w-3 h-3" />
                     <span>Clear All</span>
@@ -755,7 +746,7 @@ export default function StorefrontPage() {
                   {selectedCategory !== 'ALL' && (
                     <button
                       onClick={() => setSelectedCategory('ALL')}
-                      className="text-[11px] text-[#1d5a3e] hover:underline"
+                      className="text-[11px] text-[#1d5a3e] hover:underline cursor-pointer"
                     >
                       Clear
                     </button>
@@ -824,7 +815,7 @@ export default function StorefrontPage() {
                   {selectedBrand !== 'ALL' && (
                     <button
                       onClick={() => setSelectedBrand('ALL')}
-                      className="text-[11px] text-[#1d5a3e] hover:underline"
+                      className="text-[11px] text-[#1d5a3e] hover:underline cursor-pointer"
                     >
                       Clear
                     </button>
@@ -918,26 +909,28 @@ export default function StorefrontPage() {
               </div>
             </aside>
 
-            {/* Main Catalog Feed */}
+            {/* Catalog Grid Area */}
             <div className="flex-1 w-full space-y-4">
-              {/* Heading, Result Count & Sort Bar */}
-              <div className="bg-white border border-[#d6ddce] rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+              {/* Header Bar: Results Count & Sort */}
+              <div className="bg-white border border-[#d6ddce] rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
                 <div>
-                  <h2 className="font-serif font-bold text-lg sm:text-xl text-[#143d29] tracking-tight">
+                  <h2 className="font-serif font-bold text-base sm:text-lg text-[#143d29] tracking-tight">
                     {selectedCategory === 'ALL'
-                      ? 'Complete In-Stock Catalog'
+                      ? isFilterActive
+                        ? 'Filtered In-Stock Remedies'
+                        : 'Complete In-Stock Catalog'
                       : selectedCategory}
                   </h2>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    Showing {filteredProducts.length} in-stock remedies
+                  <p className="text-xs text-[#526359] mt-0.5">
+                    Showing {catalogProducts.length} in-stock remedies
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-                  {/* Mobile Filters Trigger */}
+                  {/* Mobile Filter Trigger */}
                   <button
                     onClick={() => setIsMobileFilterOpen(true)}
-                    className="lg:hidden flex items-center gap-1.5 px-3 py-2 bg-[#e9efdf] hover:bg-[#dfe7d2] text-[#143d29] rounded-xl text-xs font-bold transition-colors border border-[#d6ddce]"
+                    className="lg:hidden flex items-center gap-1.5 px-3 py-1.5 bg-[#e9efdf] hover:bg-[#dfe7d2] text-[#143d29] rounded-xl text-xs font-bold transition-colors border border-[#d6ddce] cursor-pointer"
                   >
                     <SlidersHorizontal className="w-3.5 h-3.5 text-[#1d5a3e]" />
                     <span>Filters</span>
@@ -948,14 +941,14 @@ export default function StorefrontPage() {
                     )}
                   </button>
 
-                  {/* Sort Control */}
+                  {/* Sort Dropdown */}
                   <div className="flex items-center gap-1.5 text-xs">
-                    <span className="text-gray-500 font-medium hidden md:inline">Sort:</span>
+                    <span className="text-[#526359] font-medium hidden sm:inline">Sort:</span>
                     <div className="relative">
                       <select
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value as SortKey)}
-                        className="appearance-none bg-[#f8f8f3] border border-[#d6ddce] rounded-xl px-3 py-2 pr-7 text-xs font-semibold text-gray-800 focus:outline-none focus:border-[#1d5a3e] cursor-pointer"
+                        className="appearance-none bg-[#f8f8f3] border border-[#d6ddce] rounded-xl px-3 py-1.5 pr-7 text-xs font-semibold text-gray-800 focus:outline-none focus:border-[#1d5a3e] cursor-pointer"
                         aria-label="Sort products"
                       >
                         <option value="FEATURED">Featured / Popular</option>
@@ -964,14 +957,14 @@ export default function StorefrontPage() {
                         <option value="DISCOUNT_DESC">Highest Discount %</option>
                         <option value="RATING_DESC">Top Customer Reviews</option>
                       </select>
-                      <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-2.5 pointer-events-none" />
+                      <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-2 pointer-events-none" />
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Product Grid: 2 columns on mobile, 3 on tablet, 4 on desktop */}
-              {filteredProducts.length === 0 ? (
+              {/* Product Grid */}
+              {catalogProducts.length === 0 ? (
                 <div className="bg-white rounded-3xl border border-[#d6ddce] p-10 text-center space-y-3 shadow-2xs">
                   <div className="text-3xl">🔍</div>
                   <h3 className="font-serif font-bold text-gray-900 text-base">
@@ -982,14 +975,14 @@ export default function StorefrontPage() {
                   </p>
                   <button
                     onClick={handleResetFilters}
-                    className="bg-[#1d5a3e] hover:bg-[#143d29] text-white text-xs font-bold px-5 py-2.5 rounded-xl transition-all shadow-xs"
+                    className="bg-[#1d5a3e] hover:bg-[#143d29] text-white text-xs font-bold px-5 py-2.5 rounded-xl transition-all shadow-xs cursor-pointer"
                   >
                     Reset All Filters
                   </button>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-                  {filteredProducts.map((product) => {
+                  {catalogProducts.map((product) => {
                     const itemInCart = cart.find((i) => i.product.id === product.id);
                     const quantityInCart = itemInCart ? itemInCart.quantity : 0;
 
@@ -1011,19 +1004,19 @@ export default function StorefrontPage() {
         </div>
 
         {/* ============================================================== */}
-        {/* RESTRAINED ORDER BY CALL / WHATSAPP STRIP                      */}
+        {/* ONE CLEAN ORDER BY WHATSAPP STRIP                              */}
         {/* ============================================================== */}
         <section className="bg-white border border-[#d6ddce] rounded-3xl p-5 sm:p-6 shadow-2xs flex flex-col md:flex-row items-center justify-between gap-5">
           <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-[#e9efdf] text-[#1d5a3e] flex items-center justify-center shrink-0 shadow-2xs">
-              <PhoneCall className="w-6 h-6" />
+            <div className="w-11 h-11 rounded-2xl bg-[#e9efdf] text-[#1d5a3e] flex items-center justify-center shrink-0">
+              <PhoneCall className="w-5 h-5 text-[#1d5a3e]" />
             </div>
             <div>
               <div className="font-serif font-bold text-sm sm:text-base text-[#143d29]">
-                Order by Phone or WhatsApp
+                Need Medicine Assistance?
               </div>
-              <div className="text-xs text-gray-600 mt-0.5">
-                Looking for a specific Ayurvedic medicine? Enter your number for instant order support.
+              <div className="text-xs text-[#526359] mt-0.5">
+                Looking for a specific Ayurvedic remedy? Message our Bhavnagar dark store directly on WhatsApp.
               </div>
             </div>
           </div>
@@ -1047,15 +1040,15 @@ export default function StorefrontPage() {
             </div>
             <button
               type="submit"
-              className="bg-[#1d5a3e] hover:bg-[#143d29] text-white font-bold text-xs px-5 py-2.5 rounded-xl transition-all shadow-xs shrink-0 active:scale-95"
+              className="bg-[#1d5a3e] hover:bg-[#143d29] text-white font-bold text-xs px-5 py-2.5 rounded-xl transition-all shadow-xs shrink-0 active:scale-95 cursor-pointer"
             >
-              {callbackSent ? 'Opening WhatsApp...' : 'Submit WhatsApp Order'}
+              {callbackSent ? 'Opening WhatsApp...' : 'Order via WhatsApp'}
             </button>
           </form>
         </section>
       </main>
 
-      {/* Floating Zepto / Blinkit Bottom Sticky Cart Bar */}
+      {/* Floating Bottom Sticky Cart Bar */}
       {cartCount > 0 && (
         <div className="fixed bottom-16 md:bottom-4 inset-x-0 z-40 p-3 sm:p-4 pointer-events-none">
           <div className="max-w-2xl mx-auto pointer-events-auto">
@@ -1084,7 +1077,7 @@ export default function StorefrontPage() {
 
               <button
                 onClick={() => setIsCartOpen(true)}
-                className="bg-[#f8f8f3] hover:bg-white text-[#143d29] font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl flex items-center gap-1.5 shadow-2xs active:scale-95 transition-all"
+                className="bg-[#f8f8f3] hover:bg-white text-[#143d29] font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl flex items-center gap-1.5 shadow-2xs active:scale-95 transition-all cursor-pointer"
               >
                 <span>View Basket</span>
                 <ArrowRight className="w-4 h-4 text-[#1d5a3e]" />
@@ -1115,7 +1108,7 @@ export default function StorefrontPage() {
           <span>Shop</span>
         </button>
 
-        {/* 2. Browse (Scrolls to Catalog & Opens Filter Drawer) */}
+        {/* 2. Browse */}
         <button
           type="button"
           onClick={() => {
@@ -1129,7 +1122,7 @@ export default function StorefrontPage() {
           <span>Browse</span>
         </button>
 
-        {/* 3. Basket (Opens Cart Drawer) */}
+        {/* 3. Basket */}
         <button
           type="button"
           onClick={() => setIsCartOpen(true)}
@@ -1147,7 +1140,7 @@ export default function StorefrontPage() {
           <span>Basket</span>
         </button>
 
-        {/* 4. Account (Opens AccountModal) */}
+        {/* 4. Account */}
         <button
           type="button"
           onClick={() => setIsAccountModalOpen(true)}
@@ -1160,7 +1153,7 @@ export default function StorefrontPage() {
       </nav>
 
       {/* Concise Footer with Contact & Owner Access */}
-      <footer className="mt-14 bg-white border-t border-[#d6ddce] py-8 text-xs text-gray-600">
+      <footer className="mt-12 bg-white border-t border-[#d6ddce] py-8 text-xs text-gray-600">
         <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3 text-center sm:text-left">
             <img
@@ -1169,7 +1162,7 @@ export default function StorefrontPage() {
               className="h-7 sm:h-8 w-auto object-contain"
             />
             <span className="text-[#a8b89e] hidden sm:inline">•</span>
-            <span className="text-gray-500 text-[11.5px]">
+            <span className="text-[#526359] text-[11.5px]">
               Authentic Ayurveda &amp; Everyday Health
             </span>
           </div>
@@ -1227,7 +1220,7 @@ export default function StorefrontPage() {
         onClose={() => setSelectedMedicineDetails(null)}
         quantityInCart={
           selectedMedicineDetails
-            ? cart.find((i) => i.product.id === selectedMedicineDetails.id)?.quantity || 0
+            ? (cart.find((i) => i.product.id === selectedMedicineDetails.id)?.quantity ?? 0)
             : 0
         }
         onAddToCart={handleAddToCart}
@@ -1256,9 +1249,15 @@ export default function StorefrontPage() {
         onClose={() => setIsMobileFilterOpen(false)}
         products={products}
         selectedCategory={selectedCategory}
-        onSelectCategory={setSelectedCategory}
+        onSelectCategory={(cat) => {
+          setSelectedCategory(cat);
+          scrollToCatalog();
+        }}
         selectedBrand={selectedBrand}
-        onSelectBrand={setSelectedBrand}
+        onSelectBrand={(b) => {
+          setSelectedBrand(b);
+          scrollToCatalog();
+        }}
         selectedPriceRange={selectedPriceRange}
         onSelectPriceRange={setSelectedPriceRange}
         selectedDispatch={selectedDispatch}
@@ -1266,16 +1265,8 @@ export default function StorefrontPage() {
         availableCategories={availableCategories}
         availableBrands={availableBrands}
         onResetFilters={handleResetFilters}
-        totalFilteredCount={filteredProducts.length}
+        totalFilteredCount={catalogProducts.length}
       />
-
-      {/* Floating Toast Notification */}
-      {toastText && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[80] bg-[#143d29] text-white px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 text-xs font-semibold animate-in fade-in slide-in-from-top-2 duration-150 border border-white/10 pointer-events-none">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>{toastText}</span>
-        </div>
-      )}
 
       <AccountModal
         isOpen={isAccountModalOpen}
@@ -1293,6 +1284,14 @@ export default function StorefrontPage() {
         settings={settings}
         onReorder={handleReorder}
       />
+
+      {/* Ephemeral Feedback Toast */}
+      {toastText && (
+        <div className="fixed top-18 right-4 z-70 bg-[#143d29] text-white px-4 py-2.5 rounded-xl shadow-lg text-xs font-semibold flex items-center gap-2 animate-in slide-in-from-top-2 duration-150">
+          <span className="w-2 h-2 rounded-full bg-emerald-400" />
+          <span>{toastText}</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -40,7 +40,7 @@ export function QuickBuyModal({
     if (!typedList.trim()) return;
 
     const message = encodeURIComponent(
-      `Hello AyurSwift! I want to order the following medicines:\n\n${typedList.trim()}\n\nPlease confirm availability and dispatch via Rapido in Bhavnagar.`
+      `Hello AyurSwift! I want to order the following medicines:\n\n${typedList.trim()}\n\nPlease confirm availability and delivery.`
     );
     window.open(`https://wa.me/${settings.merchantWhatsApp}?text=${message}`, '_blank');
     setSentWhatsapp(true);
