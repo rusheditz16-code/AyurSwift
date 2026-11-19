@@ -93,6 +93,92 @@ export function getStoredOrders(): Order[] {
 export function saveStoredOrders(orders: Order[]) {
   if (typeof window === 'undefined') return;
   localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
+  // Asynchronously sync to server API for cross-device visibility
+  try {
+    fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(orders),
+    }).catch(() => {});
+  } catch {}
+}
+
+// Cross-device order lookup by 10-digit phone number or Order ID (e.g. #AS-1001)
+export async function lookupOrdersCrossDevice(query: string): Promise<Order[]> {
+  const cleanQ = query.trim();
+  if (!cleanQ) return [];
+
+  const local = getStoredOrders();
+  const digitsQ = cleanQ.replace(/\D/g, '');
+  const cleanStrQ = cleanQ.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  const localMatches = local.filter((o) => {
+    const cleanId = o.id.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cleanPhone = o.customerPhone.replace(/\D/g, '');
+    return (
+      cleanId.includes(cleanStrQ) ||
+      cleanStrQ.includes(cleanId) ||
+      (digitsQ.length >= 4 && cleanPhone.includes(digitsQ))
+    );
+  });
+
+  try {
+    const res = await fetch(`/api/orders?q=${encodeURIComponent(cleanQ)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.orders) && data.orders.length > 0) {
+        // Automatically pin discovered orders to local device storage
+        if (typeof window !== 'undefined') {
+          const mergedMap = new Map<string, Order>();
+          local.forEach((o) => mergedMap.set(o.id, o));
+          data.orders.forEach((o: Order) => mergedMap.set(o.id, o));
+          const merged = Array.from(mergedMap.values()).sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+          localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(merged));
+        }
+        return data.orders;
+      }
+    }
+  } catch (err) {
+    console.error('Server order lookup error:', err);
+  }
+
+  return localMatches;
+}
+
+// Check server for real-time status updates (e.g. PACKED, DISPATCHED, DELIVERED)
+export async function syncOrderStatuses(): Promise<Order[]> {
+  const local = getStoredOrders();
+  if (typeof window === 'undefined' || local.length === 0) return local;
+
+  try {
+    const res = await fetch('/api/orders');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.orders)) {
+        const serverMap = new Map<string, Order>();
+        data.orders.forEach((o: Order) => serverMap.set(o.id, o));
+
+        let changed = false;
+        const updated = local.map((locOrder) => {
+          const srv = serverMap.get(locOrder.id);
+          if (srv && srv.orderStatus !== locOrder.orderStatus) {
+            changed = true;
+            return { ...locOrder, orderStatus: srv.orderStatus };
+          }
+          return locOrder;
+        });
+
+        if (changed) {
+          localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
+          return updated;
+        }
+      }
+    }
+  } catch {}
+
+  return local;
 }
 
 // Generate human-friendly sequential order ID

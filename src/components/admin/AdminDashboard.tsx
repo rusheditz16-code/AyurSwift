@@ -105,6 +105,24 @@ export function AdminDashboard() {
     const stored = getStoredSettings();
     setSettings(stored);
 
+    // Fetch orders from server store to pick up orders placed across devices
+    fetch('/api/orders')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.orders)) {
+          const currentLocal = getStoredOrders();
+          const map = new Map<string, Order>();
+          currentLocal.forEach((o) => map.set(o.id, o));
+          data.orders.forEach((o: Order) => map.set(o.id, o));
+          const merged = Array.from(map.values()).sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+          setOrders(merged);
+          saveStoredOrders(merged);
+        }
+      })
+      .catch(() => {});
+
     // Restore active browser session
     try {
       const sessionAuth = sessionStorage.getItem('ayurswift_admin_session');
@@ -368,6 +386,13 @@ export function AdminDashboard() {
     setOrders(updatedOrders);
     saveStoredOrders(updatedOrders);
 
+    // Sync status change to server API for buyer live tracking
+    fetch('/api/orders', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId: order.id, orderStatus: 'DISPATCHED' }),
+    }).catch(() => {});
+
     setTimeout(() => {
       setCopiedOrderId(null);
     }, 2500);
@@ -377,6 +402,13 @@ export function AdminDashboard() {
     const updated = orders.map((o) => (o.id === orderId ? { ...o, orderStatus: status } : o));
     setOrders(updated);
     saveStoredOrders(updated);
+
+    // Sync status change to server API for buyer live tracking
+    fetch('/api/orders', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId, orderStatus: status }),
+    }).catch(() => {});
   };
 
   const handleSaveSettings = (e: React.FormEvent) => {
