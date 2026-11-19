@@ -10,9 +10,12 @@ import {
   Smartphone,
   MessageCircle,
   X,
+  Receipt,
+  Printer,
 } from 'lucide-react';
 import { Order, MerchantSettings } from '@/types';
 import { generateUpiUri, generateWhatsAppOrderUrl } from '@/lib/store';
+import { InvoiceModal } from '@/components/InvoiceModal';
 
 interface PaymentModalProps {
   order: Order | null;
@@ -22,6 +25,7 @@ interface PaymentModalProps {
 
 export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
   const [copiedUpi, setCopiedUpi] = useState(false);
+  const [showInvoice, setShowInvoice] = useState(false);
 
   if (!order) return null;
 
@@ -160,15 +164,24 @@ export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
             </div>
           )}
 
-          {/* 1-Click WhatsApp Order Confirmation */}
-          <div className="space-y-1.5">
+          {/* 1-Click WhatsApp Order Confirmation & View Bill */}
+          <div className="space-y-2">
             <button
               onClick={handleOpenWhatsApp}
-              className="w-full bg-[#1d5a3e] hover:bg-[#143d29] text-white font-bold py-2.5 px-4 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-2xs transition-transform active:scale-98"
+              className="w-full bg-[#1d5a3e] hover:bg-[#143d29] text-white font-bold py-2.5 px-4 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-2xs transition-transform active:scale-98 cursor-pointer"
             >
               <MessageCircle className="w-4 h-4" />
               <span>Confirm & Send Order via WhatsApp</span>
             </button>
+
+            <button
+              onClick={() => setShowInvoice(true)}
+              className="w-full bg-white hover:bg-[#e9efdf] text-[#1d5a3e] font-bold py-2 px-4 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 border border-[#1d5a3e] shadow-2xs transition-transform active:scale-98 cursor-pointer"
+            >
+              <Receipt className="w-4 h-4" />
+              <span>View & Print Official Bill</span>
+            </button>
+
             <p className="text-[10px] text-[#526359] text-center">
               Sends receipt and dispatch request directly to the store team
             </p>
@@ -190,6 +203,15 @@ export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
           </div>
         </div>
       </div>
+
+      {/* Official Tax Invoice & Bill Modal */}
+      <InvoiceModal
+        order={order}
+        isOpen={showInvoice}
+        onClose={() => setShowInvoice(false)}
+        settings={settings}
+        initialFormat="A4"
+      />
     </div>
   );
 }

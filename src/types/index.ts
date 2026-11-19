@@ -59,6 +59,7 @@ export interface OrderItemSummary {
   brand: string;
   packSize: string;
   quantity: number;
+  mrp?: number;
   unitPrice: number;
   totalPrice: number;
 }

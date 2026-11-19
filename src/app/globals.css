@@ -57,3 +57,44 @@ body {
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
 }
+
+/* ========================================================
+   Standard Pharmacy Print Styles (A4 & 80mm Thermal POS)
+   ======================================================== */
+@media print {
+  @page {
+    size: auto;
+    margin: 8mm;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+  }
+
+  /* Hide interactive UI elements during printing */
+  .no-print,
+  nav,
+  header,
+  footer,
+  aside,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Ensure the printable invoice prints cleanly with crisp text & borders */
+  #printable-bill-document {
+    display: block !important;
+    visibility: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: none !important;
+    overflow: visible !important;
+  }
+}

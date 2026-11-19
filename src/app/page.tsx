@@ -361,6 +361,7 @@ export default function StorefrontPage() {
         brand: item.product.brand,
         packSize: item.product.packSize,
         quantity: item.quantity,
+        mrp: item.product.mrp,
         unitPrice: item.product.sellingPrice,
         totalPrice: item.product.sellingPrice * item.quantity,
       })),
