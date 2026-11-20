@@ -32,7 +32,15 @@ export function InvoiceModal({
   settings,
   initialFormat = 'A4',
 }: InvoiceModalProps) {
-  const [format, setFormat] = useState<'A4' | 'THERMAL'>(initialFormat);
+  const [formatOverride, setFormatOverride] = useState<{
+    orderId: string;
+    format: 'A4' | 'THERMAL';
+  } | null>(null);
+  const format =
+    order && formatOverride?.orderId === order.id ? formatOverride.format : initialFormat;
+  const setFormat = (next: 'A4' | 'THERMAL') => {
+    if (order) setFormatOverride({ orderId: order.id, format: next });
+  };
 
   if (!isOpen || !order) return null;
 

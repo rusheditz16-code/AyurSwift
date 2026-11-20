@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Plus, Minus, Eye, Check } from 'lucide-react';
-import { Product } from '@/types';
+import { Plus, Minus, Eye, Star, Zap, Truck, Images } from 'lucide-react';
+import { DeliveryType, Product } from '@/types';
 import { MedicinePackVisual } from '@/components/MedicinePackVisual';
 
 interface ProductCardProps {
@@ -11,6 +11,8 @@ interface ProductCardProps {
   onAddToCart: (product: Product) => void;
   onUpdateQuantity: (productId: string, quantity: number) => void;
   onViewDetails: (product: Product) => void;
+  dispatchType?: DeliveryType;
+  compact?: boolean;
 }
 
 export function ProductCard({
@@ -19,148 +21,168 @@ export function ProductCard({
   onAddToCart,
   onUpdateQuantity,
   onViewDetails,
+  dispatchType = 'RAPIDO_CITY',
+  compact = false,
 }: ProductCardProps) {
   const [imageError, setImageError] = useState(false);
   const discountPercent = Math.round(
     ((product.mrp - product.sellingPrice) / product.mrp) * 100
   );
+  const isLocal = dispatchType !== 'COURIER_OUTSIDE';
 
   return (
     <article
-      className="h-full flex flex-col justify-between bg-white rounded-2xl border border-[#d6ddce] hover:border-[#1d5a3e] hover:shadow-xs transition-all duration-200 overflow-hidden group focus-within:ring-2 focus-within:ring-[#1d5a3e]"
+      className={`h-full flex flex-col bg-white rounded-2xl border border-gray-200/85 hover:border-[#0C831F]/45 hover:shadow-[0_10px_28px_-10px_rgba(15,23,42,0.14)] transition-all duration-200 overflow-hidden group relative ${
+        compact ? 'w-[172px] sm:w-[196px] shrink-0' : 'w-full'
+      }`}
       aria-label={`${product.name} by ${product.brand}`}
     >
-      <div className="p-3 sm:p-3.5 flex flex-col flex-1">
-        {/* Top Meta Strip: At most one useful badge */}
-        <div className="flex items-center justify-between min-h-[22px] mb-2">
-          {discountPercent > 0 ? (
-            <span className="bg-[#c86326] text-white text-[10px] font-bold px-2 py-0.5 rounded-md tracking-wide">
-              {discountPercent}% OFF
-            </span>
-          ) : product.badgeText ? (
-            <span className="bg-[#e9efdf] text-[#1d5a3e] text-[10px] font-bold px-2 py-0.5 rounded-md border border-[#d6ddce]">
-              {product.badgeText}
-            </span>
-          ) : (
-            <span />
-          )}
-
-          {/* Availability indicator (Privacy: no raw stock count) */}
-          <span className="text-[10px] font-semibold text-emerald-800 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 inline-block" />
-            <span>In Stock</span>
-          </span>
+      {/* Top Discount Ribbon (Blinkit-style blue/emerald badge) */}
+      {discountPercent > 0 && (
+        <div className="absolute top-2.5 left-2.5 z-10 bg-[#2563EB] text-white text-[10px] font-extrabold px-2 py-0.5 rounded-md shadow-xs tracking-wide tabular-nums">
+          {discountPercent}% OFF
         </div>
+      )}
 
-        {/* Product Visual Container (Uploaded Packshot or Form-Accurate Art) */}
-        <div
-          onClick={() => onViewDetails(product)}
-          className="w-full h-36 sm:h-40 bg-[#f8f8f3] rounded-xl flex items-center justify-center p-2 cursor-pointer relative overflow-hidden group-hover:bg-[#e9efdf]/40 transition-colors"
-          tabIndex={0}
-          role="button"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              onViewDetails(product);
-            }
-          }}
-          aria-label={`View details for ${product.name}`}
-        >
-          {product.imageUrl && !imageError ? (
-            <img
-              src={product.imageUrl}
-              alt={product.name}
-              loading="lazy"
-              onError={() => setImageError(true)}
-              className="w-full h-full object-contain p-1 transform group-hover:scale-104 transition-transform duration-200"
-            />
-          ) : (
-            <MedicinePackVisual
-              product={product}
-              className="w-full h-full transform group-hover:scale-104 transition-transform duration-200"
-            />
-          )}
-
-          {/* Multiple Photos Badge */}
-          {product.images && product.images.length > 1 && (
-            <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-xs text-white text-[9.5px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1 shadow-2xs pointer-events-none">
-              <span>📷 {product.images.length}</span>
-            </div>
-          )}
-
-          {/* Quick-view icon overlay on hover */}
-          <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 p-1.5 rounded-full shadow-xs text-gray-700">
-            <Eye className="w-3.5 h-3.5 text-[#1d5a3e]" />
-          </div>
+      {/* Rating Pill top-right */}
+      {product.rating > 0 && (
+        <div className="absolute top-2.5 right-2.5 z-10 bg-white/92 backdrop-blur-xs border border-gray-200/80 text-gray-800 text-[10px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5 shadow-2xs tabular-nums">
+          <Star className="w-2.5 h-2.5 text-amber-500 fill-amber-500" />
+          <span>{product.rating.toFixed(1)}</span>
         </div>
+      )}
 
-        {/* Product Metadata */}
-        <div className="pt-2.5 flex-1 flex flex-col justify-between space-y-1">
-          <div>
-            <div className="text-[11px] text-[#526359] font-medium truncate">
-              {product.brand} • {product.packSize}
-            </div>
+      {/* Packshot Stage */}
+      <div
+        onClick={() => onViewDetails(product)}
+        tabIndex={0}
+        role="button"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onViewDetails(product);
+          }
+        }}
+        aria-label={`View details for ${product.name}`}
+        className="relative w-full aspect-[4/3] bg-[#F8FAFC] group-hover:bg-[#F1F5F9]/90 transition-colors flex items-center justify-center p-3 cursor-pointer overflow-hidden"
+      >
+        {product.imageUrl && !imageError ? (
+          <img
+            src={product.imageUrl}
+            alt={product.name}
+            loading="lazy"
+            onError={() => setImageError(true)}
+            className="w-full h-full object-contain transition-transform duration-300 ease-out group-hover:scale-105"
+          />
+        ) : (
+          <MedicinePackVisual
+            product={product}
+            className="w-full h-full transition-transform duration-300 ease-out group-hover:scale-105"
+          />
+        )}
 
-            <h3
-              onClick={() => onViewDetails(product)}
-              className="font-serif font-bold text-[13px] sm:text-[14px] text-[#143d29] line-clamp-2 leading-snug cursor-pointer hover:text-[#1d5a3e] transition-colors mt-0.5 min-h-[36px]"
-              title={product.name}
-            >
-              {product.name}
-            </h3>
+        {/* Multi-photo pill */}
+        {product.images && product.images.length > 1 && (
+          <div className="absolute bottom-2 left-2 bg-gray-900/65 backdrop-blur-xs text-white text-[9.5px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1 pointer-events-none">
+            <Images className="w-2.5 h-2.5" />
+            <span>{product.images.length}</span>
           </div>
+        )}
+
+        {/* Subtle Quick-View eye on hover */}
+        <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 border border-gray-200 p-1.5 rounded-full shadow-xs">
+          <Eye className="w-3.5 h-3.5 text-[#0C831F]" />
         </div>
       </div>
 
-      {/* Pricing & Add/Stepper Controls */}
-      <div className="px-3 sm:px-3.5 pb-3 pt-2 bg-[#f8f8f3]/60 border-t border-[#d6ddce] flex items-center justify-between mt-auto">
-        <div>
-          {product.mrp > product.sellingPrice && (
-            <div className="text-[10px] text-gray-400 line-through leading-none mb-0.5">
-              MRP ₹{product.mrp}
-            </div>
+      {/* Product Body */}
+      <div className="p-3 flex flex-col flex-1">
+        {/* Micro ETA Pill */}
+        <div className="flex items-center justify-between gap-1 mb-1.5">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-gray-100 text-[9.5px] font-extrabold text-gray-700 uppercase tracking-wide">
+            {isLocal ? (
+              <>
+                <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500" />
+                <span>30 MINS</span>
+              </>
+            ) : (
+              <>
+                <Truck className="w-2.5 h-2.5 text-[#0C831F]" />
+                <span>2–4 DAYS</span>
+              </>
+            )}
+          </span>
+          {product.badgeText && discountPercent === 0 && (
+            <span className="text-[9.5px] font-bold text-[#0C831F] bg-[#ECFDF3] px-1.5 py-0.5 rounded-md truncate max-w-[90px]">
+              {product.badgeText}
+            </span>
           )}
-          <div className="font-bold text-sm sm:text-base text-[#143d29] leading-none">
-            ₹{product.sellingPrice}
-          </div>
         </div>
 
-        {/* Add Button or Stepper */}
-        <div>
+        {/* Title */}
+        <h3
+          onClick={() => onViewDetails(product)}
+          className="font-bold text-[13px] sm:text-[13.5px] text-gray-900 line-clamp-2 leading-[1.3] cursor-pointer hover:text-[#0C831F] transition-colors min-h-[34px]"
+          title={product.name}
+        >
+          {product.name}
+        </h3>
+
+        {/* Brand & Pack Size */}
+        <div className="text-[11px] text-gray-500 font-medium mt-1 truncate">
+          {product.packSize} • {product.brand}
+        </div>
+
+        {/* Bottom Price + Blinkit ADD / Stepper */}
+        <div className="pt-3 mt-auto flex items-center justify-between gap-2">
+          <div className="leading-tight">
+            <div className="font-extrabold text-sm sm:text-[15px] text-gray-950 tabular-nums">
+              ₹{product.sellingPrice}
+            </div>
+            {product.mrp > product.sellingPrice && (
+              <div className="text-[10.5px] text-gray-400 line-through tabular-nums">
+                ₹{product.mrp}
+              </div>
+            )}
+          </div>
+
           {quantityInCart === 0 ? (
             <button
+              type="button"
               onClick={() => onAddToCart(product)}
-              className="bg-white hover:bg-[#1d5a3e] text-[#1d5a3e] hover:text-white border border-[#1d5a3e] px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all shadow-2xs active:scale-95 flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1d5a3e] cursor-pointer"
-              aria-label={`Add ${product.name} to basket`}
+              className="h-8 px-4 rounded-lg border border-[#0C831F] bg-[#F2FBF4] hover:bg-[#0C831F] text-[#0C831F] hover:text-white font-extrabold text-xs tracking-wide transition-all active:scale-95 shadow-2xs cursor-pointer"
+              aria-label={`Add ${product.name} to cart`}
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add</span>
+              ADD
             </button>
           ) : (
             <div
-              className="flex items-center bg-[#1d5a3e] text-white rounded-xl shadow-xs overflow-hidden"
+              className="h-8 flex items-center bg-[#0C831F] text-white rounded-lg shadow-sm shadow-[#0C831F]/25 overflow-hidden animate-badge-pop"
               role="group"
-              aria-label={`Quantity in basket for ${product.name}`}
+              aria-label={`Quantity in cart for ${product.name}`}
             >
               <button
                 type="button"
                 onClick={() => onUpdateQuantity(product.id, quantityInCart - 1)}
-                className="px-2.5 py-1.5 hover:bg-[#143d29] transition-colors active:scale-90 flex items-center justify-center focus:outline-none cursor-pointer"
+                className="w-7 h-full hover:bg-[#096B19] transition-colors active:scale-90 flex items-center justify-center cursor-pointer"
                 aria-label="Decrease quantity"
               >
-                <Minus className="w-3 h-3" />
+                <Minus className="w-3.5 h-3.5 stroke-[2.5]" />
               </button>
-              <span className="px-2 text-xs font-bold min-w-[20px] text-center" aria-live="polite">
+              <span
+                className="min-w-[22px] text-center text-xs font-extrabold tabular-nums"
+                aria-live="polite"
+              >
                 {quantityInCart}
               </span>
               <button
                 type="button"
                 onClick={() => onUpdateQuantity(product.id, quantityInCart + 1)}
                 disabled={quantityInCart >= product.stockQuantity}
-                className="px-2.5 py-1.5 hover:bg-[#143d29] disabled:opacity-40 transition-colors active:scale-90 flex items-center justify-center focus:outline-none cursor-pointer"
+                className="w-7 h-full hover:bg-[#096B19] disabled:opacity-40 transition-colors active:scale-90 flex items-center justify-center cursor-pointer"
                 aria-label="Increase quantity"
               >
-                <Plus className="w-3 h-3" />
+                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
               </button>
             </div>
           )}

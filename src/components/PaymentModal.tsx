@@ -1,17 +1,17 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   CheckCircle2,
   Copy,
   Check,
-  ExternalLink,
   QrCode,
   Smartphone,
   MessageCircle,
   X,
   Receipt,
-  Printer,
+  Banknote,
+  ShieldCheck,
 } from 'lucide-react';
 import { Order, MerchantSettings } from '@/types';
 import { generateUpiUri, generateWhatsAppOrderUrl } from '@/lib/store';
@@ -26,6 +26,15 @@ interface PaymentModalProps {
 export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
   const [copiedUpi, setCopiedUpi] = useState(false);
   const [showInvoice, setShowInvoice] = useState(false);
+
+  useEffect(() => {
+    if (!order) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !showInvoice) onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [order, showInvoice, onClose]);
 
   if (!order) return null;
 
@@ -48,183 +57,161 @@ export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
     setTimeout(() => setCopiedUpi(false), 2000);
   };
 
-  const handleOpenUpiApp = () => {
-    window.location.href = upiUri;
-  };
-
-  const handleOpenWhatsApp = () => {
-    window.open(whatsAppUrl, '_blank');
-  };
-
   return (
-    <div className="fixed inset-0 z-70 overflow-y-auto bg-black/45 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-      <div className="w-full max-w-md bg-[#f8f8f3] text-[#1c2e24] rounded-2xl shadow-2xl border border-[#d6ddce] overflow-hidden animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-70 overflow-y-auto bg-slate-950/55 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+      <div className="w-full max-w-md bg-white text-gray-900 rounded-3xl shadow-2xl border border-gray-200 overflow-hidden animate-modal-pop my-auto">
         {/* Success Header */}
-        <div className="bg-[#e9efdf] p-6 text-center border-b border-[#d6ddce] relative">
+        <div className="bg-gradient-to-br from-[#0A6B19] to-[#0C831F] text-white p-6 text-center relative">
           <button
+            type="button"
             onClick={onClose}
-            aria-label="Close window"
-            className="absolute top-3.5 right-3.5 p-1 rounded-full text-[#526359] hover:bg-black/5 transition-colors"
+            aria-label="Close confirmation"
+            className="absolute top-3.5 right-3.5 w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition-colors cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
-          <div className="flex justify-center mb-3">
-            <img
-              src="/ayurswift-logo.png"
-              alt="AyurSwift"
-              className="h-8 w-auto object-contain"
-            />
+
+          <div className="w-12 h-12 bg-white text-[#0C831F] rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg animate-badge-pop">
+            <CheckCircle2 className="w-7 h-7 stroke-[2.5]" />
           </div>
-          <div className="w-10 h-10 bg-[#1d5a3e] text-white rounded-full flex items-center justify-center mx-auto mb-2 shadow-2xs">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-          <span className="inline-block bg-[#1d5a3e]/10 text-[#1d5a3e] font-semibold text-xs px-3 py-0.5 rounded-full mb-1 border border-[#1d5a3e]/20">
-            Order #{order.id}
+
+          <span className="inline-block bg-white/15 text-emerald-50 font-mono font-bold text-xs px-3 py-0.5 rounded-full border border-white/20 mb-1.5">
+            Order {order.id}
           </span>
-          <h2 className="font-serif text-2xl font-bold text-[#143d29]">Order Received</h2>
-          <p className="text-xs text-[#526359] mt-1 max-w-xs mx-auto leading-relaxed">
-            Your order request is recorded. The dark store verifies in-stock inventory and courier route before packing.
+          <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight">Order Received!</h2>
+          <p className="text-xs text-emerald-100 mt-1 max-w-xs mx-auto leading-relaxed">
+            Our dark store is verifying stock &amp; preparing your pack for rapid dispatch.
           </p>
         </div>
 
-        <div className="p-5 space-y-4">
-          {/* Order Status Notice */}
-          <div className="bg-[#e9efdf] border border-[#d6ddce] rounded-xl p-3 text-xs space-y-1">
-            <div className="flex items-center justify-between font-semibold text-[#143d29]">
-              <span>Current Status:</span>
-              <span className="bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-300">
-                Awaiting Merchant Confirmation
+        <div className="p-5 space-y-4 bg-[#F8FAFC]">
+          {/* Order Summary */}
+          <div className="bg-white rounded-2xl p-3.5 text-xs space-y-2 border border-gray-200/80 shadow-2xs">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-500 font-medium">Status</span>
+              <span className="bg-amber-50 text-amber-800 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold border border-amber-200">
+                Awaiting Store Confirmation
               </span>
             </div>
-            <p className="text-[11px] text-[#526359] leading-tight">
-              {order.paymentMethod === 'COD'
-                ? 'Cash on Delivery: Payment will be collected upon doorstep delivery once verified.'
-                : 'Prepaid UPI: Please complete UPI payment below for instant processing.'}
-            </p>
-          </div>
-
-          {/* Order Summary Box */}
-          <div className="bg-white rounded-xl p-3.5 text-xs space-y-1.5 border border-[#d6ddce]">
-            <div className="flex justify-between text-[#526359]">
-              <span>Customer:</span>
-              <span className="font-bold text-[#143d29]">{order.customerName}</span>
+            <div className="flex justify-between text-gray-600">
+              <span>Customer</span>
+              <span className="font-bold text-gray-900">{order.customerName}</span>
             </div>
-            <div className="flex justify-between text-[#526359]">
-              <span>Delivery Address:</span>
-              <span className="font-medium text-[#143d29] text-right truncate max-w-[200px]">
+            <div className="flex justify-between text-gray-600 gap-4">
+              <span className="shrink-0">Deliver to</span>
+              <span className="font-semibold text-gray-900 text-right truncate">
                 {order.deliveryAddress}, {order.city}
               </span>
             </div>
-            <div className="flex justify-between text-[#526359] border-t border-[#e9efdf] pt-1.5">
-              <span>Total Payable:</span>
-              <span className="font-bold text-base text-[#1d5a3e]">
+            <div className="flex justify-between items-center border-t border-gray-100 pt-2">
+              <span className="font-bold text-gray-700">Total Payable</span>
+              <span className="font-extrabold text-lg text-[#0C831F] tabular-nums">
                 ₹{order.totalAmount}
               </span>
             </div>
           </div>
 
-          {/* UPI Section */}
+          {/* Payment Box */}
           {order.paymentMethod === 'UPI' ? (
-            <div className="space-y-3 text-center">
-              <div className="bg-[#e9efdf] border border-[#d6ddce] rounded-2xl p-4">
-                <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-[#143d29] mb-2.5">
-                  <QrCode className="w-4 h-4 text-[#1d5a3e]" />
-                  <span>Scan Universal UPI QR Code</span>
-                </div>
+            <div className="bg-white border border-gray-200/80 rounded-2xl p-4 text-center space-y-3 shadow-2xs">
+              <div className="flex items-center justify-center gap-1.5 text-xs font-extrabold text-gray-900">
+                <QrCode className="w-4 h-4 text-[#0C831F]" />
+                <span>Scan &amp; Pay via Any UPI App (₹0 Fee)</span>
+              </div>
 
-                <div className="inline-block p-2.5 bg-white rounded-2xl shadow-sm border border-[#d6ddce]">
-                  <img
-                    src={qrImageUrl}
-                    alt={`UPI Payment QR for ${settings.merchantUpiId}`}
-                    className="w-44 h-44 mx-auto rounded-lg object-contain"
-                  />
-                  <div className="mt-1 text-[10px] text-gray-500 font-semibold">
-                    Google Pay • PhonePe • Paytm • FamPay • BHIM
-                  </div>
-                </div>
-
-                <div className="mt-3 flex items-center justify-center gap-2">
-                  <div className="text-left bg-white px-3 py-1.5 rounded-xl border border-[#d6ddce]">
-                    <span className="text-[10px] text-gray-500 block leading-none font-semibold">Payee UPI ID:</span>
-                    <span className="text-xs font-mono font-bold text-[#143d29]">
-                      {settings.merchantUpiId}
-                    </span>
-                  </div>
-                  <button
-                    onClick={handleCopyUpi}
-                    className="text-xs bg-[#1d5a3e] hover:bg-[#143d29] text-white font-semibold px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
-                    title="Copy UPI ID"
-                  >
-                    {copiedUpi ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedUpi ? 'Copied' : 'Copy UPI'}</span>
-                  </button>
-                </div>
-
-                {/* Mobile 1-Tap UPI Intent Button */}
-                <div className="mt-3">
-                  <button
-                    onClick={handleOpenUpiApp}
-                    className="w-full bg-[#1d5a3e] hover:bg-[#143d29] text-white font-semibold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-2xs active:scale-98 cursor-pointer"
-                  >
-                    <Smartphone className="w-4 h-4" />
-                    <span>Pay ₹{order.totalAmount} via GPay / PhonePe / Paytm</span>
-                  </button>
+              <div className="inline-block p-2.5 bg-white rounded-2xl border-2 border-[#0C831F]/20 shadow-xs">
+                <img
+                  src={qrImageUrl}
+                  alt={`UPI QR for ${settings.merchantUpiId}`}
+                  className="w-44 h-44 mx-auto rounded-lg object-contain"
+                />
+                <div className="mt-1.5 text-[10px] text-gray-500 font-bold">
+                  GPay • PhonePe • Paytm • FamPay • BHIM
                 </div>
               </div>
+
+              <div className="flex items-center justify-center gap-2">
+                <div className="text-left bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-200">
+                  <span className="text-[9.5px] text-gray-500 block font-bold uppercase">
+                    UPI ID
+                  </span>
+                  <span className="text-xs font-mono font-bold text-gray-900">
+                    {settings.merchantUpiId}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopyUpi}
+                  className="text-xs bg-gray-900 hover:bg-gray-800 text-white font-bold px-3.5 py-2.5 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  {copiedUpi ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedUpi ? 'Copied' : 'Copy'}</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = upiUri;
+                }}
+                className="w-full bg-[#ECFDF3] hover:bg-[#DCFCE7] border border-[#BBF7D0] text-[#0C831F] font-extrabold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer"
+              >
+                <Smartphone className="w-4 h-4" />
+                <span>Tap to Pay ₹{order.totalAmount} in UPI App</span>
+              </button>
             </div>
           ) : (
-            <div className="bg-[#e9efdf] border border-[#d6ddce] rounded-xl p-4 text-center space-y-1">
-              <span className="text-2xl">💵</span>
-              <h3 className="font-serif font-bold text-[#143d29] text-sm">
-                Cash on Delivery (COD) Selected
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center space-y-1.5">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
+                <Banknote className="w-5 h-5" />
+              </div>
+              <h3 className="font-extrabold text-amber-950 text-sm">
+                Cash on Delivery Selected
               </h3>
-              <p className="text-[11px] text-[#526359]">
-                Please keep exact cash of <strong>₹{order.totalAmount}</strong> ready for the Rapido delivery rider.
+              <p className="text-xs text-amber-800">
+                Please keep exact cash of <strong className="tabular-nums">₹{order.totalAmount}</strong> ready for the Rapido rider.
               </p>
             </div>
           )}
 
-          {/* 1-Click WhatsApp Order Confirmation & View Bill */}
+          {/* Action Buttons */}
           <div className="space-y-2">
             <button
-              onClick={handleOpenWhatsApp}
-              className="w-full bg-[#1d5a3e] hover:bg-[#143d29] text-white font-bold py-2.5 px-4 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-2xs transition-transform active:scale-98 cursor-pointer"
+              type="button"
+              onClick={() => window.open(whatsAppUrl, '_blank')}
+              className="w-full bg-[#0C831F] hover:bg-[#096B19] text-white font-extrabold py-3 px-4 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-[#0C831F]/25 transition-all active:scale-98 cursor-pointer"
             >
               <MessageCircle className="w-4 h-4" />
-              <span>Confirm & Send Order via WhatsApp</span>
+              <span>Confirm &amp; Send on WhatsApp</span>
             </button>
 
             <button
+              type="button"
               onClick={() => setShowInvoice(true)}
-              className="w-full bg-white hover:bg-[#e9efdf] text-[#1d5a3e] font-bold py-2 px-4 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 border border-[#1d5a3e] shadow-2xs transition-transform active:scale-98 cursor-pointer"
+              className="w-full bg-white hover:bg-gray-50 text-gray-800 font-bold py-2.5 px-4 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 border border-gray-200 transition-colors cursor-pointer"
             >
-              <Receipt className="w-4 h-4" />
-              <span>View & Print Official Bill</span>
-            </button>
-
-            <p className="text-[10px] text-[#526359] text-center">
-              Sends receipt and dispatch request directly to the store team
-            </p>
-          </div>
-
-          {/* Cancellation Policy Notice */}
-          <div className="p-2.5 bg-[#f8f8f3] rounded-xl border border-[#d6ddce] text-[10.5px] text-[#526359] text-center leading-relaxed">
-            🌿 <strong>Cancellation Policy:</strong> You can cancel this order from your <strong>Account</strong> menu anytime before dark store packing begins. Once packed, orders are sealed for safety.
-          </div>
-
-          {/* Close */}
-          <div className="pt-1">
-            <button
-              onClick={onClose}
-              className="w-full py-1.5 text-xs font-semibold text-[#526359] hover:text-[#143d29] transition-colors"
-            >
-              Done & Return to Store
+              <Receipt className="w-4 h-4 text-[#0C831F]" />
+              <span>View &amp; Print Official Bill</span>
             </button>
           </div>
+
+          <div className="flex items-start gap-2 p-2.5 bg-white rounded-xl border border-gray-200/80 text-[10.5px] text-gray-500 leading-relaxed">
+            <ShieldCheck className="w-4 h-4 text-[#0C831F] shrink-0 mt-0.5" />
+            <span>
+              You can track or cancel this order anytime from <strong>Orders</strong> before dark-store packing starts.
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-1.5 text-xs font-bold text-gray-500 hover:text-gray-900 transition-colors cursor-pointer"
+          >
+            Done &amp; Return to Store
+          </button>
         </div>
       </div>
 
-      {/* Official Tax Invoice & Bill Modal */}
       <InvoiceModal
         order={order}
         isOpen={showInvoice}
