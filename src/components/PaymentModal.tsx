@@ -25,6 +25,7 @@ interface PaymentModalProps {
 
 export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
   const [copiedUpi, setCopiedUpi] = useState(false);
+  const [utrNumber, setUtrNumber] = useState('');
   const [showInvoice, setShowInvoice] = useState(false);
 
   useEffect(() => {
@@ -49,7 +50,10 @@ export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
     upiUri
   )}`;
 
-  const whatsAppUrl = generateWhatsAppOrderUrl(order, settings.merchantWhatsApp);
+  const baseWhatsAppUrl = generateWhatsAppOrderUrl(order, settings.merchantWhatsApp);
+  const whatsAppUrl = utrNumber.trim()
+    ? `${baseWhatsAppUrl}${encodeURIComponent(`\n\n✅ UPI Paid — UTR / Ref: ${utrNumber.trim()}`)}`
+    : baseWhatsAppUrl;
 
   const handleCopyUpi = () => {
     navigator.clipboard.writeText(settings.merchantUpiId);
@@ -159,6 +163,20 @@ export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
                 <Smartphone className="w-4 h-4" />
                 <span>Tap to Pay ₹{order.totalAmount} in UPI App</span>
               </button>
+
+              {/* Optional UTR / Transaction Ref for fast dark-store verification */}
+              <div className="pt-1 text-left space-y-1">
+                <label className="text-[10.5px] font-bold text-gray-600 block">
+                  Paid? Enter UPI Ref / UTR (optional for instant dispatch)
+                </label>
+                <input
+                  type="text"
+                  value={utrNumber}
+                  onChange={(e) => setUtrNumber(e.target.value)}
+                  placeholder="e.g. 432512345678 or last 6 digits"
+                  className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl font-mono text-gray-900 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15"
+                />
+              </div>
             </div>
           ) : (
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center space-y-1.5">
@@ -182,7 +200,11 @@ export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
               className="w-full bg-[#0C831F] hover:bg-[#096B19] text-white font-extrabold py-3 px-4 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-[#0C831F]/25 transition-all active:scale-98 cursor-pointer"
             >
               <MessageCircle className="w-4 h-4" />
-              <span>Confirm &amp; Send on WhatsApp</span>
+              <span>
+                {order.paymentMethod === 'UPI'
+                  ? "I've Paid — Confirm on WhatsApp"
+                  : 'Confirm & Send on WhatsApp'}
+              </span>
             </button>
 
             <button

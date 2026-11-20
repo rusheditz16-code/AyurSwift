@@ -37,6 +37,7 @@ interface AdminDispatchTabProps {
   copiedOrderId: string | null;
   onCopyForRapido: (order: Order) => void;
   onUpdateOrderStatus: (orderId: string, status: Order['orderStatus']) => void;
+  onTogglePaymentVerified: (orderId: string) => void;
   onWhatsAppCustomer: (order: Order) => void;
   onOpenBill: (order: Order, format?: 'A4' | 'THERMAL') => void;
   onDeleteOrder: (orderId: string) => void;
@@ -104,6 +105,7 @@ export function AdminDispatchTab({
   copiedOrderId,
   onCopyForRapido,
   onUpdateOrderStatus,
+  onTogglePaymentVerified,
   onWhatsAppCustomer,
   onOpenBill,
   onDeleteOrder,
@@ -184,15 +186,20 @@ export function AdminDispatchTab({
             >
               {isRapido ? '⚡ Rapido' : '📦 Courier'}
             </span>
-            <span
-              className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                order.paymentMethod === 'COD'
-                  ? 'bg-orange-500/15 text-orange-500'
-                  : 'bg-emerald-500/15 text-emerald-500'
+            <button
+              type="button"
+              onClick={() => onTogglePaymentVerified(order.id)}
+              title="Click to toggle UPI payment verification"
+              className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full cursor-pointer transition-all active:scale-95 border ${
+                order.paymentStatus === 'VERIFIED'
+                  ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/35'
+                  : 'bg-amber-500/15 text-amber-500 border-amber-500/35 hover:bg-emerald-500/15 hover:text-emerald-500'
               }`}
             >
-              {order.paymentMethod}
-            </span>
+              {order.paymentStatus === 'VERIFIED'
+                ? '✓ UPI Verified'
+                : `${order.paymentMethod} Pending`}
+            </button>
           </div>
 
           <span

@@ -15,7 +15,6 @@ import {
   Sparkles,
   Receipt,
   Smartphone,
-  Banknote,
   Trash2,
 } from 'lucide-react';
 import {
@@ -62,7 +61,7 @@ export function CartDrawer({
   defaultDeliveryType = 'RAPIDO_CITY',
 }: CartDrawerProps) {
   const [deliveryType, setDeliveryType] = useState<DeliveryType>(defaultDeliveryType);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('UPI');
+  const paymentMethod: PaymentMethod = 'UPI';
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
@@ -74,9 +73,6 @@ export function CartDrawer({
 
   useEffect(() => {
     setDeliveryType(defaultDeliveryType);
-    if (defaultDeliveryType === 'COURIER_OUTSIDE') {
-      setPaymentMethod('UPI');
-    }
   }, [defaultDeliveryType]);
 
   useEffect(() => {
@@ -134,9 +130,6 @@ export function CartDrawer({
 
   const handleDeliveryTypeChange = (type: DeliveryType) => {
     setDeliveryType(type);
-    if (type === 'COURIER_OUTSIDE') {
-      setPaymentMethod('UPI');
-    }
   };
 
   const handleCheckoutSubmit = (e: React.FormEvent) => {
@@ -490,7 +483,7 @@ export function CartDrawer({
                       <span>In-City 30–45m</span>
                     </div>
                     <div className="text-[10.5px] text-gray-600 mt-0.5">
-                      Rapido • {subtotal >= settings.cityFreeDeliveryAbove ? 'FREE' : `₹${settings.cityDeliveryFee}`} • UPI/COD
+                      Rapido • {subtotal >= settings.cityFreeDeliveryAbove ? 'FREE' : `₹${settings.cityDeliveryFee}`} • Prepaid UPI
                     </div>
                   </button>
 
@@ -586,50 +579,27 @@ export function CartDrawer({
                 </div>
               </div>
 
-              {/* Payment Method Card */}
+              {/* Payment Method Card — 100% Prepaid UPI Only */}
               <div className="bg-white rounded-2xl border border-gray-200/90 p-3.5 space-y-2.5 shadow-2xs">
-                <div className="text-xs font-extrabold text-gray-900">Payment method</div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('UPI')}
-                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                      paymentMethod === 'UPI'
-                        ? 'border-[#0C831F] bg-[#ECFDF3] ring-1 ring-[#0C831F]'
-                        : 'border-gray-200 bg-white hover:bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-1.5 text-xs font-extrabold text-gray-950">
-                      <Smartphone className="w-3.5 h-3.5 text-[#0C831F]" />
-                      <span>UPI Instant QR</span>
-                    </div>
-                    <div className="text-[10.5px] text-gray-600 mt-0.5">
-                      GPay / PhonePe • ₹0 fee
-                    </div>
-                  </button>
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-extrabold text-gray-900">Payment method</div>
+                  <span className="text-[10px] font-extrabold text-[#0C831F] bg-[#ECFDF3] border border-[#BBF7D0] px-2 py-0.5 rounded-full">
+                    100% Prepaid UPI
+                  </span>
+                </div>
 
-                  <button
-                    type="button"
-                    disabled={deliveryType === 'COURIER_OUTSIDE'}
-                    onClick={() => setPaymentMethod('COD')}
-                    className={`p-2.5 rounded-xl border text-left transition-all ${
-                      deliveryType === 'COURIER_OUTSIDE'
-                        ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                        : paymentMethod === 'COD'
-                        ? 'border-[#0C831F] bg-[#ECFDF3] ring-1 ring-[#0C831F] cursor-pointer'
-                        : 'border-gray-200 bg-white hover:bg-gray-50 cursor-pointer'
-                    }`}
-                  >
-                    <div className="flex items-center gap-1.5 text-xs font-extrabold text-gray-950">
-                      <Banknote className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Cash on Delivery</span>
+                <div className="p-3 rounded-xl border border-[#0C831F] bg-[#ECFDF3]/70 flex items-start gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-[#0C831F] text-white flex items-center justify-center shrink-0">
+                    <Smartphone className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-extrabold text-gray-950">
+                      Instant Zero-Fee UPI (GPay / PhonePe / Paytm)
                     </div>
-                    <div className="text-[10.5px] text-gray-600 mt-0.5">
-                      {deliveryType === 'COURIER_OUTSIDE'
-                        ? 'Prepaid UPI only outside city'
-                        : 'Pay Rapido rider in cash'}
-                    </div>
-                  </button>
+                    <p className="text-[10.5px] text-gray-600 mt-0.5 leading-snug">
+                      Scan Bharat QR or pay in 1 tap on the next step. Paying for family? You can share the QR directly.
+                    </p>
+                  </div>
                 </div>
 
                 {formError && (
@@ -641,7 +611,7 @@ export function CartDrawer({
 
                 <div className="flex items-center gap-1.5 text-[10.5px] text-gray-500 pt-0.5">
                   <ShieldCheck className="w-3.5 h-3.5 text-[#0C831F] shrink-0" />
-                  <span>100% genuine GST-invoiced Ayurvedic packs • Sealed dark-store dispatch</span>
+                  <span>Sealed GST-billed packs • Full instant refund if any item is unavailable</span>
                 </div>
               </div>
             </form>

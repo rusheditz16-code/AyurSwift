@@ -551,10 +551,10 @@ export default function StorefrontPage() {
                 </div>
                 <div className="min-w-0">
                   <div className="font-extrabold text-xs sm:text-sm text-gray-950">
-                    Direct Zero-Fee UPI
+                    100% Prepaid Zero-Fee UPI
                   </div>
                   <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
-                    Instant Bharat QR for GPay &amp; PhonePe. Cash on Delivery available locally.
+                    Instant Bharat QR for GPay, PhonePe &amp; Paytm. ₹0 gateway fees, instant refund guarantee.
                   </p>
                 </div>
               </div>

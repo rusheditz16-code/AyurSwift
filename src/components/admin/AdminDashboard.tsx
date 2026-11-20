@@ -506,6 +506,27 @@ export function AdminDashboard() {
     }).catch(() => {});
   };
 
+  const handleTogglePaymentVerified = (orderId: string) => {
+    let nextStatus: Order['paymentStatus'] = 'VERIFIED';
+    const updated = orders.map((o) => {
+      if (o.id === orderId) {
+        nextStatus = o.paymentStatus === 'VERIFIED' ? 'PENDING' : 'VERIFIED';
+        return { ...o, paymentStatus: nextStatus };
+      }
+      return o;
+    });
+    setOrders(updated);
+    saveStoredOrders(updated);
+    fetch('/api/orders', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-ayurswift-admin-key': 'ayurswift_admin_secret_auth_token_2026',
+      },
+      body: JSON.stringify({ orderId, paymentStatus: nextStatus }),
+    }).catch(() => {});
+  };
+
   const handleWhatsAppCustomer = (order: Order) => {
     const phone = order.customerPhone.replace(/\D/g, '');
     const cleanPhone = phone.length === 10 ? `91${phone}` : phone;
@@ -647,6 +668,7 @@ export function AdminDashboard() {
               copiedOrderId={copiedOrderId}
               onCopyForRapido={handleCopyForRapido}
               onUpdateOrderStatus={handleUpdateOrderStatus}
+              onTogglePaymentVerified={handleTogglePaymentVerified}
               onWhatsAppCustomer={handleWhatsAppCustomer}
               onOpenBill={handleOpenBill}
               onDeleteOrder={handleDeleteOrder}
