@@ -386,10 +386,10 @@ export async function POST(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
-    const { orderId, orderStatus } = await request.json();
-    if (!orderId || !orderStatus) {
+    const { orderId, orderStatus, paymentStatus } = await request.json();
+    if (!orderId || (!orderStatus && !paymentStatus)) {
       return NextResponse.json(
-        { success: false, error: 'orderId and orderStatus are required' },
+        { success: false, error: 'orderId and either orderStatus or paymentStatus are required' },
         { status: 400 }
       );
     }
@@ -398,11 +398,11 @@ export async function PUT(request: NextRequest) {
     const currentOrders = loadOrdersFromFile();
     const existing = currentOrders.find((o) => o.id === orderId);
 
-    // If non-admin is updating, verify they are only cancelling a NEW unpacked order
+    // Non-admins can only cancel NEW unpacked orders and cannot modify paymentStatus
     if (!isAdmin) {
-      if (orderStatus !== 'CANCELLED') {
+      if (paymentStatus || orderStatus !== 'CANCELLED') {
         return NextResponse.json(
-          { success: false, error: 'Only administrators can update active fulfillment stages.' },
+          { success: false, error: 'Only administrators can update fulfillment or payment status.' },
           { status: 403 }
         );
       }
@@ -418,7 +418,11 @@ export async function PUT(request: NextRequest) {
     const updated = currentOrders.map((o) => {
       if (o.id === orderId) {
         found = true;
-        return { ...o, orderStatus };
+        return {
+          ...o,
+          ...(orderStatus ? { orderStatus } : {}),
+          ...(paymentStatus ? { paymentStatus } : {}),
+        };
       }
       return o;
     });
@@ -431,22 +435,27 @@ export async function PUT(request: NextRequest) {
     // Sync status to Supabase
     if (supabase) {
       try {
-        await supabase
-          .from('orders')
-          .update({
-            order_status: orderStatus,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', orderId);
+        const dbPatch: Record<string, string> = {
+          updated_at: new Date().toISOString(),
+        };
+        if (orderStatus) dbPatch.order_status = orderStatus;
+        if (paymentStatus) dbPatch.payment_status = paymentStatus;
+
+        await supabase.from('orders').update(dbPatch).eq('id', orderId);
       } catch (dbErr) {
         console.warn('Supabase status update error:', dbErr);
       }
     }
 
-    return NextResponse.json({ success: true, orderId, orderStatus });
+    return NextResponse.json({
+      success: true,
+      orderId,
+      ...(orderStatus ? { orderStatus } : {}),
+      ...(paymentStatus ? { paymentStatus } : {}),
+    });
   } catch (err: any) {
     return NextResponse.json(
-      { success: false, error: err.message || 'Failed to update order status' },
+      { success: false, error: err.message || 'Failed to update order' },
       { status: 500 }
     );
   }

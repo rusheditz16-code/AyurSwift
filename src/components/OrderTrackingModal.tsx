@@ -231,17 +231,30 @@ export function OrderTrackingModal({
                       <span className="font-mono font-extrabold text-xs bg-[#ECFDF3] text-[#0C831F] border border-[#BBF7D0] px-2 py-0.5 rounded-lg">
                         {order.id}
                       </span>
-                      <span
-                        className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                          isCancelled
-                            ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                            : order.orderStatus === 'DELIVERED'
-                            ? 'bg-[#ECFDF3] text-[#0C831F] border border-[#BBF7D0]'
-                            : 'bg-amber-50 text-amber-800 border border-amber-200'
-                        }`}
-                      >
-                        {order.orderStatus}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                            order.paymentStatus === 'VERIFIED' || order.paymentStatus === 'PAID'
+                              ? 'bg-[#ECFDF3] text-[#0C831F] border border-[#BBF7D0]'
+                              : 'bg-amber-50 text-amber-800 border border-amber-200'
+                          }`}
+                        >
+                          {order.paymentStatus === 'VERIFIED' || order.paymentStatus === 'PAID'
+                            ? '✓ Payment Verified'
+                            : 'UPI Pending'}
+                        </span>
+                        <span
+                          className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                            isCancelled
+                              ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                              : order.orderStatus === 'DELIVERED'
+                              ? 'bg-[#ECFDF3] text-[#0C831F] border border-[#BBF7D0]'
+                              : 'bg-gray-100 text-gray-800 border border-gray-200'
+                          }`}
+                        >
+                          {order.orderStatus}
+                        </span>
+                      </div>
                     </div>
 
                     {!isCancelled && (
