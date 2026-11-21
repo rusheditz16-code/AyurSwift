@@ -102,6 +102,7 @@ export function LocationModal({
             <input
               id="location-locality-search"
               type="search"
+              aria-label="Search Bhavnagar locality or pincode"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search Bhavnagar locality or pincode..."

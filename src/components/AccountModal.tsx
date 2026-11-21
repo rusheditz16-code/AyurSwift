@@ -351,6 +351,7 @@ export function AccountModal({
                   <input
                     id="account-order-lookup"
                     type="search"
+                    aria-label="Search orders by Order ID or 10-digit mobile number"
                     value={searchQuery}
                     onChange={(e) => handleSearchChange(e.target.value)}
                     placeholder="Order ID (#AS-7K4M9X2P) or 10-digit mobile..."

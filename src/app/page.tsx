@@ -628,7 +628,7 @@ export default function StorefrontPage() {
           </section>
         )}
 
-        {/* 3. Compact Horizontal Trust & Delivery Strip (No Oversized Cards, Zero Unsupported Claims) */}
+        {/* 3. Compact Horizontal Trust & Delivery Strip (No Oversized Cards, Zero Truncation) */}
         {!isFilterActive && (
           <section aria-label="Delivery and order verification summary">
             <div className="bg-white rounded-2xl border border-gray-200/90 shadow-2xs grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-100 overflow-hidden">
@@ -644,8 +644,8 @@ export default function StorefrontPage() {
                   <div className="text-xs font-extrabold text-gray-950 leading-tight">
                     Bhavnagar Local ({DELIVERY_PROMISE.localTimeShort})
                   </div>
-                  <p className="text-[11px] text-gray-600 mt-0.5 truncate">
-                    ₹{settings.cityDeliveryFee} delivery • Free above ₹{settings.cityFreeDeliveryAbove}
+                  <p className="text-[11px] text-gray-600 mt-0.5 leading-snug">
+                    ₹{settings.cityDeliveryFee} • Free above ₹{settings.cityFreeDeliveryAbove}
                   </p>
                 </div>
               </button>
@@ -665,8 +665,8 @@ export default function StorefrontPage() {
                   <div className="text-xs font-extrabold text-gray-950 leading-tight">
                     All-India Courier ({DELIVERY_PROMISE.courierTimeShort})
                   </div>
-                  <p className="text-[11px] text-gray-600 mt-0.5 truncate">
-                    Flat ₹{settings.courierDeliveryFee} tracked parcel across India
+                  <p className="text-[11px] text-gray-600 mt-0.5 leading-snug">
+                    Flat ₹{settings.courierDeliveryFee} tracked parcel
                   </p>
                 </div>
               </button>
@@ -679,8 +679,8 @@ export default function StorefrontPage() {
                   <div className="text-xs font-extrabold text-gray-950 leading-tight">
                     Stock Checked Before Confirmation
                   </div>
-                  <p className="text-[11px] text-gray-600 mt-0.5 truncate">
-                    Direct UPI at checkout (₹0 gateway fee)
+                  <p className="text-[11px] text-gray-600 mt-0.5 leading-snug">
+                    Direct UPI (₹0 gateway fee)
                   </p>
                 </div>
               </div>
@@ -783,7 +783,7 @@ export default function StorefrontPage() {
               </button>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-5">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-5">
               {featuredSavingsPicks.map((product) => {
                 const qty = cart.find((i) => i.product.id === product.id)?.quantity ?? 0;
                 return (
@@ -1010,6 +1010,7 @@ export default function StorefrontPage() {
                   id="whatsapp-callback-phone"
                   type="tel"
                   inputMode="numeric"
+                  aria-label="10-digit Indian mobile number for WhatsApp order"
                   value={callbackPhone}
                   onChange={(e) => {
                     setCallbackPhone(e.target.value.replace(/\D/g, '').slice(0, 10));

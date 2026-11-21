@@ -422,6 +422,7 @@ export function Header({
               <input
                 id="desktop-catalog-search"
                 type="search"
+                aria-label="Search Ayurvedic medicines, brands, or health concerns"
                 value={searchQuery}
                 onFocus={() => setShowSuggestions(true)}
                 onChange={(e) => {
@@ -435,9 +436,9 @@ export function Header({
                 <span
                   key={placeholderIdx}
                   aria-hidden="true"
-                  className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-gray-500 animate-placeholder select-none"
+                  className="pointer-events-none absolute inset-y-0 left-3 right-3 flex items-center text-sm text-gray-500 animate-placeholder select-none overflow-hidden whitespace-nowrap text-ellipsis"
                 >
-                  {ROTATING_PLACEHOLDERS[placeholderIdx]}
+                  <span className="truncate">{ROTATING_PLACEHOLDERS[placeholderIdx]}</span>
                 </span>
               )}
             </div>
@@ -517,6 +518,7 @@ export function Header({
             <input
               id="mobile-catalog-search"
               type="search"
+              aria-label="Search Ayurvedic medicines"
               value={searchQuery}
               onFocus={() => setShowSuggestions(true)}
               onChange={(e) => {
@@ -530,9 +532,9 @@ export function Header({
               <span
                 key={placeholderIdx}
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-xs text-gray-500 animate-placeholder select-none"
+                className="pointer-events-none absolute inset-y-0 left-2.5 right-2.5 flex items-center text-xs text-gray-500 animate-placeholder select-none overflow-hidden whitespace-nowrap"
               >
-                {ROTATING_PLACEHOLDERS[placeholderIdx]}
+                <span className="truncate">{ROTATING_PLACEHOLDERS[placeholderIdx]}</span>
               </span>
             )}
           </div>

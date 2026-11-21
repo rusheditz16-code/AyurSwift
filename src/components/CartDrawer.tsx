@@ -556,6 +556,7 @@ export function CartDrawer({
                     <input
                       id="checkout-name"
                       type="text"
+                      aria-label="Full name"
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
                       placeholder="Full name *"
@@ -570,6 +571,7 @@ export function CartDrawer({
                     <input
                       id="checkout-phone"
                       type="tel"
+                      aria-label="10-digit mobile number"
                       value={customerPhone}
                       onChange={(e) => setCustomerPhone(e.target.value)}
                       placeholder="10-digit mobile *"
@@ -586,6 +588,7 @@ export function CartDrawer({
                   </label>
                   <textarea
                     id="checkout-address"
+                    aria-label="Delivery street address and locality"
                     value={deliveryAddress}
                     onChange={(e) => setDeliveryAddress(e.target.value)}
                     placeholder="House / Flat no., Building, Street, Locality *"
@@ -602,6 +605,7 @@ export function CartDrawer({
                   <input
                     id="checkout-landmark"
                     type="text"
+                    aria-label="Nearby landmark (optional)"
                     value={landmark}
                     onChange={(e) => setLandmark(e.target.value)}
                     placeholder="Nearby landmark (optional)"
@@ -617,6 +621,7 @@ export function CartDrawer({
                     <input
                       id="checkout-city"
                       type="text"
+                      aria-label="City"
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
                       placeholder="City *"
@@ -631,6 +636,7 @@ export function CartDrawer({
                     <input
                       id="checkout-pincode"
                       type="text"
+                      aria-label="6-digit pincode"
                       value={pincode}
                       onChange={(e) => setPincode(e.target.value)}
                       placeholder="6-digit pincode *"

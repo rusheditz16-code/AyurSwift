@@ -242,6 +242,7 @@ export function OrderTrackingModal({
               <input
                 id="order-tracking-lookup"
                 type="search"
+                aria-label="Search orders by Order ID or 10-digit mobile number"
                 value={searchId}
                 onChange={(e) => handleSearchChange(e.target.value)}
                 placeholder="Order ID (#AS-7K4M9X2P) or 10-digit mobile..."

@@ -203,6 +203,7 @@ export function QuickBuyModal({
               </label>
               <textarea
                 id="quick-buy-custom-list"
+                aria-label="Custom medicine list to send via WhatsApp"
                 value={typedList}
                 onChange={(e) => setTypedList(e.target.value)}
                 placeholder="e.g. 1x Zandu Balm 25g, 2x Pudin Hara Pearls, 1x Liv.52 Tablets..."

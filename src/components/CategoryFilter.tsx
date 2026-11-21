@@ -91,6 +91,7 @@ export function CategoryFilter({
           <input
             id="catalog-inline-search"
             type="search"
+            aria-label="Filter catalog by medicine name, brand, or ingredient"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Filter by name, herb or brand..."
@@ -160,6 +161,7 @@ export function CategoryFilter({
             </label>
             <select
               id="desktop-category-filter"
+              aria-label="Filter by health category"
               value={selectedCategory}
               onChange={(e) => onSelectCategory(e.target.value)}
               className={`appearance-none rounded-xl pl-3 pr-7 py-1.5 text-xs font-bold border transition-colors cursor-pointer ${
@@ -188,6 +190,7 @@ export function CategoryFilter({
             </label>
             <select
               id="desktop-brand-filter"
+              aria-label="Filter by Ayurvedic brand"
               value={selectedBrand}
               onChange={(e) => onSelectBrand(e.target.value)}
               className={`appearance-none rounded-xl pl-3 pr-7 py-1.5 text-xs font-bold border transition-colors cursor-pointer ${
@@ -216,6 +219,7 @@ export function CategoryFilter({
             </label>
             <select
               id="desktop-dispatch-filter"
+              aria-label="Filter by delivery dispatch mode"
               value={selectedDispatch}
               onChange={(e) => onSelectDispatch(e.target.value)}
               className={`appearance-none rounded-xl pl-3 pr-7 py-1.5 text-xs font-bold border transition-colors cursor-pointer ${
