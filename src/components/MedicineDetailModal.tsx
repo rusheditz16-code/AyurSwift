@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import {
   X,
   Zap,
+  Truck,
   Plus,
   Minus,
   ShieldCheck,
@@ -11,12 +12,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Images,
-  Star,
   CheckCircle2,
   FlaskConical,
   ClipboardList,
 } from 'lucide-react';
-import { Product } from '@/types';
+import { DeliveryType, Product } from '@/types';
+import { DELIVERY_PROMISE, isVerifiedProductImageUrl } from '@/lib/initialData';
 import { MedicinePackVisual } from '@/components/MedicinePackVisual';
 
 interface MedicineDetailModalProps {
@@ -25,6 +26,7 @@ interface MedicineDetailModalProps {
   quantityInCart: number;
   onAddToCart: (product: Product) => void;
   onUpdateQuantity: (productId: string, quantity: number) => void;
+  dispatchType?: DeliveryType;
 }
 
 export function MedicineDetailModal({
@@ -33,6 +35,7 @@ export function MedicineDetailModal({
   quantityInCart,
   onAddToCart,
   onUpdateQuantity,
+  dispatchType = 'RAPIDO_CITY',
 }: MedicineDetailModalProps) {
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [failedImages, setFailedImages] = useState<Record<number, boolean>>({});
@@ -53,16 +56,22 @@ export function MedicineDetailModal({
 
   if (!product) return null;
 
-  const allImages: string[] =
+  const verifiedImages: string[] = (
     product.images && product.images.length > 0
       ? product.images
       : product.imageUrl
       ? [product.imageUrl]
-      : [];
+      : []
+  ).filter((u) => isVerifiedProductImageUrl(u));
 
-  const currentImage = allImages[activeImageIdx] || product.imageUrl;
+  const currentImage = verifiedImages[activeImageIdx];
   const isCurrentFailed = failedImages[activeImageIdx];
-  const discountPercent = Math.round(((product.mrp - product.sellingPrice) / product.mrp) * 100);
+  const showVerifiedPhoto = Boolean(currentImage) && !isCurrentFailed;
+  const discountPercent =
+    product.mrp > product.sellingPrice
+      ? Math.round(((product.mrp - product.sellingPrice) / product.mrp) * 100)
+      : 0;
+  const isLocal = dispatchType !== 'COURIER_OUTSIDE';
 
   return (
     <div
@@ -70,25 +79,37 @@ export function MedicineDetailModal({
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="medicine-detail-title"
         onClick={(e) => e.stopPropagation()}
         className="relative bg-white rounded-t-3xl sm:rounded-3xl max-w-xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl border border-gray-200 animate-sheet-up sm:animate-modal-pop"
       >
         {/* Top Bar */}
         <div className="px-4 sm:px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="bg-[#ECFDF3] text-[#0C831F] border border-[#BBF7D0] text-[10.5px] font-extrabold px-2.5 py-0.5 rounded-full truncate">
+            <span className="bg-[#ECFDF3] text-[#0A5C16] border border-[#BBF7D0] text-[11px] font-extrabold px-2.5 py-0.5 rounded-full truncate">
               {product.category}
             </span>
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-gray-500">
-              <Zap className="w-3 h-3 text-amber-500 fill-amber-500" />
-              <span>30 Mins</span>
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-gray-600 shrink-0">
+              {isLocal ? (
+                <>
+                  <Zap className="w-3 h-3 text-amber-500 fill-amber-500" aria-hidden="true" />
+                  <span>{DELIVERY_PROMISE.localTimeShort}</span>
+                </>
+              ) : (
+                <>
+                  <Truck className="w-3 h-3 text-[#0C831F]" aria-hidden="true" />
+                  <span>{DELIVERY_PROMISE.courierTimeShort}</span>
+                </>
+              )}
             </span>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-950 flex items-center justify-center transition-colors cursor-pointer"
-            aria-label="Close modal"
+            aria-label="Close product details"
           >
             <X className="w-4 h-4" />
           </button>
@@ -98,22 +119,24 @@ export function MedicineDetailModal({
         <div className="flex-1 overflow-y-auto thin-scrollbar p-4 sm:p-5 space-y-4 bg-[#F8FAFC]">
           {/* Image Stage */}
           <div className="space-y-2.5">
-            <div className="relative bg-white rounded-2xl p-5 border border-gray-200/80 flex items-center justify-center h-52 sm:h-60 overflow-hidden group">
-              {currentImage && !isCurrentFailed ? (
+            <div className="relative bg-white rounded-2xl p-5 border border-gray-200/80 flex items-center justify-center h-52 sm:h-60 overflow-hidden">
+              {showVerifiedPhoto ? (
                 <img
                   src={currentImage}
-                  alt={`${product.name} - View ${activeImageIdx + 1}`}
+                  alt={`${product.name} (${product.packSize}) by ${product.brand} — View ${activeImageIdx + 1}`}
+                  width={360}
+                  height={240}
                   onError={() =>
                     setFailedImages((prev) => ({ ...prev, [activeImageIdx]: true }))
                   }
                   className="max-h-full max-w-full object-contain transition-transform duration-300"
                 />
               ) : (
-                <MedicinePackVisual product={product} className="w-full h-full scale-105" />
+                <MedicinePackVisual product={product} className="w-full h-full" />
               )}
 
               {discountPercent > 0 && (
-                <span className="absolute top-3 left-3 bg-[#2563EB] text-white text-[11px] font-extrabold px-2.5 py-0.5 rounded-lg shadow-xs tabular-nums">
+                <span className="absolute top-3 left-3 bg-[#0C831F] text-white text-[11px] font-extrabold px-2.5 py-0.5 rounded-lg shadow-xs tabular-nums">
                   {discountPercent}% OFF
                 </span>
               )}
@@ -122,12 +145,20 @@ export function MedicineDetailModal({
                 {product.packSize} • {product.form}
               </span>
 
-              {allImages.length > 1 && (
+              {!showVerifiedPhoto && (
+                <span className="absolute bottom-3 right-3 bg-gray-100/95 border border-gray-200 text-gray-600 text-[10px] font-semibold px-2 py-0.5 rounded-md">
+                  Pack illustration
+                </span>
+              )}
+
+              {verifiedImages.length > 1 && (
                 <>
                   <button
                     type="button"
                     onClick={() =>
-                      setActiveImageIdx((prev) => (prev > 0 ? prev - 1 : allImages.length - 1))
+                      setActiveImageIdx((prev) =>
+                        prev > 0 ? prev - 1 : verifiedImages.length - 1
+                      )
                     }
                     className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/95 hover:bg-white text-gray-900 shadow-md border border-gray-200 flex items-center justify-center cursor-pointer"
                     aria-label="Previous image"
@@ -137,67 +168,77 @@ export function MedicineDetailModal({
                   <button
                     type="button"
                     onClick={() =>
-                      setActiveImageIdx((prev) => (prev < allImages.length - 1 ? prev + 1 : 0))
+                      setActiveImageIdx((prev) =>
+                        prev < verifiedImages.length - 1 ? prev + 1 : 0
+                      )
                     }
                     className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/95 hover:bg-white text-gray-900 shadow-md border border-gray-200 flex items-center justify-center cursor-pointer"
                     aria-label="Next image"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>
-                  <div className="absolute top-3 right-3 bg-gray-900/70 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <div className="absolute top-3 right-3 bg-gray-900/75 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
                     <Images className="w-3 h-3" />
                     <span>
-                      {activeImageIdx + 1}/{allImages.length}
+                      {activeImageIdx + 1}/{verifiedImages.length}
                     </span>
                   </div>
                 </>
               )}
             </div>
 
-            {allImages.length > 1 && (
+            {verifiedImages.length > 1 && (
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
-                {allImages.map((img, idx) => (
+                {verifiedImages.map((img, idx) => (
                   <button
                     key={idx}
                     type="button"
                     onClick={() => setActiveImageIdx(idx)}
+                    aria-label={`View image ${idx + 1} of ${product.name}`}
                     className={`w-13 h-13 rounded-xl border bg-white p-1 shrink-0 overflow-hidden cursor-pointer transition-all ${
                       idx === activeImageIdx
                         ? 'border-[#0C831F] ring-2 ring-[#0C831F]/30'
                         : 'border-gray-200 opacity-70 hover:opacity-100'
                     }`}
                   >
-                    <img src={img} alt={`View ${idx + 1}`} className="w-full h-full object-contain" />
+                    <img
+                      src={img}
+                      alt={`${product.name} thumbnail ${idx + 1}`}
+                      width={52}
+                      height={52}
+                      className="w-full h-full object-contain"
+                    />
                   </button>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Title, Brand & Rating */}
+          {/* Title, Brand & Availability */}
           <div className="bg-white rounded-2xl border border-gray-200/80 p-4 space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-extrabold text-[#0C831F] uppercase tracking-wide">
+              <span className="text-xs font-extrabold text-[#0F766E] uppercase tracking-wide">
                 {product.brand}
               </span>
-              <div className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-full text-[11px] font-extrabold text-amber-900 tabular-nums">
-                <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-                <span>{product.rating.toFixed(1)}</span>
-                <span className="text-amber-700/80 font-semibold">
-                  ({product.reviewCount.toLocaleString('en-IN')})
+              {product.badgeText && (
+                <span className="bg-[#ECFDF3] border border-[#BBF7D0] px-2.5 py-0.5 rounded-full text-[11px] font-bold text-[#0A5C16]">
+                  {product.badgeText}
                 </span>
-              </div>
+              )}
             </div>
 
-            <h2 className="text-lg sm:text-xl font-extrabold text-gray-950 leading-snug">
+            <h2
+              id="medicine-detail-title"
+              className="text-lg sm:text-xl font-extrabold text-gray-950 leading-snug"
+            >
               {product.name}
             </h2>
 
-            <div className="text-xs text-gray-500 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <div className="text-xs text-gray-600 flex flex-wrap items-center gap-x-2 gap-y-1">
               <span>
-                By <strong className="text-gray-800">{product.manufacturer}</strong>
+                By <strong className="text-gray-900">{product.manufacturer}</strong>
               </span>
-              <span>•</span>
+              <span aria-hidden="true">•</span>
               <span className="inline-flex items-center gap-1 text-[#0C831F] font-bold">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>In Stock • Ready to Dispatch</span>
@@ -253,12 +294,12 @@ export function MedicineDetailModal({
                 ₹{product.sellingPrice}
               </span>
               {product.mrp > product.sellingPrice && (
-                <span className="text-xs text-gray-400 line-through tabular-nums">
+                <span className="text-xs text-gray-500 line-through tabular-nums">
                   MRP ₹{product.mrp}
                 </span>
               )}
             </div>
-            <div className="text-[10.5px] text-gray-500 font-medium mt-0.5">
+            <div className="text-[11px] text-gray-600 font-medium mt-0.5">
               Inclusive of all taxes • {product.packSize}
             </div>
           </div>

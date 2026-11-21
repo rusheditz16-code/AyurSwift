@@ -6,256 +6,537 @@ import { Product } from '@/types';
 interface MedicinePackVisualProps {
   product: Product;
   className?: string;
+  compact?: boolean;
 }
 
-export function MedicinePackVisual({ product, className = 'w-full h-36' }: MedicinePackVisualProps) {
-  // Brand color theming
-  let primaryColor = '#065F46'; // Default Emerald
-  let accentColor = '#F59E0B';  // Gold
-  let labelBg = '#ECFDF5';
+interface BrandPalette {
+  primary: string;
+  primaryDark: string;
+  tint: string;
+  accent: string;
+  badgeText: string;
+}
 
-  if (product.brand === 'Zandu') {
-    primaryColor = '#991B1B'; // Rich Crimson / Red
-    accentColor = '#FBBF24';
-    labelBg = '#FEF2F2';
-  } else if (product.brand === 'Dabur') {
-    primaryColor = '#047857'; // Dabur Green
-    accentColor = '#F59E0B';
-    labelBg = '#ECFDF5';
-  } else if (product.brand === 'Himalaya') {
-    primaryColor = '#0F766E'; // Himalaya Teal
-    accentColor = '#EA580C'; // Himalaya Orange
-    labelBg = '#F0FDFA';
-  } else if (product.brand === 'Baidyanath') {
-    primaryColor = '#B45309'; // Classical Saffron Amber
-    accentColor = '#D97706';
-    labelBg = '#FFFBEB';
-  } else if (product.brand === 'Patanjali') {
-    primaryColor = '#C2410C'; // Patanjali Terracotta
-    accentColor = '#15803D';
-    labelBg = '#FFF7ED';
+function getBrandPalette(brand: string): BrandPalette {
+  switch (brand) {
+    case 'Zandu':
+      return {
+        primary: '#B91C1C',
+        primaryDark: '#7F1D1D',
+        tint: '#FEF2F2',
+        accent: '#F59E0B',
+        badgeText: '#991B1B',
+      };
+    case 'Dabur':
+      return {
+        primary: '#0C831F',
+        primaryDark: '#065F46',
+        tint: '#ECFDF3',
+        accent: '#D97706',
+        badgeText: '#065F46',
+      };
+    case 'Himalaya':
+      return {
+        primary: '#0F766E',
+        primaryDark: '#115E59',
+        tint: '#F0FDFA',
+        accent: '#EA580C',
+        badgeText: '#0F766E',
+      };
+    case 'Baidyanath':
+      return {
+        primary: '#B45309',
+        primaryDark: '#78350F',
+        tint: '#FFFBEB',
+        accent: '#0C831F',
+        badgeText: '#92400E',
+      };
+    case 'Patanjali':
+      return {
+        primary: '#C2410C',
+        primaryDark: '#9A3412',
+        tint: '#FFF7ED',
+        accent: '#15803D',
+        badgeText: '#9A3412',
+      };
+    case 'Dr. Ortho':
+      return {
+        primary: '#047857',
+        primaryDark: '#064E3B',
+        tint: '#ECFDF5',
+        accent: '#DC2626',
+        badgeText: '#065F46',
+      };
+    case 'Moov':
+      return {
+        primary: '#1D4ED8',
+        primaryDark: '#1E3A8A',
+        tint: '#EFF6FF',
+        accent: '#F59E0B',
+        badgeText: '#1E40AF',
+      };
+    case 'Vicco':
+      return {
+        primary: '#9F1239',
+        primaryDark: '#881337',
+        tint: '#FFF1F2',
+        accent: '#D97706',
+        badgeText: '#9F1239',
+      };
+    default:
+      return {
+        primary: '#0C831F',
+        primaryDark: '#065F46',
+        tint: '#ECFDF3',
+        accent: '#0F766E',
+        badgeText: '#065F46',
+      };
   }
+}
+
+function getShortLabel(name: string, brand: string): string {
+  const escaped = brand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const stripped = name.replace(new RegExp(`^${escaped}\\s*`, 'i'), '').trim();
+  const base = stripped || name;
+  return base.length > 22 ? `${base.slice(0, 20).trim()}…` : base;
+}
+
+export function MedicinePackVisual({
+  product,
+  className = 'w-full h-full',
+  compact = false,
+}: MedicinePackVisualProps) {
+  const palette = getBrandPalette(product.brand);
+  const shortLabel = getShortLabel(product.name, product.brand);
+  const brandUpper = (product.brand || 'AYURSWIFT').toUpperCase().slice(0, 12);
+  const packShort = (product.packSize || '').slice(0, 18);
+  const form = product.form;
 
   return (
-    <div className={`relative flex items-center justify-center p-2 select-none ${className}`}>
-      {/* Background Soft Glow */}
-      <div
-        className="absolute inset-0 opacity-15 rounded-2xl blur-lg"
-        style={{ backgroundColor: primaryColor }}
-      />
+    <div
+      role="img"
+      aria-label={`${product.name} (${product.packSize}) by ${product.brand} — branded ${form.toLowerCase()} pack illustration`}
+      className={`relative flex items-center justify-center select-none overflow-hidden ${className}`}
+    >
+      <svg
+        viewBox="0 0 220 165"
+        className="w-full h-full max-w-full max-h-full"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <radialGradient id={`bg-${product.id}`} cx="50%" cy="48%" r="52%">
+            <stop offset="0%" stopColor={palette.tint} stopOpacity="1" />
+            <stop offset="100%" stopColor="#F8FAFC" stopOpacity="0.2" />
+          </radialGradient>
+          <linearGradient id={`cap-${product.id}`} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor={palette.primaryDark} />
+            <stop offset="45%" stopColor={palette.primary} />
+            <stop offset="100%" stopColor={palette.primaryDark} />
+          </linearGradient>
+          <linearGradient id={`glass-${product.id}`} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#E5E7EB" />
+            <stop offset="28%" stopColor="#FFFFFF" />
+            <stop offset="72%" stopColor="#F9FAFB" />
+            <stop offset="100%" stopColor="#E2E8F0" />
+          </linearGradient>
+          <linearGradient id={`amber-${product.id}`} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#5C2808" />
+            <stop offset="35%" stopColor="#92400E" />
+            <stop offset="70%" stopColor="#78350F" />
+            <stop offset="100%" stopColor="#451A03" />
+          </linearGradient>
+        </defs>
 
-      {/* RENDER ACCORDING TO MEDICINE FORM */}
-      {product.form === 'Balm' && (
-        <div className="relative w-24 h-20 flex flex-col items-center justify-end">
-          {/* Lid */}
-          <div
-            className="w-20 h-5 rounded-t-lg shadow-md border-b border-black/20"
-            style={{ backgroundColor: primaryColor }}
-          >
-            <div className="w-full h-1 bg-white/30 rounded-t-lg" />
-          </div>
-          {/* Glass Jar Body */}
-          <div className="w-22 h-14 bg-gradient-to-b from-amber-50 to-amber-100 rounded-b-xl border border-amber-300 shadow-lg flex flex-col items-center justify-center p-1 relative overflow-hidden">
-            <div className="text-[9px] font-black tracking-tight" style={{ color: primaryColor }}>
-              {product.brand.toUpperCase()}
-            </div>
-            <div className="text-[7.5px] font-bold text-gray-800 line-clamp-1 max-w-[70px] text-center">
-              {product.name.replace(product.brand, '').trim()}
-            </div>
-            <div className="text-[6.5px] font-semibold text-gray-500 mt-0.5">
-              {product.packSize}
-            </div>
-            {/* Hologram strip */}
-            <div className="absolute bottom-0 inset-x-0 h-1 bg-gradient-to-r from-amber-400 via-emerald-400 to-amber-300 opacity-80" />
-          </div>
-        </div>
-      )}
+        {/* Soft Studio Halo & Pedestal Shadow */}
+        <rect x="6" y="6" width="208" height="153" rx="18" fill={`url(#bg-${product.id})`} />
+        <ellipse cx="110" cy="144" rx="54" ry="7" fill="#0F172A" fillOpacity="0.08" />
 
-      {product.form === 'Tablets' && (
-        <div className="relative w-20 h-28 flex flex-col items-center justify-end">
-          {/* Screw Cap */}
-          <div className="w-12 h-4 bg-white rounded-t-md shadow-xs border border-gray-300 flex items-center justify-center">
-            <div className="w-10 h-0.5 bg-gray-200" />
-          </div>
-          {/* Plastic White Bottle */}
-          <div className="w-16 h-22 bg-gradient-to-r from-gray-50 via-white to-gray-100 rounded-lg border border-gray-200 shadow-md flex flex-col items-center justify-between p-1.5 relative overflow-hidden">
-            <div className="w-full flex items-center justify-between">
-              <span className="text-[7px] font-black" style={{ color: primaryColor }}>
-                {product.brand}
-              </span>
-              <span className="text-[6px] font-bold text-emerald-700 bg-emerald-50 px-1 rounded">
-                OTC
-              </span>
-            </div>
-            {/* Center Label */}
-            <div
-              className="w-full py-1.5 px-1 rounded text-center my-auto border shadow-2xs"
-              style={{ backgroundColor: labelBg, borderColor: `${primaryColor}40` }}
+        {/* === FORM 1: BALM JAR === */}
+        {form === 'Balm' && (
+          <g>
+            {/* Screw Lid */}
+            <rect x="64" y="42" width="92" height="22" rx="7" fill={`url(#cap-${product.id})`} />
+            <rect x="68" y="46" width="84" height="3" rx="1.5" fill="#FFFFFF" fillOpacity="0.3" />
+            {/* Glass Jar Body */}
+            <rect
+              x="56"
+              y="62"
+              width="108"
+              height="78"
+              rx="16"
+              fill="#FEF3C7"
+              stroke="#D97706"
+              strokeWidth="1.5"
+              strokeOpacity="0.45"
+            />
+            <rect x="62" y="66" width="12" height="68" rx="6" fill="#FFFFFF" fillOpacity="0.45" />
+            {/* Wraparound Label */}
+            <rect
+              x="64"
+              y="74"
+              width="92"
+              height="54"
+              rx="8"
+              fill="#FFFFFF"
+              stroke={palette.primary}
+              strokeWidth="1.2"
+              strokeOpacity="0.35"
+            />
+            <rect x="64" y="74" width="92" height="15" rx="6" fill={palette.primary} />
+            <text
+              x="110"
+              y="84.5"
+              textAnchor="middle"
+              fill="#FFFFFF"
+              fontSize="9"
+              fontWeight="800"
+              letterSpacing="0.8"
             >
-              <div className="text-[8px] font-black line-clamp-1 leading-tight" style={{ color: primaryColor }}>
-                {product.name.replace(product.brand, '').trim()}
-              </div>
-              <div className="text-[6.5px] font-semibold text-gray-600 mt-0.5">
-                {product.packSize}
-              </div>
-            </div>
-            <div className="text-[6px] text-gray-400 tracking-wider">GENUINE AYURVEDA</div>
-          </div>
-        </div>
-      )}
+              {brandUpper}
+            </text>
+            {!compact && (
+              <>
+                <text x="110" y="102" textAnchor="middle" fill="#111827" fontSize="8.5" fontWeight="800">
+                  {shortLabel}
+                </text>
+                <rect x="82" y="109" width="56" height="13" rx="6.5" fill={palette.tint} />
+                <text x="110" y="118.5" textAnchor="middle" fill={palette.badgeText} fontSize="7.5" fontWeight="800">
+                  {packShort}
+                </text>
+              </>
+            )}
+          </g>
+        )}
 
-      {product.form === 'Syrup' && (
-        <div className="relative w-20 h-30 flex flex-col items-center justify-end">
-          {/* Syrup Cap */}
-          <div
-            className="w-9 h-4 rounded-t-sm shadow-xs border-b border-black/15"
-            style={{ backgroundColor: primaryColor }}
-          />
-          {/* Amber Bottle Neck */}
-          <div className="w-6 h-3 bg-gradient-to-r from-amber-800 to-amber-900 border-x border-amber-950" />
-          {/* Amber Glass Body */}
-          <div className="w-16 h-22 bg-gradient-to-r from-amber-900 via-amber-800 to-amber-950 rounded-b-lg border border-amber-950 shadow-lg flex flex-col items-center justify-center p-1 relative overflow-hidden">
+        {/* === FORM 2: SPRAY CAN === */}
+        {form === 'Spray' && (
+          <g>
+            {/* Nozzle Cap */}
+            <rect x="92" y="20" width="36" height="19" rx="5" fill="#F8FAFC" stroke="#CBD5E1" strokeWidth="1.2" />
+            <rect x="103" y="24" width="14" height="6" rx="2" fill={palette.primary} />
+            {/* Shoulder */}
+            <path d="M84 48 C84 38 92 37 110 37 C128 37 136 38 136 48 Z" fill="#E2E8F0" />
+            {/* Cylinder Body */}
+            <rect
+              x="80"
+              y="46"
+              width="60"
+              height="95"
+              rx="8"
+              fill={`url(#cap-${product.id})`}
+            />
             {/* Front Label */}
-            <div className="w-14 bg-white/95 rounded p-1 text-center shadow-xs">
-              <div className="text-[7.5px] font-black" style={{ color: primaryColor }}>
-                {product.brand}
-              </div>
-              <div className="text-[7.5px] font-black text-gray-900 line-clamp-1 leading-tight">
-                {product.name.replace(product.brand, '').trim()}
-              </div>
-              <div className="text-[6px] font-bold text-amber-700 bg-amber-50 rounded mt-0.5">
-                {product.packSize}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+            <rect x="85" y="60" width="50" height="68" rx="6" fill="#FFFFFF" />
+            <rect x="85" y="60" width="50" height="14" rx="5" fill={palette.accent} />
+            <text x="110" y="70" textAnchor="middle" fill="#111827" fontSize="8.5" fontWeight="900">
+              {brandUpper}
+            </text>
+            {!compact && (
+              <>
+                <text x="110" y="88" textAnchor="middle" fill="#111827" fontSize="7.5" fontWeight="800">
+                  PAIN SPRAY
+                </text>
+                <text x="110" y="102" textAnchor="middle" fill="#475569" fontSize="7" fontWeight="700">
+                  {packShort}
+                </text>
+                <rect x="92" y="110" width="36" height="11" rx="5.5" fill={palette.tint} />
+                <text x="110" y="118" textAnchor="middle" fill={palette.badgeText} fontSize="6.5" fontWeight="800">
+                  AYURVEDIC
+                </text>
+              </>
+            )}
+          </g>
+        )}
 
-      {product.form === 'Oil' && (
-        <div className="relative w-20 h-30 flex flex-col items-center justify-end">
-          {/* Oil Cap */}
-          <div
-            className="w-8 h-4 rounded-t-md shadow-xs"
-            style={{ backgroundColor: primaryColor }}
-          />
-          {/* Clear Bottle Neck */}
-          <div className="w-7 h-2 bg-gradient-to-r from-emerald-100 to-emerald-50 border-x border-emerald-200" />
-          {/* Tall Bottle Body */}
-          <div className="w-16 h-23 bg-gradient-to-r from-emerald-50/80 via-white to-emerald-100/80 rounded-b-xl border border-emerald-200 shadow-md flex flex-col items-center justify-between p-1.5 relative overflow-hidden">
-            <div className="w-full flex justify-between items-center">
-              <span className="text-[7px] font-black" style={{ color: primaryColor }}>
-                {product.brand}
-              </span>
-              <span className="text-[6px] text-amber-600 font-bold">100% PURE</span>
-            </div>
-            <div
-              className="w-full py-1.5 px-0.5 rounded text-center border"
-              style={{ backgroundColor: labelBg, borderColor: `${primaryColor}30` }}
-            >
-              <div className="text-[8px] font-black line-clamp-1 leading-tight" style={{ color: primaryColor }}>
-                {product.name.replace(product.brand, '').trim()}
-              </div>
-              <div className="text-[6.5px] font-bold text-emerald-800 mt-0.5">
-                {product.packSize}
-              </div>
-            </div>
-            <div className="text-[6px] text-gray-500 font-medium">AYURVEDIC OIL</div>
-          </div>
-        </div>
-      )}
+        {/* === FORM 3: TABLETS BOTTLE === */}
+        {form === 'Tablets' && (
+          <g>
+            {/* Ribbed Screw Cap */}
+            <rect x="83" y="24" width="54" height="17" rx="5" fill="#F8FAFC" stroke="#CBD5E1" strokeWidth="1.3" />
+            <line x1="92" y1="27" x2="92" y2="38" stroke="#CBD5E1" strokeWidth="1.2" />
+            <line x1="101" y1="27" x2="101" y2="38" stroke="#CBD5E1" strokeWidth="1.2" />
+            <line x1="110" y1="27" x2="110" y2="38" stroke="#CBD5E1" strokeWidth="1.2" />
+            <line x1="119" y1="27" x2="119" y2="38" stroke="#CBD5E1" strokeWidth="1.2" />
+            <line x1="128" y1="27" x2="128" y2="38" stroke="#CBD5E1" strokeWidth="1.2" />
+            {/* Bottle Body */}
+            <rect
+              x="71"
+              y="40"
+              width="78"
+              height="100"
+              rx="14"
+              fill={`url(#glass-${product.id})`}
+              stroke="#CBD5E1"
+              strokeWidth="1.4"
+            />
+            {/* Label */}
+            <rect
+              x="76"
+              y="55"
+              width="68"
+              height="70"
+              rx="7"
+              fill="#FFFFFF"
+              stroke={palette.primary}
+              strokeWidth="1.2"
+              strokeOpacity="0.4"
+            />
+            <rect x="76" y="55" width="68" height="16" rx="5" fill={palette.primary} />
+            <text x="110" y="66" textAnchor="middle" fill="#FFFFFF" fontSize="8.5" fontWeight="800" letterSpacing="0.5">
+              {brandUpper}
+            </text>
+            {!compact && (
+              <>
+                <text x="110" y="86" textAnchor="middle" fill="#111827" fontSize="8" fontWeight="800">
+                  {shortLabel.slice(0, 15)}
+                </text>
+                <rect x="83" y="95" width="54" height="14" rx="7" fill={palette.tint} />
+                <text x="110" y="104.5" textAnchor="middle" fill={palette.badgeText} fontSize="7" fontWeight="800">
+                  {packShort}
+                </text>
+                <text x="110" y="119" textAnchor="middle" fill="#64748B" fontSize="6.5" fontWeight="700">
+                  OTC AYURVEDA
+                </text>
+              </>
+            )}
+          </g>
+        )}
 
-      {product.form === 'Churna' && (
-        <div className="relative w-22 h-26 flex flex-col items-center justify-end">
-          {/* Tub Lid */}
-          <div
-            className="w-20 h-4 rounded-t-lg shadow-sm"
-            style={{ backgroundColor: primaryColor }}
-          />
-          {/* Tub Body */}
-          <div className="w-21 h-20 bg-gradient-to-r from-stone-50 via-white to-stone-100 rounded-b-xl border border-gray-200 shadow-md flex flex-col items-center justify-center p-2 relative overflow-hidden">
-            <div className="text-[8px] font-black uppercase tracking-wider" style={{ color: primaryColor }}>
-              {product.brand}
-            </div>
-            <div className="text-[8px] font-black text-gray-900 text-center line-clamp-2 leading-tight mt-0.5">
-              {product.name.replace(product.brand, '').trim()}
-            </div>
-            <div className="mt-1 bg-amber-100/80 text-amber-900 text-[6.5px] font-bold px-1.5 py-0.5 rounded">
-              {product.packSize}
-            </div>
-            {/* Base seal */}
-            <div className="absolute bottom-1 w-16 h-0.5 bg-gray-200" />
-          </div>
-        </div>
-      )}
+        {/* === FORM 4: SYRUP AMBER BOTTLE === */}
+        {form === 'Syrup' && (
+          <g>
+            {/* Cap */}
+            <rect x="93" y="18" width="34" height="15" rx="4" fill={`url(#cap-${product.id})`} />
+            {/* Bottle Neck */}
+            <rect x="98" y="33" width="24" height="14" fill={`url(#amber-${product.id})`} />
+            {/* Shoulder + Body */}
+            <path
+              d="M78 62 C78 48 94 46 98 46 L122 46 C126 46 142 48 142 62 L142 132 C142 137 137 141 132 141 L88 141 C83 141 78 137 78 132 Z"
+              fill={`url(#amber-${product.id})`}
+            />
+            {/* Glass Highlight */}
+            <rect x="84" y="60" width="7" height="72" rx="3.5" fill="#FFFFFF" fillOpacity="0.18" />
+            {/* Label */}
+            <rect x="84" y="68" width="52" height="58" rx="6" fill="#FFFFFF" />
+            <rect x="84" y="68" width="52" height="14" rx="5" fill={palette.primary} />
+            <text x="110" y="78" textAnchor="middle" fill="#FFFFFF" fontSize="8" fontWeight="800">
+              {brandUpper}
+            </text>
+            {!compact && (
+              <>
+                <text x="110" y="95" textAnchor="middle" fill="#111827" fontSize="7.5" fontWeight="800">
+                  {shortLabel.slice(0, 14)}
+                </text>
+                <rect x="89" y="103" width="42" height="13" rx="6.5" fill={palette.tint} />
+                <text x="110" y="112" textAnchor="middle" fill={palette.badgeText} fontSize="6.8" fontWeight="800">
+                  {packShort}
+                </text>
+              </>
+            )}
+          </g>
+        )}
 
-      {product.form === 'Capsules' && (
-        <div className="relative w-24 h-24 flex items-center justify-center">
-          {/* Foil Blister Pack */}
-          <div className="w-22 h-18 bg-gradient-to-br from-gray-100 via-gray-200 to-gray-300 rounded-xl border border-gray-300 shadow-md p-1.5 flex flex-col justify-between relative overflow-hidden">
-            {/* Blister bubbles */}
-            <div className="grid grid-cols-5 gap-1.5 justify-items-center">
-              {[...Array(10)].map((_, i) => (
-                <div
-                  key={i}
-                  className="w-2.5 h-4 rounded-full shadow-inner border border-white/60"
-                  style={{
-                    backgroundColor: i % 2 === 0 ? primaryColor : accentColor,
-                  }}
+        {/* === FORM 5: HERBAL OIL BOTTLE === */}
+        {form === 'Oil' && (
+          <g>
+            {/* Cap */}
+            <rect x="94" y="18" width="32" height="15" rx="4" fill={`url(#cap-${product.id})`} />
+            {/* Neck */}
+            <rect x="99" y="33" width="22" height="12" fill="#ECFDF5" stroke="#A7F3D0" strokeWidth="1" />
+            {/* Oil Bottle Body */}
+            <rect
+              x="76"
+              y="44"
+              width="68"
+              height="97"
+              rx="14"
+              fill="#FEFCE8"
+              stroke={palette.primary}
+              strokeWidth="1.4"
+              strokeOpacity="0.4"
+            />
+            <rect x="81" y="50" width="8" height="84" rx="4" fill="#FFFFFF" fillOpacity="0.55" />
+            {/* Label */}
+            <rect x="82" y="60" width="56" height="66" rx="7" fill="#FFFFFF" stroke={palette.primary} strokeOpacity="0.3" />
+            <rect x="82" y="60" width="56" height="15" rx="5" fill={palette.primary} />
+            <text x="110" y="70.5" textAnchor="middle" fill="#FFFFFF" fontSize="8" fontWeight="800">
+              {brandUpper}
+            </text>
+            {!compact && (
+              <>
+                <text x="110" y="90" textAnchor="middle" fill="#111827" fontSize="7.8" fontWeight="800">
+                  {shortLabel.slice(0, 14)}
+                </text>
+                <rect x="88" y="98" width="44" height="13" rx="6.5" fill={palette.tint} />
+                <text x="110" y="107" textAnchor="middle" fill={palette.badgeText} fontSize="6.8" fontWeight="800">
+                  {packShort}
+                </text>
+                <text x="110" y="121" textAnchor="middle" fill="#64748B" fontSize="6" fontWeight="700">
+                  HERBAL OIL
+                </text>
+              </>
+            )}
+          </g>
+        )}
+
+        {/* === FORM 6: CHURNA / CHYAWANPRASH JAR === */}
+        {form === 'Churna' && (
+          <g>
+            {/* Wide Lid */}
+            <rect x="64" y="34" width="92" height="18" rx="6" fill={`url(#cap-${product.id})`} />
+            <rect x="68" y="38" width="84" height="3" rx="1.5" fill="#FFFFFF" fillOpacity="0.28" />
+            {/* Wide Container Body */}
+            <rect
+              x="60"
+              y="51"
+              width="100"
+              height="90"
+              rx="14"
+              fill={`url(#glass-${product.id})`}
+              stroke="#CBD5E1"
+              strokeWidth="1.4"
+            />
+            {/* Label */}
+            <rect
+              x="67"
+              y="62"
+              width="86"
+              height="68"
+              rx="8"
+              fill="#FFFFFF"
+              stroke={palette.primary}
+              strokeWidth="1.2"
+              strokeOpacity="0.35"
+            />
+            <rect x="67" y="62" width="86" height="16" rx="6" fill={palette.primary} />
+            <text x="110" y="73" textAnchor="middle" fill="#FFFFFF" fontSize="8.8" fontWeight="800" letterSpacing="0.6">
+              {brandUpper}
+            </text>
+            {!compact && (
+              <>
+                <text x="110" y="94" textAnchor="middle" fill="#111827" fontSize="8.3" fontWeight="800">
+                  {shortLabel.slice(0, 17)}
+                </text>
+                <rect x="80" y="104" width="60" height="15" rx="7.5" fill={palette.tint} />
+                <text x="110" y="114.5" textAnchor="middle" fill={palette.badgeText} fontSize="7.3" fontWeight="800">
+                  {packShort}
+                </text>
+              </>
+            )}
+          </g>
+        )}
+
+        {/* === FORM 7: CAPSULES / PEARLS BLISTER STRIP === */}
+        {form === 'Capsules' && (
+          <g>
+            {/* Foil Strip */}
+            <rect
+              x="44"
+              y="42"
+              width="132"
+              height="86"
+              rx="14"
+              fill="#E2E8F0"
+              stroke="#94A3B8"
+              strokeWidth="1.5"
+            />
+            <rect x="50" y="48" width="120" height="74" rx="10" fill="#F8FAFC" />
+            {/* 10 Capsule / Pearl Blisters */}
+            {[0, 1, 2, 3, 4].map((col) => (
+              <g key={col}>
+                <rect
+                  x={60 + col * 21}
+                  y="56"
+                  width="15"
+                  height="21"
+                  rx="7.5"
+                  fill={palette.primary}
+                  fillOpacity="0.88"
                 />
-              ))}
-            </div>
-            <div className="flex items-center justify-between text-[7px] font-black px-1 mt-1 text-gray-800">
-              <span style={{ color: primaryColor }}>{product.brand}</span>
-              <span className="text-[6.5px] font-mono text-gray-600">{product.packSize}</span>
-            </div>
-          </div>
-        </div>
-      )}
+                <ellipse cx={65 + col * 21} cy="62" rx="2.5" ry="4" fill="#FFFFFF" fillOpacity="0.45" />
+                <rect
+                  x={60 + col * 21}
+                  y="83"
+                  width="15"
+                  height="21"
+                  rx="7.5"
+                  fill={palette.primary}
+                  fillOpacity="0.88"
+                />
+                <ellipse cx={65 + col * 21} cy="89" rx="2.5" ry="4" fill="#FFFFFF" fillOpacity="0.45" />
+              </g>
+            ))}
+            {!compact && (
+              <>
+                <rect x="56" y="108" width="108" height="12" rx="4" fill={palette.tint} />
+                <text x="110" y="116.5" textAnchor="middle" fill={palette.badgeText} fontSize="7.2" fontWeight="800">
+                  {brandUpper} • {packShort}
+                </text>
+              </>
+            )}
+          </g>
+        )}
 
-      {product.form === 'Gel' && (
-        <div className="relative w-18 h-28 flex flex-col items-center justify-end">
-          {/* Tube Cap */}
-          <div className="w-10 h-3 bg-gray-200 rounded-b-md shadow-inner border border-gray-300" />
-          {/* Tube Body */}
-          <div className="w-14 h-22 bg-gradient-to-b from-emerald-100 via-emerald-50 to-white rounded-t-xl border border-emerald-200 shadow-md flex flex-col items-center justify-between p-1.5 relative">
-            <div className="w-full text-center">
-              <div className="text-[7.5px] font-black" style={{ color: primaryColor }}>
-                {product.brand}
-              </div>
-              <div className="text-[7.5px] font-black text-gray-900 line-clamp-1">
-                {product.name.replace(product.brand, '').trim()}
-              </div>
-            </div>
-            <div className="text-[6.5px] font-bold text-emerald-800 bg-emerald-50 px-1 py-0.5 rounded">
-              {product.packSize}
-            </div>
-          </div>
-        </div>
-      )}
+        {/* === FORM 8: GEL / PASTE TUBE === */}
+        {form === 'Gel' && (
+          <g>
+            {/* Crimp Top */}
+            <rect x="78" y="20" width="64" height="8" rx="2" fill={palette.primaryDark} />
+            {/* Tapered Tube Body */}
+            <path
+              d="M80 28 L140 28 L131 124 L89 124 Z"
+              fill={`url(#glass-${product.id})`}
+              stroke="#CBD5E1"
+              strokeWidth="1.4"
+            />
+            {/* Flip Cap at Bottom */}
+            <rect x="93" y="124" width="34" height="16" rx="4" fill={`url(#cap-${product.id})`} />
+            {/* Label */}
+            <rect x="86" y="42" width="48" height="68" rx="6" fill="#FFFFFF" stroke={palette.primary} strokeOpacity="0.35" />
+            <rect x="86" y="42" width="48" height="15" rx="5" fill={palette.primary} />
+            <text x="110" y="52.5" textAnchor="middle" fill="#FFFFFF" fontSize="8" fontWeight="800">
+              {brandUpper}
+            </text>
+            {!compact && (
+              <>
+                <text x="110" y="72" textAnchor="middle" fill="#111827" fontSize="7.5" fontWeight="800">
+                  {shortLabel.slice(0, 12)}
+                </text>
+                <rect x="91" y="82" width="38" height="13" rx="6.5" fill={palette.tint} />
+                <text x="110" y="91" textAnchor="middle" fill={palette.badgeText} fontSize="6.8" fontWeight="800">
+                  {packShort}
+                </text>
+              </>
+            )}
+          </g>
+        )}
 
-      {product.form === 'Husk' && (
-        <div className="relative w-22 h-26 flex flex-col items-center justify-end">
-          {/* Box Header */}
-          <div
-            className="w-20 h-4 rounded-t-md shadow-xs border-b border-black/10 flex items-center justify-center"
-            style={{ backgroundColor: primaryColor }}
-          >
-            <span className="text-[7px] text-white font-extrabold">{product.brand}</span>
-          </div>
-          {/* Carton Box */}
-          <div className="w-20 h-20 bg-gradient-to-b from-amber-50 to-white rounded-b-md border border-amber-200 shadow-md flex flex-col items-center justify-center p-1.5 relative">
-            <div className="text-[8.5px] font-black text-amber-950 text-center leading-tight">
-              ISABGOL
-            </div>
-            <div className="text-[7px] text-gray-600 font-semibold text-center mt-0.5">
-              Pure Psyllium
-            </div>
-            <div className="mt-1 bg-emerald-100 text-emerald-900 text-[6.5px] font-bold px-1.5 py-0.5 rounded">
-              {product.packSize}
-            </div>
-          </div>
-        </div>
-      )}
+        {/* === FORM 9: HUSK / CARTON BOX === */}
+        {form === 'Husk' && (
+          <g>
+            {/* Box Top */}
+            <rect x="66" y="28" width="88" height="113" rx="10" fill="#FFFFFF" stroke={palette.primary} strokeWidth="1.5" strokeOpacity="0.45" />
+            <rect x="66" y="28" width="88" height="26" rx="9" fill={`url(#cap-${product.id})`} />
+            <text x="110" y="44.5" textAnchor="middle" fill="#FFFFFF" fontSize="9.5" fontWeight="800" letterSpacing="0.8">
+              {brandUpper}
+            </text>
+            {!compact && (
+              <>
+                <text x="110" y="76" textAnchor="middle" fill="#111827" fontSize="9" fontWeight="900">
+                  {shortLabel.slice(0, 16)}
+                </text>
+                <text x="110" y="91" textAnchor="middle" fill="#64748B" fontSize="7.5" fontWeight="700">
+                  PURE AYURVEDIC HUSK
+                </text>
+                <rect x="80" y="104" width="60" height="16" rx="8" fill={palette.tint} />
+                <text x="110" y="115" textAnchor="middle" fill={palette.badgeText} fontSize="7.8" fontWeight="800">
+                  {packShort}
+                </text>
+              </>
+            )}
+          </g>
+        )}
+      </svg>
     </div>
   );
 }

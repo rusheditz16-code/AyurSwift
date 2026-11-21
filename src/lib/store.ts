@@ -1,7 +1,7 @@
 'use client';
 
 import { Product, Order, MerchantSettings, DeliveryType, PaymentMethod } from '@/types';
-import { INITIAL_PRODUCTS, DEFAULT_SETTINGS } from './initialData';
+import { INITIAL_PRODUCTS, DEFAULT_SETTINGS, isVerifiedProductImageUrl } from './initialData';
 
 const STORAGE_KEYS = {
   PRODUCTS: 'ayurswift_products_v3',
@@ -77,7 +77,7 @@ export function saveStoredSettings(settings: MerchantSettings) {
   localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(safeSettings));
 }
 
-// Retrieve products (with fallback to INITIAL_PRODUCTS)
+// Retrieve products (with fallback to INITIAL_PRODUCTS; strips unverified Unsplash stock URLs)
 export function getStoredProducts(): Product[] {
   if (typeof window === 'undefined') return INITIAL_PRODUCTS;
   try {
@@ -87,7 +87,31 @@ export function getStoredProducts(): Product[] {
       return INITIAL_PRODUCTS;
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_PRODUCTS;
+    if (!Array.isArray(parsed) || parsed.length === 0) return INITIAL_PRODUCTS;
+
+    const cleaned: Product[] = parsed.map((p: Product) => {
+      const cleanImg = isVerifiedProductImageUrl(p.imageUrl) ? p.imageUrl : '';
+      const cleanImages = Array.isArray(p.images)
+        ? p.images.filter((u) => isVerifiedProductImageUrl(u))
+        : [];
+      const fixedBrand = p.id === 'prod-004' && p.brand === 'Other' ? 'Moov' : p.brand;
+      const fixedForm = p.id === 'prod-004' && p.form === 'Oil' ? 'Spray' : p.form;
+      const fixedCategory =
+        p.id === 'prod-018' && p.category === 'Daily Wellness' ? 'Liver & Detox' : p.category;
+
+      return {
+        ...p,
+        brand: fixedBrand,
+        form: fixedForm,
+        category: fixedCategory,
+        imageUrl: cleanImg,
+        images: cleanImages,
+        rating: undefined,
+        reviewCount: undefined,
+      };
+    });
+
+    return cleaned;
   } catch {
     return INITIAL_PRODUCTS;
   }

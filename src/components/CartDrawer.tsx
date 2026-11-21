@@ -25,6 +25,7 @@ import {
   MerchantSettings,
   Product,
 } from '@/types';
+import { DELIVERY_PROMISE, isVerifiedProductImageUrl } from '@/lib/initialData';
 import { MedicinePackVisual } from '@/components/MedicinePackVisual';
 
 interface CartDrawerProps {
@@ -110,7 +111,6 @@ export function CartDrawer({
     const inCartIds = new Set(cart.map((c) => c.product.id));
     return products
       .filter((p) => p.isLive && p.stockQuantity > 0 && !inCartIds.has(p.id))
-      .sort((a, b) => b.reviewCount - a.reviewCount)
       .slice(0, 6);
   }, [products, cart]);
 
@@ -211,13 +211,19 @@ export function CartDrawer({
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cart-drawer-title"
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-[460px] bg-[#F5F7FA] text-gray-900 h-full flex flex-col shadow-2xl animate-drawer-right"
       >
         {/* Top Sticky Header */}
         <div className="px-4 py-3.5 bg-white border-b border-gray-200 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
-            <h2 className="font-extrabold text-base sm:text-lg text-gray-950 tracking-tight">
+            <h2
+              id="cart-drawer-title"
+              className="font-extrabold text-base sm:text-lg text-gray-950 tracking-tight"
+            >
               My Cart
             </h2>
             {itemCount > 0 && (
@@ -247,7 +253,7 @@ export function CartDrawer({
                 Your cart is empty
               </h3>
               <p className="text-xs text-gray-500 max-w-xs mx-auto leading-relaxed">
-                Add authentic Ayurvedic remedies and everyday health essentials for 30-min local delivery.
+                Add authentic Ayurvedic remedies and everyday health essentials for {DELIVERY_PROMISE.localTimeShort} local delivery.
               </p>
               <button
                 type="button"
@@ -337,15 +343,17 @@ export function CartDrawer({
                 <div className="divide-y divide-gray-100">
                   {cart.map((item) => (
                     <div key={item.product.id} className="p-3 flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-[#F8FAFC] border border-gray-200/80 p-1 flex items-center justify-center shrink-0 overflow-hidden">
-                        {item.product.imageUrl ? (
+                      <div className="w-12 h-12 rounded-xl bg-[#F7FAF8] border border-gray-200/80 p-1 flex items-center justify-center shrink-0 overflow-hidden">
+                        {isVerifiedProductImageUrl(item.product.imageUrl) ? (
                           <img
                             src={item.product.imageUrl}
-                            alt={item.product.name}
+                            alt={`${item.product.name} (${item.product.packSize})`}
+                            width={48}
+                            height={48}
                             className="w-full h-full object-contain"
                           />
                         ) : (
-                          <MedicinePackVisual product={item.product} className="w-full h-full" />
+                          <MedicinePackVisual product={item.product} compact className="w-full h-full" />
                         )}
                       </div>
 
@@ -413,15 +421,17 @@ export function CartDrawer({
                         className="w-[126px] shrink-0 rounded-xl border border-gray-200/80 bg-[#F8FAFC] p-2 flex flex-col justify-between gap-1.5"
                       >
                         <div>
-                          <div className="h-14 bg-white rounded-lg p-1 flex items-center justify-center border border-gray-100 mb-1.5">
-                            {prod.imageUrl ? (
+                          <div className="h-14 bg-[#F7FAF8] rounded-lg p-1 flex items-center justify-center border border-gray-100 mb-1.5 overflow-hidden">
+                            {isVerifiedProductImageUrl(prod.imageUrl) ? (
                               <img
                                 src={prod.imageUrl}
-                                alt={prod.name}
+                                alt={`${prod.name} (${prod.packSize})`}
+                                width={80}
+                                height={56}
                                 className="max-h-full max-w-full object-contain"
                               />
                             ) : (
-                              <MedicinePackVisual product={prod} className="w-full h-full" />
+                              <MedicinePackVisual product={prod} compact className="w-full h-full" />
                             )}
                           </div>
                           <div className="text-[11px] font-bold text-gray-900 line-clamp-2 leading-tight min-h-[26px]">
@@ -539,60 +549,96 @@ export function CartDrawer({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="Full name *"
+                  <div>
+                    <label htmlFor="checkout-name" className="sr-only">
+                      Full name
+                    </label>
+                    <input
+                      id="checkout-name"
+                      type="text"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      placeholder="Full name *"
+                      required
+                      className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-500 focus:bg-white focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="checkout-phone" className="sr-only">
+                      10-digit mobile number
+                    </label>
+                    <input
+                      id="checkout-phone"
+                      type="tel"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      placeholder="10-digit mobile *"
+                      maxLength={12}
+                      required
+                      className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-500 focus:bg-white focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="checkout-address" className="sr-only">
+                    Delivery street address and locality
+                  </label>
+                  <textarea
+                    id="checkout-address"
+                    value={deliveryAddress}
+                    onChange={(e) => setDeliveryAddress(e.target.value)}
+                    placeholder="House / Flat no., Building, Street, Locality *"
+                    rows={2}
                     required
-                    className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15"
-                  />
-                  <input
-                    type="tel"
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    placeholder="10-digit mobile *"
-                    maxLength={12}
-                    required
-                    className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15"
+                    className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-500 focus:bg-white focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15 resize-none"
                   />
                 </div>
 
-                <textarea
-                  value={deliveryAddress}
-                  onChange={(e) => setDeliveryAddress(e.target.value)}
-                  placeholder="House / Flat no., Building, Street, Locality *"
-                  rows={2}
-                  required
-                  className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15 resize-none"
-                />
-
-                <input
-                  type="text"
-                  value={landmark}
-                  onChange={(e) => setLandmark(e.target.value)}
-                  placeholder="Nearby landmark (optional)"
-                  className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15"
-                />
+                <div>
+                  <label htmlFor="checkout-landmark" className="sr-only">
+                    Nearby landmark (optional)
+                  </label>
+                  <input
+                    id="checkout-landmark"
+                    type="text"
+                    value={landmark}
+                    onChange={(e) => setLandmark(e.target.value)}
+                    placeholder="Nearby landmark (optional)"
+                    className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-500 focus:bg-white focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15"
+                  />
+                </div>
 
                 <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    placeholder="City *"
-                    required
-                    className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15"
-                  />
-                  <input
-                    type="text"
-                    value={pincode}
-                    onChange={(e) => setPincode(e.target.value)}
-                    placeholder="6-digit pincode *"
-                    maxLength={6}
-                    required
-                    className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15 font-mono"
-                  />
+                  <div>
+                    <label htmlFor="checkout-city" className="sr-only">
+                      City
+                    </label>
+                    <input
+                      id="checkout-city"
+                      type="text"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      placeholder="City *"
+                      required
+                      className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-500 focus:bg-white focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="checkout-pincode" className="sr-only">
+                      6-digit pincode
+                    </label>
+                    <input
+                      id="checkout-pincode"
+                      type="text"
+                      value={pincode}
+                      onChange={(e) => setPincode(e.target.value)}
+                      placeholder="6-digit pincode *"
+                      maxLength={6}
+                      required
+                      className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-500 focus:bg-white focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15 font-mono"
+                    />
+                  </div>
                 </div>
               </div>
 

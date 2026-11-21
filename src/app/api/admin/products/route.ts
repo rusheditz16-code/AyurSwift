@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { INITIAL_PRODUCTS } from '@/lib/initialData';
+import { INITIAL_PRODUCTS, isVerifiedProductImageUrl } from '@/lib/initialData';
 import { Product } from '@/types';
 import {
   checkRateLimit,
@@ -71,6 +71,11 @@ export async function GET(request: NextRequest) {
       const rawStock = Math.max(0, Number(row.stock_quantity ?? base?.stockQuantity ?? 0));
       const isLive = Boolean(row.is_live ?? base?.isLive ?? true) && rawStock > 0;
 
+      const rawImage = String(row.image_url ?? base?.imageUrl ?? '');
+      const safePrimary = isVerifiedProductImageUrl(rawImage) ? rawImage.trim() : '';
+      const rawImgs = Array.isArray(row.images) ? (row.images as string[]) : base?.images || [];
+      const safeImgs = rawImgs.filter((u) => isVerifiedProductImageUrl(u));
+
       return {
         id,
         name: String(row.name || base?.name || ''),
@@ -88,17 +93,13 @@ export async function GET(request: NextRequest) {
             : 0
           : rawStock,
         isLive,
-        rating: base?.rating ?? 4.8,
-        reviewCount: base?.reviewCount ?? 120,
         badgeText: base?.badgeText,
         indications: String(row.indications ?? base?.indications ?? ''),
         dosage: String(row.dosage ?? base?.dosage ?? ''),
         composition: String(row.composition ?? base?.composition ?? ''),
         safetyAdvice: base?.safetyAdvice,
-        imageUrl: String(row.image_url ?? base?.imageUrl ?? ''),
-        images: Array.isArray(row.images) && row.images.length > 0
-          ? (row.images as string[])
-          : base?.images || [],
+        imageUrl: safePrimary,
+        images: safeImgs,
       };
     });
 

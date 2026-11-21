@@ -1,5 +1,28 @@
 import { Product, MerchantSettings } from '@/types';
 
+export const DELIVERY_PROMISE = {
+  localTimeShort: '30–45 mins',
+  localTimeBadge: '30–45 MINS',
+  localLabel: 'Bhavnagar Express (30–45 mins)',
+  courierTimeShort: '2–4 days',
+  courierTimeBadge: '2–4 DAYS',
+  courierLabel: 'All-India Courier (2–4 days)',
+} as const;
+
+export function isVerifiedProductImageUrl(url?: string | null): boolean {
+  if (!url) return false;
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+  // Never display generic Unsplash stock photos as medicine packshots
+  if (/images\.unsplash\.com/i.test(trimmed)) return false;
+  return (
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('/') ||
+    trimmed.startsWith('data:image/')
+  );
+}
+
 export const DEFAULT_SETTINGS: MerchantSettings = {
   storeName: 'AyurSwift',
   tagline: 'Tradition Meets Speed',
@@ -29,18 +52,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellingPrice: 75,
     stockQuantity: 36,
     isLive: true,
-    rating: 4.8,
-    reviewCount: 3120,
-    badgeText: 'Top Bestseller',
+    badgeText: 'Fast Action',
     indications: 'Targeted relief for headaches, neck stiffness, back pain & joint aches.',
     dosage: 'Massage gently over affected forehead or joint 2-3 times daily.',
     composition: 'Mentha Sp. Satva (14%), Gaultheria Oil (12%), Eucalyptus Oil (2%), Ointment base q.s.',
     safetyAdvice: 'For external application only. Do not apply on broken or irritated skin.',
-    imageUrl: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=600&auto=format&fit=crop&q=80',
-    images: [
-      'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=600&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1587854692152-cbe660dbde88?w=600&auto=format&fit=crop&q=80'
-    ]
+    imageUrl: '',
+    images: [],
   },
   {
     id: 'prod-002',
@@ -55,18 +73,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellingPrice: 192,
     stockQuantity: 18,
     isLive: true,
-    rating: 4.9,
-    reviewCount: 860,
     badgeText: 'Classical Oil',
     indications: 'Classical Ayurvedic medicated oil for chronic arthritis, knee pain, sciatica & joint mobility.',
     dosage: 'Gently warm a small quantity and massage in circular motion for 10-15 minutes.',
     composition: 'Bilva, Ashwagandha, Bala, Atibala, Patala, Agnimantha processed in Pure Til Taila.',
     safetyAdvice: 'Best used lukewarm. For external use only.',
-    imageUrl: 'https://images.unsplash.com/photo-1608248597359-54845585b4d7?w=600&auto=format&fit=crop&q=80',
-    images: [
-      'https://images.unsplash.com/photo-1608248597359-54845585b4d7?w=600&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?w=600&auto=format&fit=crop&q=80'
-    ]
+    imageUrl: '',
+    images: [],
   },
   {
     id: 'prod-003',
@@ -81,36 +94,34 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellingPrice: 255,
     stockQuantity: 14,
     isLive: true,
-    rating: 4.8,
-    reviewCount: 2410,
     badgeText: '8 Herbal Oils',
     indications: 'Synergistic formulation of 8 botanical oils specifically crafted for senior knee stiffness and back spasms.',
     dosage: 'Apply 5ml to 10ml and massage gently until absorbed.',
     composition: 'Alsi Oil, Kapoor Oil, Pudina Oil, Cheed Oil, Gandhapura, Jyotishmati Oil.',
     safetyAdvice: 'Avoid hot water bath immediately after application.',
-    imageUrl: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=600&auto=format&fit=crop&q=80'
+    imageUrl: '',
+    images: [],
   },
   {
     id: 'prod-004',
     name: 'Moov Ayurvedic Pain Relief Spray',
-    brand: 'Other',
+    brand: 'Moov',
     category: 'Joint & Muscle Pain',
     manufacturer: 'Reckitt Benckiser Healthcare India Pvt. Ltd.',
-    form: 'Oil',
+    form: 'Spray',
     packSize: '80g Spray Can',
     agencyCostPrice: 142,
     mrp: 190,
     sellingPrice: 168,
     stockQuantity: 22,
     isLive: true,
-    rating: 4.7,
-    reviewCount: 1940,
-    badgeText: 'Instant Action',
+    badgeText: 'Instant Spray',
     indications: 'Natural Ayurvedic formula that penetrates deep to relax muscles and reduce joint swelling.',
     dosage: 'Hold can 5 cm away from skin and spray uniformly on painful muscle area.',
     composition: 'Wintergreen Oil 15%, Nilgiri Oil 2%, Pudina Extract 5%, Turpentine Oil 10%',
     safetyAdvice: 'Flammable aerosol. Do not puncture or expose to temperatures exceeding 50°C.',
-    imageUrl: 'https://images.unsplash.com/photo-1584017911766-d451b3d0e843?w=600&auto=format&fit=crop&q=80'
+    imageUrl: '',
+    images: [],
   },
   {
     id: 'prod-005',
@@ -125,14 +136,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellingPrice: 210,
     stockQuantity: 20,
     isLive: true,
-    rating: 4.8,
-    reviewCount: 1530,
     badgeText: 'Joint Mobility',
     indications: 'Herbal anti-inflammatory and pain manager for osteoarthritis, cervical spondylosis and gout.',
     dosage: '1 tablet twice daily after meals with water.',
     composition: 'Shallaki (Boswellia serrata) 240mg, Guggulu (Commiphora wightii) 200mg, Alpinia galanga.',
     safetyAdvice: 'Not recommended during pregnancy.',
-    imageUrl: 'https://images.unsplash.com/photo-1550572017-edb79984244b?w=600&auto=format&fit=crop&q=80'
+    imageUrl: '',
+    images: [],
   },
 
   // ==========================================
@@ -151,18 +161,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellingPrice: 26,
     stockQuantity: 48,
     isLive: true,
-    rating: 4.9,
-    reviewCount: 4200,
     badgeText: 'Fast Cooling',
     indications: 'Natural cooling menthol extract that gives immediate comfort from heartburn, flatulence & nausea.',
     dosage: 'Adults: 1-2 pearls swallowed whole with a glass of water after food.',
     composition: 'Mentha Piperita (Pudina Satva) 0.037ml, Spearmint Oil 0.005ml.',
     safetyAdvice: 'Not recommended for children under 5 years.',
-    imageUrl: 'https://images.unsplash.com/photo-1550572017-edb79984244b?w=600&auto=format&fit=crop&q=80',
-    images: [
-      'https://images.unsplash.com/photo-1550572017-edb79984244b?w=600&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=600&auto=format&fit=crop&q=80'
-    ]
+    imageUrl: '',
+    images: [],
   },
   {
     id: 'prod-007',
@@ -177,14 +182,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellingPrice: 108,
     stockQuantity: 25,
     isLive: true,
-    rating: 4.8,
-    reviewCount: 1670,
     badgeText: 'Overnight Relief',
     indications: 'Gentle, non-habit forming laxative powder for chronic constipation, acidity & abdominal gas.',
     dosage: '1 to 2 teaspoonfuls (4-8g) with warm water at bedtime.',
     composition: 'Senna Leaves, Saunf, Triphala (Amla, Haritaki, Bibhitaki), Yashtimadhu, Svarjiksara.',
     safetyAdvice: 'Do not use during pregnancy without medical advice.',
-    imageUrl: 'https://images.unsplash.com/photo-1587854692152-cbe660dbde88?w=600&auto=format&fit=crop&q=80'
+    imageUrl: '',
+    images: [],
   },
   {
     id: 'prod-008',
@@ -199,14 +203,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellingPrice: 124,
     stockQuantity: 28,
     isLive: true,
-    rating: 4.7,
-    reviewCount: 920,
-    badgeText: '100% Soluble Fiber',
+    badgeText: 'Soluble Fiber',
     indications: 'Pure natural husk for regular bowel function, gut detox, and gentle digestion support.',
     dosage: '1-2 tablespoons mixed in 200ml water, milk, or curd before sleeping.',
     composition: '100% Pure Plantago Ovata (Psyllium) Seed Husk.',
     safetyAdvice: 'Drink plenty of water when taking psyllium husk.',
-    imageUrl: 'https://images.unsplash.com/photo-1512069772995-ec65ed45afd6?w=600&auto=format&fit=crop&q=80'
+    imageUrl: '',
+    images: [],
   },
   {
     id: 'prod-009',
@@ -221,14 +224,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellingPrice: 56,
     stockQuantity: 32,
     isLive: true,
-    rating: 4.7,
-    reviewCount: 1140,
-    badgeText: 'Chatpata Digest',
+    badgeText: 'Post-Meal Digest',
     indications: 'Traditional Hing (Asafoetida) & Kala Namak chewables for relief from heavy, bloated stomach.',
     dosage: 'Chew 1-2 tablets post heavy lunch or dinner.',
     composition: 'Shuddha Hing (Ferula Foetida), Kali Mirch, Jeera, Nimbu Satva, Sendha Namak.',
     safetyAdvice: 'Tightly close container to prevent moisture absorption.',
-    imageUrl: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=600&auto=format&fit=crop&q=80'
+    imageUrl: '',
+    images: [],
   },
   {
     id: 'prod-010',
@@ -243,14 +245,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellingPrice: 159,
     stockQuantity: 20,
     isLive: true,
-    rating: 4.8,
-    reviewCount: 2210,
-    badgeText: 'Complete Gut Tonic',
+    badgeText: '35 Herbs Tonic',
     indications: 'Complete Ayurvedic digestive tonic formulated with 35 herbs to improve appetite and chronic gas.',
     dosage: 'Mix 30ml tonic with equal quantity of water, take twice daily after meals.',
     composition: 'Draksha, Kumari, Dashamoola, Ashwagandha, Shatavari, Triphala, Trikatu.',
     safetyAdvice: 'Shake well before use.',
-    imageUrl: 'https://images.unsplash.com/photo-1608248597359-54845585b4d7?w=600&auto=format&fit=crop&q=80'
+    imageUrl: '',
+    images: [],
   },
 
   // ==========================================
@@ -269,14 +270,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellingPrice: 215,
     stockQuantity: 24,
     isLive: true,
-    rating: 4.9,
-    reviewCount: 5300,
     badgeText: '40+ Herbs',
     indications: 'Comprehensive Ayurvedic tonic with 40+ herbs that boosts natural immunity against viral & seasonal coughs.',
     dosage: '1 tablespoon (approx 12g) morning & evening with warm milk or direct.',
     composition: 'Amla (Indian Gooseberry), Ashwagandha, Pippali, Gokshura, Karkatashringi, Guduchi.',
     safetyAdvice: 'Suitable for adults and children over 3 years.',
-    imageUrl: 'https://images.unsplash.com/photo-1587854692152-cbe660dbde88?w=600&auto=format&fit=crop&q=80'
+    imageUrl: '',
+    images: [],
   },
   {
     id: 'prod-012',
@@ -291,14 +291,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellingPrice: 158,
     stockQuantity: 22,
     isLive: true,
-    rating: 4.8,
-    reviewCount: 1880,
     badgeText: 'Upper Respiratory',
     indications: 'Builds systemic defense against recurring tonsillitis, sinus pressure, allergic rhinitis & throat infections.',
     dosage: '1-2 tablets twice daily with meals.',
     composition: 'Guggulu (Balsamodendron Mukul), Yashtimadhu (Licorice), Guduchi (Tinospora Cordifolia).',
     safetyAdvice: 'Consult a physician if symptoms persist beyond 10 days.',
-    imageUrl: 'https://images.unsplash.com/photo-1550572017-edb79984244b?w=600&auto=format&fit=crop&q=80'
+    imageUrl: '',
+    images: [],
   },
   {
     id: 'prod-013',
@@ -313,14 +312,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellingPrice: 99,
     stockQuantity: 30,
     isLive: true,
-    rating: 4.8,
-    reviewCount: 3410,
     badgeText: 'Honey Enriched',
     indications: 'Honey-fortified herbal cough remedy effective against dry cough and throat irritation without drowsiness.',
     dosage: 'Adults: 2 teaspoons (10ml) 3-4 times daily. Children: 1 teaspoon (5ml).',
     composition: 'Tulsi, Mulethi, Banapsha, Kantkari, Shuddha Madhu (Honey).',
-    safetyAdvice: 'Contains pure honey; safe during work & driving without drowsiness.',
-    imageUrl: 'https://images.unsplash.com/photo-1608248597359-54845585b4d7?w=600&auto=format&fit=crop&q=80'
+    safetyAdvice: 'Contains pure honey; non-drowsy herbal formulation.',
+    imageUrl: '',
+    images: [],
   },
   {
     id: 'prod-014',
@@ -335,14 +333,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellingPrice: 265,
     stockQuantity: 15,
     isLive: true,
-    rating: 4.7,
-    reviewCount: 950,
     badgeText: 'Daily Health Drink',
     indications: 'Powerful Ayurvedic trio that purifies blood, boosts white cell count and fights recurring seasonal fever.',
     dosage: 'Mix 20-30ml of juice with equal quantity of water, drink on empty stomach in the morning.',
     composition: 'Giloy (Tinospora Cordifolia) 40%, Neem 30%, Tulsi (Ocimum Sanctum) 30%.',
     safetyAdvice: 'Store in refrigerator after opening and consume within 30 days.',
-    imageUrl: 'https://images.unsplash.com/photo-1608248597359-54845585b4d7?w=600&auto=format&fit=crop&q=80'
+    imageUrl: '',
+    images: [],
   },
 
   // ==========================================
@@ -361,14 +358,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellingPrice: 96,
     stockQuantity: 35,
     isLive: true,
-    rating: 4.7,
-    reviewCount: 2890,
-    badgeText: '90% Pure Pulp',
+    badgeText: '90% Aloe Pulp',
     indications: 'Deep skin hydration, soothing kitchen burns, acne redness, and soothing post-shave skin irritation.',
     dosage: 'Apply generous layer evenly on skin or hair scalp before sleep.',
     composition: 'Aloe Vera (Aloe Barbadensis) Juice 90%, Permitted Base and Preservatives q.s.',
     safetyAdvice: 'Conduct a patch test prior to first full-face application.',
-    imageUrl: 'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=600&auto=format&fit=crop&q=80'
+    imageUrl: '',
+    images: [],
   },
   {
     id: 'prod-016',
@@ -383,14 +379,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellingPrice: 188,
     stockQuantity: 16,
     isLive: true,
-    rating: 4.9,
-    reviewCount: 1350,
     badgeText: 'Cold Pressed',
     indications: 'Cold-pressed sweet almond oil packed with natural Vitamin E for radiant glowing skin, scalp roots & brain memory.',
     dosage: 'Skin/Hair: Apply directly. Oral: 1 teaspoon (5ml) stirred into a glass of warm milk.',
     composition: '100% Pure Sweet Almond (Prunus Amygdalus Dulcis) Seed Oil.',
     safetyAdvice: 'Keep bottle securely closed in a cool, dark cabinet.',
-    imageUrl: 'https://images.unsplash.com/photo-1608248597359-54845585b4d7?w=600&auto=format&fit=crop&q=80'
+    imageUrl: '',
+    images: [],
   },
   {
     id: 'prod-017',
@@ -405,24 +400,23 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellingPrice: 145,
     stockQuantity: 28,
     isLive: true,
-    rating: 4.8,
-    reviewCount: 1740,
     badgeText: '18 Herbs',
     indications: 'Traditional Ayurvedic formulation of 18 bark and root herbs that strengthens gums and prevents tooth decay.',
     dosage: 'Brush thoroughly twice daily or massage gently onto bleeding gums.',
     composition: 'Babul, Bakul, Lavang, Dalchini, Manjistha, Jeshthamadh, Bor, Akkal-kadha.',
     safetyAdvice: 'For dental hygiene use.',
-    imageUrl: 'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=600&auto=format&fit=crop&q=80'
+    imageUrl: '',
+    images: [],
   },
 
   // ==========================================
-  // 5. Daily Wellness & Liver
+  // 5. Liver & Detox
   // ==========================================
   {
     id: 'prod-018',
     name: 'Himalaya Liv.52 DS Double Strength',
     brand: 'Himalaya',
-    category: 'Daily Wellness',
+    category: 'Liver & Detox',
     manufacturer: 'Himalaya Wellness Company',
     form: 'Tablets',
     packSize: '60 Tablets Bottle',
@@ -431,15 +425,18 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellingPrice: 202,
     stockQuantity: 28,
     isLive: true,
-    rating: 4.9,
-    reviewCount: 4600,
     badgeText: 'Hepato-Protective',
     indications: 'Herbal liver protection; restores appetite, detoxifies liver parenchyma & aids metabolic enzymes.',
     dosage: '1 tablet twice daily with water before meals.',
     composition: 'Himsra (Capparis Spinosa) 130mg, Kasani (Cichorium Intybus) 130mg, Arjuna, Kakamachi.',
     safetyAdvice: 'Recommended for daily liver maintenance and sluggish digestion.',
-    imageUrl: 'https://images.unsplash.com/photo-1584017911766-d451b3d0e843?w=600&auto=format&fit=crop&q=80'
+    imageUrl: '',
+    images: [],
   },
+
+  // ==========================================
+  // 6. Daily Wellness
+  // ==========================================
   {
     id: 'prod-019',
     name: 'Zandu Kesari Jivan Saffron Revitalizer',
@@ -453,14 +450,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellingPrice: 435,
     stockQuantity: 18,
     isLive: true,
-    rating: 4.8,
-    reviewCount: 1980,
-    badgeText: 'Gold & Kesar',
+    badgeText: 'Kesar & Amla',
     indications: 'Premium rejuvenator enriched with Kesar (Saffron), Moti (Pearl) & fresh Amla for bone calcium and stamina.',
     dosage: '1 to 2 teaspoons every morning, ideally with warm milk.',
     composition: 'Kesar, Moti Bhasma, Amla, Ashwagandha, Lavanga, Jaiphal.',
     safetyAdvice: 'Keep refrigerated after breaking inner foil seal.',
-    imageUrl: 'https://images.unsplash.com/photo-1587854692152-cbe660dbde88?w=600&auto=format&fit=crop&q=80'
+    imageUrl: '',
+    images: [],
   },
   {
     id: 'prod-020',
@@ -475,13 +471,12 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellingPrice: 78,
     stockQuantity: 30,
     isLive: true,
-    rating: 4.8,
-    reviewCount: 1420,
     badgeText: 'Colon Cleanse',
     indications: 'Time-tested Ayurvedic blend of Amla, Haritaki and Bibhitaki for natural digestion and gentle colon detox.',
     dosage: '1 teaspoon (3-6g) with lukewarm water or honey before bedtime.',
     composition: 'Equal parts of Haritaki (Terminalia chebula), Bibhitaki (Terminalia bellirica), Amalaki (Emblica officinalis).',
     safetyAdvice: 'Keep container dry and tightly capped.',
-    imageUrl: 'https://images.unsplash.com/photo-1587854692152-cbe660dbde88?w=600&auto=format&fit=crop&q=80'
-  }
+    imageUrl: '',
+    images: [],
+  },
 ];

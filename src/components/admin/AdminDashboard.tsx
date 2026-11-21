@@ -75,8 +75,6 @@ const DEFAULT_NEW_PROD: Partial<Product> = {
   sellingPrice: 70,
   stockQuantity: 10,
   isLive: true,
-  rating: 4.8,
-  reviewCount: 100,
   indications: '',
   dosage: 'Apply or take as directed on pack',
   composition: 'Ayurvedic Botanical Extracts',

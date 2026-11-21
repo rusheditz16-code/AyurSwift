@@ -2,9 +2,9 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'AyurSwift ⚡ | Authentic Ayurveda in 30 Mins | Quick Ayurvedic Store',
+  title: 'AyurSwift | Authentic Ayurvedic & OTC Pharmacy — 30–45 Min Local Delivery',
   description:
-    'Instant 30-45 min delivery of genuine Ayurvedic medicines & primary health essentials. Zero-fee UPI, live dark-store stock.',
+    'Order genuine Dabur, Zandu, Himalaya, Baidyanath & Patanjali Ayurvedic essentials. Estimated 30–45 min local delivery in Bhavnagar and 2–4 day All-India tracked courier.',
   icons: {
     icon: '/ayurswift-icon.png',
     apple: '/ayurswift-icon.png',

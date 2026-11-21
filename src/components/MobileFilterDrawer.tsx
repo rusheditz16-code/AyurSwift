@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { X, SlidersHorizontal, RotateCcw, Check } from 'lucide-react';
+import { X, SlidersHorizontal, RotateCcw, Check, Zap, Truck } from 'lucide-react';
 import { Product } from '@/types';
+import { DELIVERY_PROMISE } from '@/lib/initialData';
 
 interface MobileFilterDrawerProps {
   isOpen: boolean;
@@ -38,6 +39,8 @@ export function MobileFilterDrawer({
   onSelectBrand,
   selectedPriceRange,
   onSelectPriceRange,
+  selectedDispatch,
+  onSelectDispatch,
   availableCategories,
   availableBrands,
   onResetFilters,
@@ -60,6 +63,9 @@ export function MobileFilterDrawer({
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mobile-filter-title"
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-lg bg-white rounded-t-3xl max-h-[86vh] flex flex-col overflow-hidden shadow-2xl animate-sheet-up"
       >
@@ -70,13 +76,15 @@ export function MobileFilterDrawer({
         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <SlidersHorizontal className="w-4 h-4 text-[#0C831F]" />
-            <h3 className="font-extrabold text-base text-gray-950">Filter Remedies</h3>
+            <h3 id="mobile-filter-title" className="font-extrabold text-base text-gray-950">
+              Filter Remedies
+            </h3>
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={onResetFilters}
-              className="text-xs font-bold text-rose-600 hover:bg-rose-50 px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer"
+              className="text-xs font-bold text-rose-700 hover:bg-rose-50 px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer"
             >
               <RotateCcw className="w-3 h-3" />
               <span>Reset</span>
@@ -93,6 +101,7 @@ export function MobileFilterDrawer({
         </div>
 
         <div className="p-4 overflow-y-auto thin-scrollbar space-y-5 flex-1">
+          {/* Health Concern */}
           <div className="space-y-2.5">
             <h4 className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider">
               Health Concern
@@ -101,9 +110,10 @@ export function MobileFilterDrawer({
               <button
                 type="button"
                 onClick={() => onSelectCategory('ALL')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                aria-pressed={selectedCategory === 'ALL'}
+                className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
                   selectedCategory === 'ALL'
-                    ? 'bg-[#ECFDF3] border-[#0C831F] text-[#0C831F]'
+                    ? 'bg-[#ECFDF3] border-[#0C831F] text-[#0A5C16]'
                     : 'bg-white border-gray-200 text-gray-700'
                 }`}
               >
@@ -115,9 +125,10 @@ export function MobileFilterDrawer({
                   key={cat}
                   type="button"
                   onClick={() => onSelectCategory(cat)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                  aria-pressed={selectedCategory === cat}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
                     selectedCategory === cat
-                      ? 'bg-[#ECFDF3] border-[#0C831F] text-[#0C831F]'
+                      ? 'bg-[#ECFDF3] border-[#0C831F] text-[#0A5C16]'
                       : 'bg-white border-gray-200 text-gray-700'
                   }`}
                 >
@@ -128,6 +139,63 @@ export function MobileFilterDrawer({
             </div>
           </div>
 
+          {/* Delivery Dispatch Mode */}
+          <div className="space-y-2.5 pt-3 border-t border-gray-100">
+            <h4 className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider">
+              Delivery Dispatch Mode
+            </h4>
+            <div className="grid grid-cols-1 gap-2">
+              <button
+                type="button"
+                onClick={() => onSelectDispatch('ALL')}
+                aria-pressed={selectedDispatch === 'ALL'}
+                className={`px-3 py-2.5 rounded-xl text-xs font-bold border text-left transition-all cursor-pointer flex items-center justify-between ${
+                  selectedDispatch === 'ALL'
+                    ? 'bg-[#ECFDF3] border-[#0C831F] text-[#0A5C16]'
+                    : 'bg-white border-gray-200 text-gray-700'
+                }`}
+              >
+                <span>All Delivery Modes (Bhavnagar &amp; All India)</span>
+                {selectedDispatch === 'ALL' && <Check className="w-4 h-4 text-[#0C831F]" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => onSelectDispatch('RAPIDO_CITY')}
+                aria-pressed={selectedDispatch === 'RAPIDO_CITY'}
+                className={`px-3 py-2.5 rounded-xl text-xs font-bold border text-left transition-all cursor-pointer flex items-center justify-between ${
+                  selectedDispatch === 'RAPIDO_CITY'
+                    ? 'bg-[#ECFDF3] border-[#0C831F] text-[#0A5C16]'
+                    : 'bg-white border-gray-200 text-gray-700'
+                }`}
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                  <span>{DELIVERY_PROMISE.localLabel}</span>
+                </span>
+                {selectedDispatch === 'RAPIDO_CITY' && <Check className="w-4 h-4 text-[#0C831F]" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => onSelectDispatch('COURIER_OUTSIDE')}
+                aria-pressed={selectedDispatch === 'COURIER_OUTSIDE'}
+                className={`px-3 py-2.5 rounded-xl text-xs font-bold border text-left transition-all cursor-pointer flex items-center justify-between ${
+                  selectedDispatch === 'COURIER_OUTSIDE'
+                    ? 'bg-[#ECFDF3] border-[#0C831F] text-[#0A5C16]'
+                    : 'bg-white border-gray-200 text-gray-700'
+                }`}
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <Truck className="w-3.5 h-3.5 text-[#0C831F]" />
+                  <span>{DELIVERY_PROMISE.courierLabel}</span>
+                </span>
+                {selectedDispatch === 'COURIER_OUTSIDE' && (
+                  <Check className="w-4 h-4 text-[#0C831F]" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Ayurvedic Brand */}
           <div className="space-y-2.5 pt-3 border-t border-gray-100">
             <h4 className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider">
               Ayurvedic Brand
@@ -136,9 +204,10 @@ export function MobileFilterDrawer({
               <button
                 type="button"
                 onClick={() => onSelectBrand('ALL')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                aria-pressed={selectedBrand === 'ALL'}
+                className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                   selectedBrand === 'ALL'
-                    ? 'bg-[#ECFDF3] border-[#0C831F] text-[#0C831F]'
+                    ? 'bg-[#ECFDF3] border-[#0C831F] text-[#0A5C16]'
                     : 'bg-white border-gray-200 text-gray-700'
                 }`}
               >
@@ -149,9 +218,10 @@ export function MobileFilterDrawer({
                   key={brand}
                   type="button"
                   onClick={() => onSelectBrand(brand)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                  aria-pressed={selectedBrand === brand}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                     selectedBrand === brand
-                      ? 'bg-[#ECFDF3] border-[#0C831F] text-[#0C831F]'
+                      ? 'bg-[#ECFDF3] border-[#0C831F] text-[#0A5C16]'
                       : 'bg-white border-gray-200 text-gray-700'
                   }`}
                 >
@@ -161,6 +231,7 @@ export function MobileFilterDrawer({
             </div>
           </div>
 
+          {/* Price Range */}
           <div className="space-y-2.5 pt-3 border-t border-gray-100">
             <h4 className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider">
               Price Range
@@ -171,9 +242,10 @@ export function MobileFilterDrawer({
                   key={range.id}
                   type="button"
                   onClick={() => onSelectPriceRange(range.id)}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold border text-center transition-all cursor-pointer ${
+                  aria-pressed={selectedPriceRange === range.id}
+                  className={`px-3 py-2.5 rounded-xl text-xs font-bold border text-center transition-all cursor-pointer ${
                     selectedPriceRange === range.id
-                      ? 'bg-[#ECFDF3] border-[#0C831F] text-[#0C831F]'
+                      ? 'bg-[#ECFDF3] border-[#0C831F] text-[#0A5C16]'
                       : 'bg-white border-gray-200 text-gray-700'
                   }`}
                 >

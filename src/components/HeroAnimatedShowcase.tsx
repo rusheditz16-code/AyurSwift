@@ -1,99 +1,69 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Sparkles, Check } from 'lucide-react';
 import { Product } from '@/types';
+import { isVerifiedProductImageUrl } from '@/lib/initialData';
 import { MedicinePackVisual } from '@/components/MedicinePackVisual';
 
 interface HeroAnimatedShowcaseProps {
   products: Product[];
   onAddToCart: (product: Product) => void;
   onSelectProduct: (product: Product) => void;
-  onSelectCategory: (category: string) => void;
   onSelectBrand: (brand: string) => void;
 }
-
-const POWERED_BRANDS = ['Dabur', 'Zandu', 'Himalaya', 'Baidyanath'];
-
-interface MarqueeTile {
-  id: string;
-  badge: string;
-  title: string;
-  category: string;
-  accentBg: string;
-  badgeBg: string;
-  fallbackBrand: string;
-}
-
-const MARQUEE_TILES: MarqueeTile[] = [
-  {
-    id: 'tile-immunity',
-    badge: 'Up to 15% OFF',
-    title: 'Chyawanprash & Immunity',
-    category: 'Immunity & Cold',
-    accentBg: 'from-[#ECFDF3] via-white to-[#DCFCE7]',
-    badgeBg: 'bg-[#0C831F] text-white',
-    fallbackBrand: 'Dabur',
-  },
-  {
-    id: 'tile-pain',
-    badge: 'Fast Relief',
-    title: 'Balms & Joint Care',
-    category: 'Joint & Muscle Pain',
-    accentBg: 'from-[#FEF3C7] via-white to-[#FDE68A]/50',
-    badgeBg: 'bg-amber-500 text-slate-950',
-    fallbackBrand: 'Zandu',
-  },
-  {
-    id: 'tile-digestion',
-    badge: 'Top Seller',
-    title: 'Digestion & Liver Care',
-    category: 'Digestion & Acidity',
-    accentBg: 'from-[#E0F2FE] via-white to-[#BAE6FD]/50',
-    badgeBg: 'bg-sky-700 text-white',
-    fallbackBrand: 'Himalaya',
-  },
-  {
-    id: 'tile-wellness',
-    badge: '100% Pure',
-    title: 'Daily Herbs & Vitality',
-    category: 'Daily Wellness',
-    accentBg: 'from-[#F3E8FF] via-white to-[#E9D5FF]/50',
-    badgeBg: 'bg-emerald-800 text-white',
-    fallbackBrand: 'Baidyanath',
-  },
-  {
-    id: 'tile-skin',
-    badge: 'Herbal Care',
-    title: 'Skin & Hair Ayurveda',
-    category: 'Skin & Hair',
-    accentBg: 'from-[#FCE7F3] via-white to-[#FBCFE8]/45',
-    badgeBg: 'bg-teal-800 text-white',
-    fallbackBrand: 'Himalaya',
-  },
-];
 
 export function HeroAnimatedShowcase({
   products,
   onAddToCart,
   onSelectProduct,
-  onSelectCategory,
   onSelectBrand,
 }: HeroAnimatedShowcaseProps) {
-  const liveProducts = products.filter((p) => p.isLive && p.stockQuantity > 0);
-  const spotlightPool = liveProducts.slice(0, 6);
+  const liveProducts = useMemo(
+    () => products.filter((p) => p.isLive && p.stockQuantity > 0),
+    [products]
+  );
+
+  // Pick top verified-discount deals from distinct categories so the hero spotlight feels curated
+  const spotlightPool = useMemo(() => {
+    const sortedByDiscount = [...liveProducts].sort((a, b) => {
+      const discA = a.mrp > 0 ? (a.mrp - a.sellingPrice) / a.mrp : 0;
+      const discB = b.mrp > 0 ? (b.mrp - b.sellingPrice) / b.mrp : 0;
+      return discB - discA;
+    });
+    return sortedByDiscount.slice(0, 5);
+  }, [liveProducts]);
+
+  // Distinct real brands present in the live catalog
+  const liveBrands = useMemo(
+    () => Array.from(new Set(liveProducts.map((p) => p.brand))).slice(0, 6),
+    [liveProducts]
+  );
+
+  // 3 distinct featured picks shown alongside the active spotlight (never duplicating category tiles below)
+  const quickPicks = useMemo(() => {
+    const seenCat = new Set<string>();
+    const picks: Product[] = [];
+    for (const p of liveProducts) {
+      if (!seenCat.has(p.category)) {
+        seenCat.add(p.category);
+        picks.push(p);
+      }
+      if (picks.length >= 3) break;
+    }
+    return picks;
+  }, [liveProducts]);
 
   const [activeIdx, setActiveIdx] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [justAddedId, setJustAddedId] = useState<string | null>(null);
 
-  // Blinkit-style 2.2s auto-cycling spotlight deal card (pauses on hover or hidden tab)
   useEffect(() => {
     if (spotlightPool.length <= 1 || isPaused) return;
     const timer = setInterval(() => {
       if (typeof document !== 'undefined' && document.hidden) return;
       setActiveIdx((prev) => (prev + 1) % spotlightPool.length);
-    }, 2200);
+    }, 3200);
     return () => clearInterval(timer);
   }, [spotlightPool.length, isPaused]);
 
@@ -104,9 +74,7 @@ export function HeroAnimatedShowcase({
     currentDeal.mrp > currentDeal.sellingPrice
       ? Math.round(((currentDeal.mrp - currentDeal.sellingPrice) / currentDeal.mrp) * 100)
       : 0;
-
-  // Duplicate marquee tiles once for a seamless infinite 0 -> -50% CSS translation loop
-  const loopedTiles = [...MARQUEE_TILES, ...MARQUEE_TILES];
+  const showCurrentPhoto = isVerifiedProductImageUrl(currentDeal.imageUrl);
 
   const handleQuickAdd = (e: React.MouseEvent, prod: Product) => {
     e.stopPropagation();
@@ -117,23 +85,25 @@ export function HeroAnimatedShowcase({
 
   return (
     <div
-      className="relative z-10 flex flex-col gap-2.5 w-full"
+      className="relative z-10 flex flex-col gap-3 w-full"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
+      onFocus={() => setIsPaused(true)}
+      onBlur={() => setIsPaused(false)}
     >
-      {/* 1. Blinkit/JioMart "POWERED BY" Brand Pill Bar */}
-      <div className="flex items-center justify-between gap-2 bg-black/15 backdrop-blur-xs border border-white/15 rounded-2xl px-3 py-1.5">
-        <span className="text-[9.5px] font-extrabold uppercase tracking-widest text-emerald-100/90 shrink-0 flex items-center gap-1">
-          <Sparkles className="w-3 h-3 text-amber-300" />
-          <span>Powered By</span>
+      {/* 1. Real Brand Filter Bar */}
+      <div className="flex items-center justify-between gap-2 bg-black/18 backdrop-blur-xs border border-white/15 rounded-2xl px-3 py-2">
+        <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-100 shrink-0 flex items-center gap-1.5">
+          <Sparkles className="w-3 h-3 text-amber-300" aria-hidden="true" />
+          <span>Shop by Brand</span>
         </span>
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-          {POWERED_BRANDS.map((brand) => (
+          {liveBrands.map((brand) => (
             <button
               key={brand}
               type="button"
               onClick={() => onSelectBrand(brand)}
-              className="px-2.5 py-0.5 rounded-full bg-white/95 hover:bg-amber-300 text-[#0A5C16] font-extrabold text-[10px] shadow-2xs transition-all active:scale-95 shrink-0 cursor-pointer"
+              className="px-2.5 py-1 rounded-full bg-white/95 hover:bg-amber-300 text-[#0A5C16] font-extrabold text-[10.5px] shadow-2xs transition-all active:scale-95 shrink-0 cursor-pointer"
             >
               {brand}
             </button>
@@ -141,81 +111,93 @@ export function HeroAnimatedShowcase({
         </div>
       </div>
 
-      {/* 2. Main Split: Blinkit Auto-Morphing Deal Spotlight + JioMart Gliding Arched Cards */}
-      <div className="grid grid-cols-12 gap-2.5 items-stretch">
-        {/* LEFT (5 cols): Blinkit "Winter Deals" Style Auto-Cycling Price & Pack Spotlight */}
+      {/* 2. Value Spotlight + Quick OTC Picks */}
+      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-stretch">
+        {/* Left: Featured Savings Spotlight */}
         <div
           onClick={() => onSelectProduct(currentDeal)}
-          className="col-span-5 bg-gradient-to-b from-white/22 via-white/14 to-black/20 backdrop-blur-md border border-white/30 rounded-t-[26px] rounded-b-2xl p-2.5 sm:p-3 flex flex-col justify-between text-center cursor-pointer hover:border-amber-300/80 transition-all shadow-lg relative overflow-hidden group"
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onSelectProduct(currentDeal);
+            }
+          }}
+          aria-label={`Featured deal: ${currentDeal.name}, ₹${currentDeal.sellingPrice}`}
+          className="sm:col-span-6 bg-white/14 backdrop-blur-md border border-white/25 rounded-2xl p-3.5 flex flex-col justify-between cursor-pointer hover:border-amber-300/80 transition-all shadow-lg"
         >
-          <div className="flex items-center justify-between gap-1">
-            <span className="text-[9.5px] font-extrabold uppercase tracking-wider text-emerald-100">
-              Flash Deal
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-100">
+              Featured Value Deal
             </span>
             {discountPct > 0 && (
-              <span className="text-[9px] font-black bg-emerald-950/60 text-amber-300 px-1.5 py-0.5 rounded-md border border-amber-300/30">
-                -{discountPct}%
+              <span className="text-[10px] font-black bg-amber-300 text-slate-950 px-2 py-0.5 rounded-md tabular-nums">
+                SAVE {discountPct}%
               </span>
             )}
           </div>
 
-          {/* Animated Swap Container keyed by product id */}
-          <div key={currentDeal.id} className="animate-deal-swap my-1 space-y-1.5">
-            {/* Blinkit Strikethrough MRP + Yellow Price Pill */}
-            <div className="flex flex-col items-center">
-              {currentDeal.mrp > currentDeal.sellingPrice && (
-                <span className="text-[10px] text-emerald-100/80 line-through font-bold tabular-nums leading-none">
-                  ₹{currentDeal.mrp}
-                </span>
-              )}
-              <div className="mt-0.5 inline-block bg-amber-300 text-slate-950 font-black text-sm sm:text-base px-2.5 py-0.5 rounded-lg shadow-sm tabular-nums leading-tight">
-                ₹{currentDeal.sellingPrice}
-              </div>
-            </div>
-
-            <div className="text-[11px] font-extrabold text-white line-clamp-1 px-0.5">
-              {currentDeal.name}
-            </div>
-
-            {/* Floating Product Packshot */}
-            <div className="relative mx-auto w-20 h-20 sm:w-22 sm:h-22 rounded-2xl bg-white/95 p-1.5 shadow-md flex items-center justify-center animate-gentle-float">
-              {currentDeal.imageUrl ? (
+          <div key={currentDeal.id} className="animate-deal-swap my-2 flex items-center gap-3">
+            <div className="w-24 h-20 rounded-xl bg-white p-1.5 shadow-md flex items-center justify-center shrink-0 overflow-hidden">
+              {showCurrentPhoto ? (
                 <img
                   src={currentDeal.imageUrl}
-                  alt={currentDeal.name}
-                  className="w-full h-full object-contain rounded-xl"
+                  alt={`${currentDeal.name} (${currentDeal.packSize})`}
+                  width={96}
+                  height={80}
+                  className="w-full h-full object-contain"
                 />
               ) : (
-                <MedicinePackVisual product={currentDeal} />
+                <MedicinePackVisual product={currentDeal} className="w-full h-full" />
               )}
+            </div>
 
-              <button
-                type="button"
-                onClick={(e) => handleQuickAdd(e, currentDeal)}
-                aria-label={`Add ${currentDeal.name}`}
-                className={`absolute -bottom-1.5 -right-1.5 px-2 py-1 rounded-lg font-extrabold text-[10px] shadow-md flex items-center gap-0.5 transition-all cursor-pointer ${
-                  justAddedId === currentDeal.id
-                    ? 'bg-emerald-700 text-white scale-105'
-                    : 'bg-[#0C831F] hover:bg-[#096B19] text-white active:scale-95'
-                }`}
-              >
-                {justAddedId === currentDeal.id ? (
-                  <>
-                    <Check className="w-3 h-3" />
-                    <span>Added</span>
-                  </>
-                ) : (
-                  <>
-                    <Plus className="w-3 h-3 stroke-[2.75]" />
-                    <span>ADD</span>
-                  </>
-                )}
-              </button>
+            <div className="min-w-0 flex-1 space-y-1">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-emerald-200 truncate">
+                {currentDeal.brand} • {currentDeal.packSize}
+              </div>
+              <div className="text-xs sm:text-[13px] font-extrabold text-white line-clamp-2 leading-snug">
+                {currentDeal.name}
+              </div>
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <div className="flex items-baseline gap-1.5 tabular-nums">
+                  <span className="text-base font-black text-amber-300">
+                    ₹{currentDeal.sellingPrice}
+                  </span>
+                  {currentDeal.mrp > currentDeal.sellingPrice && (
+                    <span className="text-[11px] text-emerald-100/80 line-through">
+                      ₹{currentDeal.mrp}
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => handleQuickAdd(e, currentDeal)}
+                  aria-label={`Add ${currentDeal.name} to cart`}
+                  className={`px-2.5 py-1 rounded-lg font-extrabold text-[10.5px] shadow-sm flex items-center gap-1 transition-all cursor-pointer ${
+                    justAddedId === currentDeal.id
+                      ? 'bg-emerald-950 text-amber-300'
+                      : 'bg-white text-[#0A5C16] hover:bg-amber-300 hover:text-slate-950'
+                  }`}
+                >
+                  {justAddedId === currentDeal.id ? (
+                    <>
+                      <Check className="w-3 h-3" />
+                      <span>Added</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-3 h-3 stroke-[2.75]" />
+                      <span>ADD</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Slide Progress Dots */}
-          <div className="flex items-center justify-center gap-1 pt-1.5">
+          <div className="flex items-center justify-center gap-1.5 pt-1">
             {spotlightPool.map((item, idx) => (
               <button
                 key={item.id}
@@ -224,75 +206,79 @@ export function HeroAnimatedShowcase({
                   e.stopPropagation();
                   setActiveIdx(idx);
                 }}
-                aria-label={`Show ${item.name}`}
+                aria-label={`Show deal ${idx + 1}: ${item.name}`}
+                aria-current={idx === activeIdx % spotlightPool.length ? 'true' : undefined}
                 className={`h-1.5 rounded-full transition-all cursor-pointer ${
                   idx === activeIdx % spotlightPool.length
-                    ? 'w-4 bg-amber-300'
-                    : 'w-1.5 bg-white/35 hover:bg-white/60'
+                    ? 'w-5 bg-amber-300'
+                    : 'w-1.5 bg-white/35 hover:bg-white/65'
                 }`}
               />
             ))}
           </div>
         </div>
 
-        {/* RIGHT (7 cols): JioMart-Style Continuous Auto-Gliding Arched Category Cards */}
-        <div className="col-span-7 flex flex-col justify-between overflow-hidden rounded-2xl bg-black/15 border border-white/15 p-2">
-          <div className="flex items-center justify-between px-1 pb-1.5">
-            <span className="text-[10px] font-extrabold text-emerald-50 tracking-wide">
-              Swipe or Tap Health Picks
+        {/* Right: 3 Quick-Add OTC Essentials */}
+        <div className="sm:col-span-6 bg-black/15 border border-white/15 rounded-2xl p-3 flex flex-col justify-between gap-2">
+          <div className="flex items-center justify-between px-0.5">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-100">
+              In-Stock OTC Picks
             </span>
-            <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-amber-300">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-ping" />
-              <span>Live Shelf</span>
-            </span>
+            <span className="text-[10px] font-bold text-amber-300">Ready to pack</span>
           </div>
 
-          {/* Infinite Horizontal Gliding Marquee Rail */}
-          <div className="relative overflow-hidden w-full py-0.5">
-            <div className="animate-hero-marquee gap-2.5">
-              {loopedTiles.map((tile, idx) => {
-                const sampleProduct =
-                  liveProducts.find((p) => p.category === tile.category) ||
-                  liveProducts.find((p) => p.brand === tile.fallbackBrand) ||
-                  currentDeal;
-
-                return (
+          <div className="space-y-2">
+            {quickPicks.map((item) => {
+              const showPhoto = isVerifiedProductImageUrl(item.imageUrl);
+              return (
+                <div
+                  key={item.id}
+                  className="bg-white/95 hover:bg-white rounded-xl p-2 flex items-center justify-between gap-2.5 text-gray-900 shadow-xs transition-colors"
+                >
                   <button
-                    key={`${tile.id}-${idx}`}
                     type="button"
-                    onClick={() => onSelectCategory(tile.category)}
-                    className={`w-[116px] sm:w-[126px] shrink-0 rounded-t-[34px] rounded-b-2xl bg-gradient-to-b ${tile.accentBg} text-gray-900 p-2.5 shadow-md border border-white flex flex-col items-center justify-between gap-1.5 hover:-translate-y-0.5 transition-transform cursor-pointer group`}
+                    onClick={() => onSelectProduct(item)}
+                    className="flex items-center gap-2.5 min-w-0 flex-1 text-left cursor-pointer rounded-lg"
                   >
-                    <span
-                      className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full shadow-2xs ${tile.badgeBg}`}
-                    >
-                      {tile.badge}
-                    </span>
-
-                    <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-white shadow-xs border border-gray-100 p-1.5 flex items-center justify-center overflow-hidden group-hover:scale-105 transition-transform">
-                      {sampleProduct?.imageUrl ? (
+                    <div className="w-10 h-9 rounded-lg bg-[#F7FAF8] border border-gray-100 p-0.5 flex items-center justify-center shrink-0 overflow-hidden">
+                      {showPhoto ? (
                         <img
-                          src={sampleProduct.imageUrl}
-                          alt={tile.title}
+                          src={item.imageUrl}
+                          alt={`${item.name} (${item.packSize})`}
+                          width={40}
+                          height={36}
                           className="w-full h-full object-contain"
                         />
-                      ) : sampleProduct ? (
-                        <MedicinePackVisual product={sampleProduct} />
-                      ) : null}
+                      ) : (
+                        <MedicinePackVisual product={item} compact className="w-full h-full" />
+                      )}
                     </div>
-
-                    <span className="text-[10.5px] font-extrabold text-gray-900 leading-tight line-clamp-2 text-center">
-                      {tile.title}
-                    </span>
+                    <div className="min-w-0">
+                      <div className="text-[11.5px] font-bold text-gray-950 truncate">
+                        {item.name}
+                      </div>
+                      <div className="text-[10px] text-gray-500 flex items-center gap-1 tabular-nums">
+                        <span>{item.packSize}</span>
+                        <span aria-hidden="true">•</span>
+                        <strong className="text-[#0C831F]">₹{item.sellingPrice}</strong>
+                      </div>
+                    </div>
                   </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="mt-1.5 px-2 py-1 rounded-xl bg-white/12 text-[10px] font-bold text-emerald-50 flex items-center justify-between">
-            <span>100% Authentic Sealed Packs</span>
-            <span className="text-amber-300 font-extrabold">Tap to Filter →</span>
+                  <button
+                    type="button"
+                    onClick={(e) => handleQuickAdd(e, item)}
+                    aria-label={`Add ${item.name} to cart`}
+                    className={`px-2.5 py-1 rounded-lg font-extrabold text-[10px] shrink-0 transition-colors cursor-pointer ${
+                      justAddedId === item.id
+                        ? 'bg-[#0C831F] text-white'
+                        : 'bg-[#ECFDF3] text-[#0C831F] hover:bg-[#0C831F] hover:text-white border border-[#BBF7D0]'
+                    }`}
+                  >
+                    {justAddedId === item.id ? 'Added' : '+ ADD'}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

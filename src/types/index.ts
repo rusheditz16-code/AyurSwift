@@ -13,6 +13,7 @@ export type BrandName =
   | 'Baidyanath'
   | 'Patanjali'
   | 'Dr. Ortho'
+  | 'Moov'
   | 'Hamdard'
   | 'Vicco'
   | 'Charak'
@@ -24,22 +25,22 @@ export interface Product {
   brand: BrandName | string;
   category: ProductCategory | string;
   manufacturer: string;           // e.g. 'Dabur India Ltd.'
-  form: 'Oil' | 'Tablets' | 'Churna' | 'Syrup' | 'Balm' | 'Gel' | 'Husk' | 'Capsules';
+  form: 'Oil' | 'Tablets' | 'Churna' | 'Syrup' | 'Balm' | 'Gel' | 'Husk' | 'Capsules' | 'Spray';
   packSize: string;               // e.g. '25g Jar', '100ml Bottle', '60 Tablets'
   agencyCostPrice: number;        // Wholesale agency purchase price with GST
   mrp: number;                    // Maximum Retail Price
   sellingPrice: number;           // Storefront customer price (with savings)
   stockQuantity: number;          // Real-time home dark store stock
   isLive: boolean;                // Merchant visibility switch
-  rating: number;                 // e.g. 4.8
-  reviewCount: number;            // e.g. 1420
+  rating?: number;                // Optional — only shown when backed by real customer reviews
+  reviewCount?: number;           // Optional — only shown when backed by real customer reviews
   imageUrl?: string;
   images?: string[];              // Multiple packshot views (front, back, label, side)
   indications: string;            // Bullet point benefits
   dosage: string;                 // Dosage instructions
   composition: string;            // Key Ayurvedic herbs/ingredients
   safetyAdvice?: string;          // e.g. 'Store in cool dry place, keep away from direct sunlight'
-  badgeText?: string;             // e.g. 'Bestseller', 'Doctor Verified', '100% Ayurvedic'
+  badgeText?: string;             // e.g. 'Classical Oil', '40+ Herbs'
 }
 
 export interface CartItem {

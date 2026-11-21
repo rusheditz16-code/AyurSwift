@@ -267,6 +267,7 @@ export function AdminProductDrawer({
                 <option value="Baidyanath">Baidyanath</option>
                 <option value="Patanjali">Patanjali</option>
                 <option value="Dr. Ortho">Dr. Ortho</option>
+                <option value="Moov">Moov</option>
                 <option value="Vicco">Vicco</option>
                 <option value="Hamdard">Hamdard</option>
                 <option value="Charak">Charak</option>
@@ -318,6 +319,7 @@ export function AdminProductDrawer({
                 <option value="Tablets">Tablets (Bottle)</option>
                 <option value="Syrup">Syrup (Bottle)</option>
                 <option value="Oil">Oil (Bottle)</option>
+                <option value="Spray">Spray (Can)</option>
                 <option value="Churna">Churna (Tub)</option>
                 <option value="Capsules">Capsules (Blister)</option>
                 <option value="Gel">Gel (Tube)</option>

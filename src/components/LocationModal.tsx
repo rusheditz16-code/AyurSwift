@@ -61,6 +61,9 @@ export function LocationModal({
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="location-modal-title"
         onClick={(e) => e.stopPropagation()}
         className="bg-white rounded-t-3xl sm:rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-gray-200 animate-sheet-up sm:animate-modal-pop"
       >
@@ -71,7 +74,7 @@ export function LocationModal({
               <MapPin className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-extrabold text-gray-950 text-base">
+              <h3 id="location-modal-title" className="font-extrabold text-gray-950 text-base">
                 Change Delivery Location
               </h3>
               <p className="text-[11px] text-gray-500 font-medium">
@@ -91,14 +94,18 @@ export function LocationModal({
 
         {/* Search */}
         <div className="p-3.5 border-b border-gray-100 bg-[#F8FAFC]">
+          <label htmlFor="location-locality-search" className="sr-only">
+            Search Bhavnagar locality or pincode
+          </label>
           <div className="relative">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-2.5" />
+            <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-2.5" aria-hidden="true" />
             <input
-              type="text"
+              id="location-locality-search"
+              type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search Bhavnagar locality or pincode..."
-              className="w-full pl-10 pr-3 py-2 text-xs bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15 font-medium"
+              className="w-full pl-10 pr-3 py-2 text-xs bg-white border border-gray-200 rounded-xl focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15 font-medium"
             />
           </div>
         </div>
@@ -111,46 +118,57 @@ export function LocationModal({
               <span>Bhavnagar 30–45 Min Express</span>
             </div>
 
-            {filteredAreas.map((item) => {
-              const isSelected =
-                currentLocation.dispatchType === 'RAPIDO_CITY' &&
-                currentLocation.area === item.area;
+            {filteredAreas.length === 0 ? (
+              <div className="px-3 py-4 rounded-xl bg-gray-50 border border-gray-200/80 text-center space-y-1">
+                <p className="text-xs font-bold text-gray-800">
+                  No Bhavnagar locality matches &ldquo;{search}&rdquo;
+                </p>
+                <p className="text-[11px] text-gray-500">
+                  Ordering outside Bhavnagar? Choose All-India Tracked Courier below.
+                </p>
+              </div>
+            ) : (
+              filteredAreas.map((item) => {
+                const isSelected =
+                  currentLocation.dispatchType === 'RAPIDO_CITY' &&
+                  currentLocation.area === item.area;
 
-              return (
-                <button
-                  key={item.area}
-                  type="button"
-                  onClick={() => {
-                    onSelectLocation({
-                      area: item.area,
-                      city: 'Bhavnagar',
-                      pincode: item.pincode,
-                      dispatchType: 'RAPIDO_CITY',
-                      estimate: 'Local Express Delivery (30–45 mins)',
-                    });
-                    onClose();
-                  }}
-                  className={`w-full text-left px-3 py-2.5 rounded-xl text-xs flex items-center justify-between transition-all cursor-pointer border ${
-                    isSelected
-                      ? 'bg-[#ECFDF3] text-[#0A5C16] font-bold border-[#BBF7D0]'
-                      : 'border-transparent hover:bg-gray-50 text-gray-800'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span
-                      className={`w-2 h-2 rounded-full ${
-                        isSelected ? 'bg-[#0C831F]' : 'bg-gray-300'
-                      }`}
-                    />
-                    <span className="font-semibold">{item.area}</span>
-                    <span className="text-[10.5px] text-gray-400 font-mono">
-                      {item.pincode}
-                    </span>
-                  </div>
-                  {isSelected && <Check className="w-4 h-4 text-[#0C831F]" />}
-                </button>
-              );
-            })}
+                return (
+                  <button
+                    key={item.area}
+                    type="button"
+                    onClick={() => {
+                      onSelectLocation({
+                        area: item.area,
+                        city: 'Bhavnagar',
+                        pincode: item.pincode,
+                        dispatchType: 'RAPIDO_CITY',
+                        estimate: 'Local Express Delivery (30–45 mins)',
+                      });
+                      onClose();
+                    }}
+                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs flex items-center justify-between transition-all cursor-pointer border ${
+                      isSelected
+                        ? 'bg-[#ECFDF3] text-[#0A5C16] font-bold border-[#BBF7D0]'
+                        : 'border-transparent hover:bg-gray-50 text-gray-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          isSelected ? 'bg-[#0C831F]' : 'bg-gray-300'
+                        }`}
+                      />
+                      <span className="font-semibold">{item.area}</span>
+                      <span className="text-[10.5px] text-gray-400 font-mono">
+                        {item.pincode}
+                      </span>
+                    </div>
+                    {isSelected && <Check className="w-4 h-4 text-[#0C831F]" />}
+                  </button>
+                );
+              })
+            )}
           </div>
 
           <div className="pt-2 border-t border-gray-100 space-y-1">

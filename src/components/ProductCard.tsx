@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Plus, Minus, Eye, Star, Zap, Truck, Images } from 'lucide-react';
+import { Plus, Minus, Eye, Zap, Truck } from 'lucide-react';
 import { DeliveryType, Product } from '@/types';
+import { DELIVERY_PROMISE, isVerifiedProductImageUrl } from '@/lib/initialData';
 import { MedicinePackVisual } from '@/components/MedicinePackVisual';
 
 interface ProductCardProps {
@@ -25,123 +26,112 @@ export function ProductCard({
   compact = false,
 }: ProductCardProps) {
   const [imageError, setImageError] = useState(false);
-  const discountPercent = Math.round(
-    ((product.mrp - product.sellingPrice) / product.mrp) * 100
-  );
+  const discountPercent =
+    product.mrp > product.sellingPrice
+      ? Math.round(((product.mrp - product.sellingPrice) / product.mrp) * 100)
+      : 0;
   const isLocal = dispatchType !== 'COURIER_OUTSIDE';
+  const showPhoto = isVerifiedProductImageUrl(product.imageUrl) && !imageError;
 
   return (
     <article
-      className={`h-full flex flex-col bg-white rounded-2xl border border-gray-200/85 hover:border-[#0C831F]/45 hover:shadow-[0_10px_28px_-10px_rgba(15,23,42,0.14)] transition-all duration-200 overflow-hidden group relative ${
-        compact ? 'w-[172px] sm:w-[196px] shrink-0' : 'w-full'
+      className={`h-full flex flex-col bg-white rounded-2xl border border-gray-200/90 hover:border-[#0C831F]/50 hover:shadow-[0_12px_30px_-12px_rgba(12,131,31,0.18)] transition-all duration-200 overflow-hidden group relative ${
+        compact ? 'w-[216px] sm:w-[248px] shrink-0' : 'w-full'
       }`}
-      aria-label={`${product.name} by ${product.brand}`}
+      aria-label={`${product.name} (${product.packSize}) by ${product.brand}`}
     >
-      {/* Top Discount Ribbon (Blinkit-style blue/emerald badge) */}
+      {/* Verified Discount Pill */}
       {discountPercent > 0 && (
-        <div className="absolute top-2.5 left-2.5 z-10 bg-[#2563EB] text-white text-[10px] font-extrabold px-2 py-0.5 rounded-md shadow-xs tracking-wide tabular-nums">
+        <div className="absolute top-3 left-3 z-10 bg-[#0C831F] text-white text-[10.5px] font-extrabold px-2 py-0.5 rounded-md shadow-xs tracking-wide tabular-nums">
           {discountPercent}% OFF
         </div>
       )}
 
-      {/* Rating Pill top-right */}
-      {product.rating > 0 && (
-        <div className="absolute top-2.5 right-2.5 z-10 bg-white/92 backdrop-blur-xs border border-gray-200/80 text-gray-800 text-[10px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5 shadow-2xs tabular-nums">
-          <Star className="w-2.5 h-2.5 text-amber-500 fill-amber-500" />
-          <span>{product.rating.toFixed(1)}</span>
-        </div>
-      )}
+      {/* Form Tag Top-Right */}
+      <div className="absolute top-3 right-3 z-10 bg-white/95 border border-gray-200/90 text-gray-700 text-[10px] font-bold px-2 py-0.5 rounded-md shadow-2xs">
+        {product.form}
+      </div>
 
-      {/* Packshot Stage */}
-      <div
+      {/* Consistent 4:3 Image Frame */}
+      <button
+        type="button"
         onClick={() => onViewDetails(product)}
-        tabIndex={0}
-        role="button"
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onViewDetails(product);
-          }
-        }}
-        aria-label={`View details for ${product.name}`}
-        className="relative w-full aspect-[4/3] bg-[#F8FAFC] group-hover:bg-[#F1F5F9]/90 transition-colors flex items-center justify-center p-3 cursor-pointer overflow-hidden"
+        aria-label={`View details for ${product.name}, ${product.packSize}`}
+        className="relative w-full aspect-[4/3] bg-[#F7FAF8] group-hover:bg-[#EFF7F2] border-b border-gray-100 transition-colors flex items-center justify-center p-3 cursor-pointer overflow-hidden text-left"
       >
-        {product.imageUrl && !imageError ? (
+        {showPhoto ? (
           <img
             src={product.imageUrl}
-            alt={product.name}
+            alt={`${product.name} (${product.packSize}) by ${product.brand}`}
+            width={320}
+            height={240}
             loading="lazy"
+            decoding="async"
             onError={() => setImageError(true)}
             className="w-full h-full object-contain transition-transform duration-300 ease-out group-hover:scale-105"
           />
         ) : (
           <MedicinePackVisual
             product={product}
-            className="w-full h-full transition-transform duration-300 ease-out group-hover:scale-105"
+            className="w-full h-full transition-transform duration-300 ease-out group-hover:scale-[1.03]"
           />
         )}
 
-        {/* Multi-photo pill */}
-        {product.images && product.images.length > 1 && (
-          <div className="absolute bottom-2 left-2 bg-gray-900/65 backdrop-blur-xs text-white text-[9.5px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1 pointer-events-none">
-            <Images className="w-2.5 h-2.5" />
-            <span>{product.images.length}</span>
-          </div>
-        )}
-
-        {/* Subtle Quick-View eye on hover */}
-        <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 border border-gray-200 p-1.5 rounded-full shadow-xs">
+        <span
+          aria-hidden="true"
+          className="absolute bottom-2.5 right-2.5 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity bg-white/95 border border-gray-200 p-1.5 rounded-full shadow-xs"
+        >
           <Eye className="w-3.5 h-3.5 text-[#0C831F]" />
-        </div>
-      </div>
+        </span>
+      </button>
 
-      {/* Product Body */}
-      <div className="p-3 flex flex-col flex-1">
-        {/* Micro ETA Pill */}
-        <div className="flex items-center justify-between gap-1 mb-1.5">
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-gray-100 text-[9.5px] font-extrabold text-gray-700 uppercase tracking-wide">
+      {/* Readable Product Body */}
+      <div className="p-3.5 sm:p-4 flex flex-col flex-1">
+        {/* Brand & Delivery Estimate */}
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <span className="text-[11px] font-extrabold text-[#0F766E] uppercase tracking-wide truncate">
+            {product.brand}
+          </span>
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-gray-100 text-[10px] font-bold text-gray-700 shrink-0">
             {isLocal ? (
               <>
-                <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500" />
-                <span>30 MINS</span>
+                <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500" aria-hidden="true" />
+                <span>{DELIVERY_PROMISE.localTimeShort}</span>
               </>
             ) : (
               <>
-                <Truck className="w-2.5 h-2.5 text-[#0C831F]" />
-                <span>2–4 DAYS</span>
+                <Truck className="w-2.5 h-2.5 text-[#0C831F]" aria-hidden="true" />
+                <span>{DELIVERY_PROMISE.courierTimeShort}</span>
               </>
             )}
           </span>
-          {product.badgeText && discountPercent === 0 && (
-            <span className="text-[9.5px] font-bold text-[#0C831F] bg-[#ECFDF3] px-1.5 py-0.5 rounded-md truncate max-w-[90px]">
-              {product.badgeText}
-            </span>
-          )}
         </div>
 
-        {/* Title */}
-        <h3
-          onClick={() => onViewDetails(product)}
-          className="font-bold text-[13px] sm:text-[13.5px] text-gray-900 line-clamp-2 leading-[1.3] cursor-pointer hover:text-[#0C831F] transition-colors min-h-[34px]"
-          title={product.name}
-        >
-          {product.name}
+        {/* Product Name */}
+        <h3 className="font-bold text-[13.5px] sm:text-[15px] text-gray-950 line-clamp-2 leading-[1.35] min-h-[38px]">
+          <button
+            type="button"
+            onClick={() => onViewDetails(product)}
+            className="text-left hover:text-[#0C831F] transition-colors cursor-pointer rounded"
+          >
+            {product.name}
+          </button>
         </h3>
 
-        {/* Brand & Pack Size */}
-        <div className="text-[11px] text-gray-500 font-medium mt-1 truncate">
-          {product.packSize} • {product.brand}
-        </div>
+        {/* Pack Size */}
+        <p className="text-xs text-gray-600 font-medium mt-1 truncate">
+          {product.packSize}
+        </p>
 
-        {/* Bottom Price + Blinkit ADD / Stepper */}
-        <div className="pt-3 mt-auto flex items-center justify-between gap-2">
+        {/* Bottom Price + Accessible Add / Stepper */}
+        <div className="pt-3.5 mt-auto flex items-end justify-between gap-2 border-t border-gray-100/80 mt-3">
           <div className="leading-tight">
-            <div className="font-extrabold text-sm sm:text-[15px] text-gray-950 tabular-nums">
+            <div className="font-extrabold text-[15px] sm:text-base text-gray-950 tabular-nums">
               ₹{product.sellingPrice}
             </div>
             {product.mrp > product.sellingPrice && (
-              <div className="text-[10.5px] text-gray-400 line-through tabular-nums">
-                ₹{product.mrp}
+              <div className="text-[11px] text-gray-500 line-through tabular-nums mt-0.5">
+                MRP ₹{product.mrp}
               </div>
             )}
           </div>
@@ -150,27 +140,27 @@ export function ProductCard({
             <button
               type="button"
               onClick={() => onAddToCart(product)}
-              className="h-8 px-4 rounded-lg border border-[#0C831F] bg-[#F2FBF4] hover:bg-[#0C831F] text-[#0C831F] hover:text-white font-extrabold text-xs tracking-wide transition-all active:scale-95 shadow-2xs cursor-pointer"
+              className="h-9 px-4 rounded-xl border border-[#0C831F] bg-[#F2FBF4] hover:bg-[#0C831F] text-[#0C831F] hover:text-white font-extrabold text-xs tracking-wide transition-all active:scale-95 shadow-2xs cursor-pointer"
               aria-label={`Add ${product.name} to cart`}
             >
               ADD
             </button>
           ) : (
             <div
-              className="h-8 flex items-center bg-[#0C831F] text-white rounded-lg shadow-sm shadow-[#0C831F]/25 overflow-hidden animate-badge-pop"
+              className="h-9 flex items-center bg-[#0C831F] text-white rounded-xl shadow-sm shadow-[#0C831F]/25 overflow-hidden animate-badge-pop"
               role="group"
               aria-label={`Quantity in cart for ${product.name}`}
             >
               <button
                 type="button"
                 onClick={() => onUpdateQuantity(product.id, quantityInCart - 1)}
-                className="w-7 h-full hover:bg-[#096B19] transition-colors active:scale-90 flex items-center justify-center cursor-pointer"
-                aria-label="Decrease quantity"
+                className="w-8 h-full hover:bg-[#096B19] transition-colors active:scale-90 flex items-center justify-center cursor-pointer"
+                aria-label={`Decrease quantity for ${product.name}`}
               >
                 <Minus className="w-3.5 h-3.5 stroke-[2.5]" />
               </button>
               <span
-                className="min-w-[22px] text-center text-xs font-extrabold tabular-nums"
+                className="min-w-[24px] text-center text-xs font-extrabold tabular-nums"
                 aria-live="polite"
               >
                 {quantityInCart}
@@ -179,8 +169,8 @@ export function ProductCard({
                 type="button"
                 onClick={() => onUpdateQuantity(product.id, quantityInCart + 1)}
                 disabled={quantityInCart >= product.stockQuantity}
-                className="w-7 h-full hover:bg-[#096B19] disabled:opacity-40 transition-colors active:scale-90 flex items-center justify-center cursor-pointer"
-                aria-label="Increase quantity"
+                className="w-8 h-full hover:bg-[#096B19] disabled:opacity-40 transition-colors active:scale-90 flex items-center justify-center cursor-pointer"
+                aria-label={`Increase quantity for ${product.name}`}
               >
                 <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
               </button>

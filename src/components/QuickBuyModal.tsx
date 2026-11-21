@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Zap, Plus, Check, PhoneCall, ArrowRight, MessageCircle } from 'lucide-react';
 import { Product, CartItem, MerchantSettings } from '@/types';
+import { DELIVERY_PROMISE, isVerifiedProductImageUrl } from '@/lib/initialData';
 import { MedicinePackVisual } from '@/components/MedicinePackVisual';
 
 interface QuickBuyModalProps {
@@ -40,7 +41,6 @@ export function QuickBuyModal({
 
   const quickItems = products
     .filter((p) => p.isLive && p.stockQuantity > 0)
-    .sort((a, b) => b.reviewCount - a.reviewCount)
     .slice(0, 6);
 
   const cartCount = cart.reduce((acc, i) => acc + i.quantity, 0);
@@ -67,20 +67,25 @@ export function QuickBuyModal({
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="quick-buy-title"
         onClick={(e) => e.stopPropagation()}
         className="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-gray-200 animate-sheet-up sm:animate-modal-pop flex flex-col max-h-[90vh]"
       >
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200/80 flex items-center justify-center shrink-0">
-              <Zap className="w-5 h-5 fill-amber-500 text-amber-600" />
+            <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-200/80 flex items-center justify-center shrink-0">
+              <Zap className="w-5 h-5 fill-[#0C831F]/20 text-[#0C831F]" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-extrabold text-gray-950 text-base">Quick Buy Express</h3>
-                <span className="bg-[#ECFDF3] text-[#0C831F] border border-[#BBF7D0] text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase">
-                  30 Mins
+                <h3 id="quick-buy-title" className="font-extrabold text-gray-950 text-base">
+                  Quick Buy Express
+                </h3>
+                <span className="bg-[#ECFDF3] text-[#0A5C16] border border-[#BBF7D0] text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase">
+                  {DELIVERY_PROMISE.localTimeShort}
                 </span>
               </div>
               <p className="text-xs text-gray-500 mt-0.5">
@@ -119,15 +124,17 @@ export function QuickBuyModal({
                     className="p-2.5 rounded-2xl border border-gray-200/85 bg-white flex items-center justify-between gap-3 shadow-2xs hover:border-[#0C831F]/40 transition-colors"
                   >
                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                      <div className="w-11 h-11 rounded-xl bg-gray-50 border border-gray-100 p-1 flex items-center justify-center shrink-0">
-                        {product.imageUrl ? (
+                      <div className="w-11 h-11 rounded-xl bg-[#F7FAF8] border border-gray-100 p-1 flex items-center justify-center shrink-0 overflow-hidden">
+                        {isVerifiedProductImageUrl(product.imageUrl) ? (
                           <img
                             src={product.imageUrl}
-                            alt={product.name}
+                            alt={`${product.name} (${product.packSize})`}
+                            width={44}
+                            height={44}
                             className="w-full h-full object-contain"
                           />
                         ) : (
-                          <MedicinePackVisual product={product} className="w-full h-full" />
+                          <MedicinePackVisual product={product} compact className="w-full h-full" />
                         )}
                       </div>
                       <div className="min-w-0">
@@ -191,12 +198,16 @@ export function QuickBuyModal({
               Need an item not listed here? Type medicine names &amp; quantities:
             </p>
             <form onSubmit={handleSendCustomList} className="space-y-2.5">
+              <label htmlFor="quick-buy-custom-list" className="sr-only">
+                Type medicine names and quantities to send on WhatsApp
+              </label>
               <textarea
+                id="quick-buy-custom-list"
                 value={typedList}
                 onChange={(e) => setTypedList(e.target.value)}
                 placeholder="e.g. 1x Zandu Balm 25g, 2x Pudin Hara Pearls, 1x Liv.52 Tablets..."
                 rows={3}
-                className="w-full text-xs p-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15 resize-none"
+                className="w-full text-xs p-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15 resize-none"
               />
               <button
                 type="submit"
