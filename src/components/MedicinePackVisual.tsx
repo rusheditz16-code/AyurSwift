@@ -94,11 +94,16 @@ function getBrandPalette(brand: string): BrandPalette {
   }
 }
 
-function getShortLabel(name: string, brand: string): string {
+function getShortLabel(name: string, brand: string, maxChars = 14): string {
   const escaped = brand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const stripped = name.replace(new RegExp(`^${escaped}\\s*`, 'i'), '').trim();
   const base = stripped || name;
-  return base.length > 22 ? `${base.slice(0, 20).trim()}…` : base;
+  if (base.length <= maxChars) return base;
+  // Prefer breaking cleanly at a word boundary when possible
+  const slice = base.slice(0, maxChars - 1).trim();
+  const lastSpace = slice.lastIndexOf(' ');
+  const clean = lastSpace >= Math.floor(maxChars * 0.55) ? slice.slice(0, lastSpace) : slice;
+  return `${clean.trim()}…`;
 }
 
 export function MedicinePackVisual({
@@ -107,9 +112,15 @@ export function MedicinePackVisual({
   compact = false,
 }: MedicinePackVisualProps) {
   const palette = getBrandPalette(product.brand);
-  const shortLabel = getShortLabel(product.name, product.brand);
-  const brandUpper = (product.brand || 'AYURSWIFT').toUpperCase().slice(0, 12);
-  const packShort = (product.packSize || '').slice(0, 18);
+  const wideLabel = getShortLabel(product.name, product.brand, 15);
+  const medLabel = getShortLabel(product.name, product.brand, 11);
+  const narrowLabel = getShortLabel(product.name, product.brand, 9);
+  const brandUpper = (product.brand || 'AYURSWIFT').toUpperCase().slice(0, 10);
+  const packShort = (product.packSize || '')
+    .replace(/\s*\([^)]*\)/g, '')
+    .replace(/Bottle|Container|Spray Can/gi, '')
+    .trim()
+    .slice(0, 12);
   const form = product.form;
 
   return (
@@ -196,8 +207,8 @@ export function MedicinePackVisual({
             </text>
             {!compact && (
               <>
-                <text x="110" y="102" textAnchor="middle" fill="#111827" fontSize="8.5" fontWeight="800">
-                  {shortLabel}
+                <text x="110" y="102" textAnchor="middle" fill="#111827" fontSize="8" fontWeight="800">
+                  {wideLabel}
                 </text>
                 <rect x="82" y="109" width="56" height="13" rx="6.5" fill={palette.tint} />
                 <text x="110" y="118.5" textAnchor="middle" fill={palette.badgeText} fontSize="7.5" fontWeight="800">
@@ -287,8 +298,8 @@ export function MedicinePackVisual({
             </text>
             {!compact && (
               <>
-                <text x="110" y="86" textAnchor="middle" fill="#111827" fontSize="8" fontWeight="800">
-                  {shortLabel.slice(0, 15)}
+                <text x="110" y="86" textAnchor="middle" fill="#111827" fontSize="7.5" fontWeight="800">
+                  {medLabel}
                 </text>
                 <rect x="83" y="95" width="54" height="14" rx="7" fill={palette.tint} />
                 <text x="110" y="104.5" textAnchor="middle" fill={palette.badgeText} fontSize="7" fontWeight="800">
@@ -324,8 +335,8 @@ export function MedicinePackVisual({
             </text>
             {!compact && (
               <>
-                <text x="110" y="95" textAnchor="middle" fill="#111827" fontSize="7.5" fontWeight="800">
-                  {shortLabel.slice(0, 14)}
+                <text x="110" y="95" textAnchor="middle" fill="#111827" fontSize="7" fontWeight="800">
+                  {narrowLabel}
                 </text>
                 <rect x="89" y="103" width="42" height="13" rx="6.5" fill={palette.tint} />
                 <text x="110" y="112" textAnchor="middle" fill={palette.badgeText} fontSize="6.8" fontWeight="800">
@@ -364,8 +375,8 @@ export function MedicinePackVisual({
             </text>
             {!compact && (
               <>
-                <text x="110" y="90" textAnchor="middle" fill="#111827" fontSize="7.8" fontWeight="800">
-                  {shortLabel.slice(0, 14)}
+                <text x="110" y="90" textAnchor="middle" fill="#111827" fontSize="7.2" fontWeight="800">
+                  {narrowLabel}
                 </text>
                 <rect x="88" y="98" width="44" height="13" rx="6.5" fill={palette.tint} />
                 <text x="110" y="107" textAnchor="middle" fill={palette.badgeText} fontSize="6.8" fontWeight="800">
@@ -414,8 +425,8 @@ export function MedicinePackVisual({
             </text>
             {!compact && (
               <>
-                <text x="110" y="94" textAnchor="middle" fill="#111827" fontSize="8.3" fontWeight="800">
-                  {shortLabel.slice(0, 17)}
+                <text x="110" y="94" textAnchor="middle" fill="#111827" fontSize="7.8" fontWeight="800">
+                  {wideLabel}
                 </text>
                 <rect x="80" y="104" width="60" height="15" rx="7.5" fill={palette.tint} />
                 <text x="110" y="114.5" textAnchor="middle" fill={palette.badgeText} fontSize="7.3" fontWeight="800">
@@ -499,8 +510,8 @@ export function MedicinePackVisual({
             </text>
             {!compact && (
               <>
-                <text x="110" y="72" textAnchor="middle" fill="#111827" fontSize="7.5" fontWeight="800">
-                  {shortLabel.slice(0, 12)}
+                <text x="110" y="72" textAnchor="middle" fill="#111827" fontSize="7" fontWeight="800">
+                  {narrowLabel}
                 </text>
                 <rect x="91" y="82" width="38" height="13" rx="6.5" fill={palette.tint} />
                 <text x="110" y="91" textAnchor="middle" fill={palette.badgeText} fontSize="6.8" fontWeight="800">
@@ -522,8 +533,8 @@ export function MedicinePackVisual({
             </text>
             {!compact && (
               <>
-                <text x="110" y="76" textAnchor="middle" fill="#111827" fontSize="9" fontWeight="900">
-                  {shortLabel.slice(0, 16)}
+                <text x="110" y="76" textAnchor="middle" fill="#111827" fontSize="8.2" fontWeight="900">
+                  {medLabel}
                 </text>
                 <text x="110" y="91" textAnchor="middle" fill="#64748B" fontSize="7.5" fontWeight="700">
                   PURE AYURVEDIC HUSK

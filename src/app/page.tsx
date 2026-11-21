@@ -228,20 +228,9 @@ export default function StorefrontPage() {
     showToast(`Delivery updated to ${loc.area}`);
   };
 
-  // Selecting a dispatch mode filter syncs cleanly with delivery estimate & location context
+  // Dispatch filter previews local vs courier delivery estimates cleanly without overwriting saved location on Reset
   const handleSelectDispatchFilter = (mode: string) => {
     setSelectedDispatch(mode);
-    if (mode === 'RAPIDO_CITY' && currentLocation.dispatchType !== 'RAPIDO_CITY') {
-      handleSelectLocation(DEFAULT_LOCATION);
-    } else if (mode === 'COURIER_OUTSIDE' && currentLocation.dispatchType !== 'COURIER_OUTSIDE') {
-      handleSelectLocation({
-        area: 'Rest of India',
-        city: 'All India',
-        pincode: 'Other',
-        dispatchType: 'COURIER_OUTSIDE',
-        estimate: `Courier Dispatch (${DELIVERY_PROMISE.courierTimeShort})`,
-      });
-    }
   };
 
   // In-stock live products only

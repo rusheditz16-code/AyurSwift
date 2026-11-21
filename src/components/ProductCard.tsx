@@ -86,29 +86,16 @@ export function ProductCard({
       </button>
 
       {/* Readable Product Body */}
-      <div className="p-3.5 sm:p-4 flex flex-col flex-1">
-        {/* Brand & Delivery Estimate */}
-        <div className="flex items-center justify-between gap-2 mb-1.5">
-          <span className="text-[11px] font-extrabold text-[#0F766E] uppercase tracking-wide truncate">
+      <div className="p-3 sm:p-4 flex flex-col flex-1">
+        {/* Brand Eyebrow */}
+        <div className="flex items-center justify-between gap-1.5 mb-1">
+          <span className="text-[10.5px] sm:text-[11px] font-extrabold text-[#0F766E] uppercase tracking-wide truncate">
             {product.brand}
-          </span>
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-gray-100 text-[10px] font-bold text-gray-700 shrink-0">
-            {isLocal ? (
-              <>
-                <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500" aria-hidden="true" />
-                <span>{DELIVERY_PROMISE.localTimeShort}</span>
-              </>
-            ) : (
-              <>
-                <Truck className="w-2.5 h-2.5 text-[#0C831F]" aria-hidden="true" />
-                <span>{DELIVERY_PROMISE.courierTimeShort}</span>
-              </>
-            )}
           </span>
         </div>
 
         {/* Product Name */}
-        <h3 className="font-bold text-[13.5px] sm:text-[15px] text-gray-950 line-clamp-2 leading-[1.35] min-h-[38px]">
+        <h3 className="font-bold text-[13px] sm:text-[15px] text-gray-950 line-clamp-2 leading-[1.35] min-h-[36px] sm:min-h-[40px]">
           <button
             type="button"
             onClick={() => onViewDetails(product)}
@@ -118,10 +105,25 @@ export function ProductCard({
           </button>
         </h3>
 
-        {/* Pack Size */}
-        <p className="text-xs text-gray-600 font-medium mt-1 truncate">
-          {product.packSize}
-        </p>
+        {/* Pack Size & Verified Delivery Estimate */}
+        <div className="mt-1.5 space-y-1">
+          <p className="text-[11.5px] sm:text-xs text-gray-600 font-medium truncate">
+            {product.packSize}
+          </p>
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-gray-100 text-[10px] font-bold text-gray-700">
+            {isLocal ? (
+              <>
+                <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500 shrink-0" aria-hidden="true" />
+                <span>{DELIVERY_PROMISE.localTimeShort}</span>
+              </>
+            ) : (
+              <>
+                <Truck className="w-2.5 h-2.5 text-[#0C831F] shrink-0" aria-hidden="true" />
+                <span>{DELIVERY_PROMISE.courierTimeShort}</span>
+              </>
+            )}
+          </span>
+        </div>
 
         {/* Bottom Price + Accessible Add / Stepper */}
         <div className="pt-3.5 mt-auto flex items-end justify-between gap-2 border-t border-gray-100/80 mt-3">
