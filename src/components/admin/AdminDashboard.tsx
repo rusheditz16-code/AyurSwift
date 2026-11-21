@@ -588,8 +588,9 @@ export function AdminDashboard() {
     const trimmedName = (newProd.name || '').trim();
     const trimmedPack = (newProd.packSize || '').trim();
     const trimmedBrand = (newProd.brand || '').trim();
-    if (!trimmedName || !trimmedPack || !trimmedBrand) {
-      showToast('error', 'Please fill in Medicine Name, Brand, and Pack Size.');
+    const trimmedCategory = (newProd.category || '').trim();
+    if (!trimmedName || !trimmedPack || !trimmedBrand || !trimmedCategory) {
+      showToast('error', 'Please fill in Medicine Name, Brand, Category, and Pack Size.');
       return;
     }
 
@@ -615,7 +616,7 @@ export function AdminDashboard() {
       id: editingProductId || `sku-custom-${Date.now()}`,
       name: trimmedName,
       brand: trimmedBrand,
-      category: newProd.category || existingProd?.category || 'Joint & Muscle Pain',
+      category: trimmedCategory,
       manufacturer: (
         newProd.manufacturer ||
         existingProd?.manufacturer ||
@@ -1024,6 +1025,8 @@ export function AdminDashboard() {
         editingProductId={editingProductId}
         newProd={newProd}
         onChangeProd={setNewProd}
+        existingBrands={Array.from(new Set(products.map((p) => p.brand).filter(Boolean)))}
+        existingCategories={Array.from(new Set(products.map((p) => p.category).filter(Boolean)))}
         uploadedImages={uploadedImages}
         imageUrlInput={imageUrlInput}
         onImageUrlInputChange={setImageUrlInput}

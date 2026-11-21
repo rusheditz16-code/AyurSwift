@@ -280,11 +280,29 @@ export default function StorefrontPage() {
     return counts;
   }, [inStockProducts]);
 
-  // Only show Health Concern tiles that have live in-stock products
-  const visibleCategoryCards = useMemo(
-    () => CATEGORY_CARDS.filter((c) => (categoryCounts[c.id] || 0) > 0),
-    [categoryCounts]
-  );
+  // Show Health Concern tiles for every live category (preset + custom categories created in Admin)
+  const visibleCategoryCards = useMemo(() => {
+    const presetCards = CATEGORY_CARDS.filter((c) => (categoryCounts[c.id] || 0) > 0);
+    const presetIds = new Set(CATEGORY_CARDS.map((c) => c.id));
+    const customThemes = [
+      { icon: Leaf, bg: 'bg-emerald-50', iconColor: 'text-[#0C831F]', border: 'border-emerald-200/80' },
+      { icon: Sparkles, bg: 'bg-teal-50', iconColor: 'text-teal-700', border: 'border-teal-200/80' },
+      { icon: ShieldPlus, bg: 'bg-amber-50', iconColor: 'text-amber-700', border: 'border-amber-200/80' },
+      { icon: HeartPulse, bg: 'bg-cyan-50', iconColor: 'text-cyan-700', border: 'border-cyan-200/80' },
+    ];
+    const customCards = availableCategories
+      .filter((cat) => !presetIds.has(cat) && (categoryCounts[cat] || 0) > 0)
+      .map((cat, idx) => {
+        const theme = customThemes[idx % customThemes.length];
+        return {
+          id: cat,
+          title: cat,
+          sub: 'Ayurvedic essentials',
+          ...theme,
+        };
+      });
+    return [...presetCards, ...customCards];
+  }, [availableCategories, categoryCounts]);
 
   // Single focused 4-card Featured Savings row (1 highest-discount item per distinct category, zero repetition)
   const featuredSavingsPicks = useMemo(() => {

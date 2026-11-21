@@ -188,6 +188,7 @@ export function AdminInventoryTab({
           <select
             value={categoryFilter}
             onChange={(e) => onCategoryFilterChange(e.target.value)}
+            aria-label="Filter inventory by category"
             className={`px-3 py-1.5 rounded-xl text-xs font-bold border focus:outline-none cursor-pointer ${
               dark
                 ? 'bg-slate-900 border-slate-800 text-slate-200'
@@ -195,12 +196,24 @@ export function AdminInventoryTab({
             }`}
           >
             <option value="ALL">All Categories ({products.length})</option>
-            <option value="Joint & Muscle Pain">Joint &amp; Muscle Pain</option>
-            <option value="Digestion & Acidity">Digestion &amp; Acidity</option>
-            <option value="Immunity & Cold">Immunity &amp; Cold</option>
-            <option value="Skin & Hair">Skin &amp; Hair</option>
-            <option value="Daily Wellness">Daily Wellness</option>
-            <option value="Liver & Detox">Liver &amp; Detox</option>
+            {Array.from(
+              new Set([
+                'Joint & Muscle Pain',
+                'Digestion & Acidity',
+                'Immunity & Cold',
+                'Skin & Hair',
+                'Liver & Detox',
+                'Daily Wellness',
+                ...products.map((p) => p.category).filter(Boolean),
+              ])
+            ).map((cat) => {
+              const catCount = products.filter((p) => p.category === cat).length;
+              return (
+                <option key={cat} value={cat}>
+                  {cat} ({catCount})
+                </option>
+              );
+            })}
           </select>
         </div>
       </div>

@@ -17,11 +17,22 @@ const PRESET_BRANDS = [
   'Charak',
 ];
 
+const PRESET_CATEGORIES = [
+  'Joint & Muscle Pain',
+  'Digestion & Acidity',
+  'Immunity & Cold',
+  'Skin & Hair',
+  'Liver & Detox',
+  'Daily Wellness',
+];
+
 interface AdminProductDrawerProps {
   isOpen: boolean;
   editingProductId: string | null;
   newProd: Partial<Product>;
   onChangeProd: (p: Partial<Product>) => void;
+  existingBrands?: string[];
+  existingCategories?: string[];
   uploadedImages: string[];
   imageUrlInput: string;
   onImageUrlInputChange: (v: string) => void;
@@ -41,6 +52,8 @@ export function AdminProductDrawer({
   editingProductId,
   newProd,
   onChangeProd,
+  existingBrands = [],
+  existingCategories = [],
   uploadedImages,
   imageUrlInput,
   onImageUrlInputChange,
@@ -54,14 +67,25 @@ export function AdminProductDrawer({
   isSaving = false,
   dark,
 }: AdminProductDrawerProps) {
+  const brandOptions = Array.from(
+    new Set([...PRESET_BRANDS, ...existingBrands.map((b) => b.trim()).filter(Boolean)])
+  );
+  const categoryOptions = Array.from(
+    new Set([...PRESET_CATEGORIES, ...existingCategories.map((c) => c.trim()).filter(Boolean)])
+  );
+
   const [useCustomBrand, setUseCustomBrand] = useState(false);
+  const [useCustomCategory, setUseCustomCategory] = useState(false);
   const customBrandInputRef = useRef<HTMLInputElement>(null);
+  const customCategoryInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     const initialBrand = String(newProd.brand ?? '').trim();
-    setUseCustomBrand(Boolean(initialBrand) && !PRESET_BRANDS.includes(initialBrand));
-    // Re-sync custom brand mode only when opening the drawer or switching which SKU is edited
+    setUseCustomBrand(Boolean(initialBrand) && !brandOptions.includes(initialBrand));
+    const initialCat = String(newProd.category ?? '').trim();
+    setUseCustomCategory(Boolean(initialCat) && !categoryOptions.includes(initialCat));
+    // Re-sync custom brand/category modes only when opening the drawer or switching edited SKU
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, editingProductId]);
 
@@ -86,7 +110,11 @@ export function AdminProductDrawer({
 
   const rawBrand = typeof newProd.brand === 'string' ? newProd.brand : '';
   const isCustomBrand =
-    useCustomBrand || (rawBrand.trim().length > 0 && !PRESET_BRANDS.includes(rawBrand));
+    useCustomBrand || (rawBrand.trim().length > 0 && !brandOptions.includes(rawBrand));
+
+  const rawCategory = typeof newProd.category === 'string' ? newProd.category : '';
+  const isCustomCategory =
+    useCustomCategory || (rawCategory.trim().length > 0 && !categoryOptions.includes(rawCategory));
 
   const inputClass = `w-full px-3 py-2 rounded-xl text-xs font-semibold border focus:outline-none focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15 ${
     dark
@@ -319,7 +347,7 @@ export function AdminProductDrawer({
                   const val = e.target.value;
                   if (val === '__OTHER__') {
                     setUseCustomBrand(true);
-                    const nextBrand = PRESET_BRANDS.includes(rawBrand) ? '' : rawBrand;
+                    const nextBrand = brandOptions.includes(rawBrand) ? '' : rawBrand;
                     const nextMfg =
                       !editingProductId && newProd.manufacturer === 'Dabur India Ltd.'
                         ? ''
@@ -340,12 +368,12 @@ export function AdminProductDrawer({
                 }}
                 className={inputClass}
               >
-                {PRESET_BRANDS.map((b) => (
+                {brandOptions.map((b) => (
                   <option key={b} value={b}>
                     {b}
                   </option>
                 ))}
-                <option value="__OTHER__">Other / Custom Brand</option>
+                <option value="__OTHER__">+ Other / Add Custom Brand</option>
               </select>
             </div>
           </div>
@@ -381,16 +409,27 @@ export function AdminProductDrawer({
               </label>
               <select
                 id="admin-sku-category"
-                value={newProd.category || 'Joint & Muscle Pain'}
-                onChange={(e) => onChangeProd({ ...newProd, category: e.target.value })}
+                value={isCustomCategory ? '__NEW_CATEGORY__' : rawCategory || 'Joint & Muscle Pain'}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '__NEW_CATEGORY__') {
+                    setUseCustomCategory(true);
+                    const nextCat = categoryOptions.includes(rawCategory) ? '' : rawCategory;
+                    onChangeProd({ ...newProd, category: nextCat });
+                    setTimeout(() => customCategoryInputRef.current?.focus(), 0);
+                  } else {
+                    setUseCustomCategory(false);
+                    onChangeProd({ ...newProd, category: val });
+                  }
+                }}
                 className={inputClass}
               >
-                <option value="Joint & Muscle Pain">Joint &amp; Muscle Pain</option>
-                <option value="Digestion & Acidity">Digestion &amp; Acidity</option>
-                <option value="Immunity & Cold">Immunity &amp; Cold</option>
-                <option value="Skin & Hair">Skin &amp; Hair</option>
-                <option value="Liver & Detox">Liver &amp; Detox</option>
-                <option value="Daily Wellness">Daily Wellness</option>
+                {categoryOptions.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+                <option value="__NEW_CATEGORY__">+ Add New Category</option>
               </select>
             </div>
             <div>
@@ -408,6 +447,37 @@ export function AdminProductDrawer({
               />
             </div>
           </div>
+
+          {isCustomCategory && (
+            <div
+              className={`rounded-xl border p-3 ${
+                dark
+                  ? 'bg-emerald-950/25 border-emerald-800/70'
+                  : 'bg-emerald-50/70 border-emerald-200'
+              }`}
+            >
+              <label
+                htmlFor="admin-sku-custom-category"
+                className="block text-[11px] font-extrabold mb-1"
+              >
+                New Category Name *
+              </label>
+              <input
+                ref={customCategoryInputRef}
+                id="admin-sku-custom-category"
+                type="text"
+                maxLength={80}
+                value={rawCategory}
+                onChange={(e) => onChangeProd({ ...newProd, category: e.target.value })}
+                placeholder="e.g. Diabetes Care, Women's Wellness, Baby Care, Eye Care"
+                required
+                className={inputClass}
+              />
+              <p className={`text-[10px] mt-1 ${dark ? 'text-slate-400' : 'text-slate-600'}`}>
+                Automatically appears on your storefront navigation, category tiles &amp; filters.
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
