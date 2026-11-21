@@ -163,6 +163,53 @@ body {
   animation: placeholderCycle 3s ease-in-out infinite;
 }
 
+@keyframes heroMarquee {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@keyframes dealCardSwap {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes gentleFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.animate-hero-marquee {
+  display: flex;
+  width: max-content;
+  animation: heroMarquee 22s linear infinite;
+}
+
+.animate-hero-marquee:hover {
+  animation-play-state: paused;
+}
+
+.animate-deal-swap {
+  animation: dealCardSwap 340ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-gentle-float {
+  animation: gentleFloat 3.2s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in,
   .animate-modal-pop,

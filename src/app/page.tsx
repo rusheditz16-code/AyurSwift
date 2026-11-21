@@ -14,6 +14,7 @@ import { QuickBuyModal } from '@/components/QuickBuyModal';
 import { MobileFilterDrawer } from '@/components/MobileFilterDrawer';
 import { AccountModal } from '@/components/AccountModal';
 import { OrderTrackingModal } from '@/components/OrderTrackingModal';
+import { HeroAnimatedShowcase } from '@/components/HeroAnimatedShowcase';
 import {
   Product,
   CartItem,
@@ -466,55 +467,75 @@ export default function StorefrontPage() {
         {/* 2. Compact Quick-Commerce Hero Bento (hidden while actively searching) */}
         {!searchQuery.trim() && (
           <section className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
-            {/* Primary Express Hero Card */}
-            <div className="lg:col-span-2 relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0A6B19] via-[#0C831F] to-[#15803D] text-white p-5 sm:p-7 shadow-lg shadow-[#0C831F]/15 flex flex-col justify-between gap-4">
+            {/* Primary Express Hero Card (2-column split: Headline left + Blinkit/JioMart Animated Showcase right) */}
+            <div className="lg:col-span-2 relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0A6B19] via-[#0C831F] to-[#15803D] text-white p-5 sm:p-6 shadow-lg shadow-[#0C831F]/15 grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
               {/* Subtle geometric rings */}
               <div className="pointer-events-none absolute -right-12 -top-12 w-52 h-52 rounded-full bg-white/10 blur-xl" />
               <div className="pointer-events-none absolute right-10 -bottom-16 w-40 h-40 rounded-full bg-amber-400/15 blur-xl" />
 
-              <div className="space-y-2.5 relative z-10 max-w-xl">
-                <div className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-xs border border-white/20 px-3 py-1 rounded-full text-[11px] font-bold text-emerald-50">
-                  <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
-                  <span>
-                    {isLocal
-                      ? `30–45 Min Rapido Dispatch in ${currentLocation.area}`
-                      : 'All-India Tracked Express Courier (2–4 Days)'}
-                  </span>
+              {/* Left Column: Core Promise & Primary Actions */}
+              <div className="md:col-span-5 flex flex-col justify-between gap-4 relative z-10">
+                <div className="space-y-2.5">
+                  <div className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-xs border border-white/20 px-3 py-1 rounded-full text-[11px] font-bold text-emerald-50">
+                    <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+                    <span>
+                      {isLocal
+                        ? `30–45 Min Rapido Dispatch in ${currentLocation.area}`
+                        : 'All-India Tracked Express Courier (2–4 Days)'}
+                    </span>
+                  </div>
+
+                  <h1 className="font-extrabold text-2xl sm:text-3xl lg:text-[31px] tracking-tight leading-[1.15]">
+                    Authentic Ayurveda,
+                    <br />
+                    <span className="text-amber-300">at your door in 30 mins.</span>
+                  </h1>
+
+                  <p className="text-xs sm:text-[13px] text-emerald-50/90 leading-relaxed font-medium">
+                    100% genuine Dabur, Zandu, Himalaya &amp; Baidyanath essentials packed fresh from our Bhavnagar dark store.{' '}
+                    {isLocal && (
+                      <strong className="text-white">
+                        Free delivery above ₹{settings.cityFreeDeliveryAbove}.
+                      </strong>
+                    )}
+                  </p>
                 </div>
 
-                <h1 className="font-extrabold text-2xl sm:text-3xl lg:text-[34px] tracking-tight leading-[1.15]">
-                  Authentic Ayurveda,
-                  <br />
-                  <span className="text-amber-300">at your door in 30 mins.</span>
-                </h1>
-
-                <p className="text-xs sm:text-sm text-emerald-50/90 leading-relaxed max-w-md font-medium">
-                  100% genuine Dabur, Zandu, Himalaya &amp; Baidyanath essentials packed fresh from our Bhavnagar dark store.{' '}
-                  {isLocal && (
-                    <strong className="text-white">
-                      Free delivery above ₹{settings.cityFreeDeliveryAbove}.
-                    </strong>
-                  )}
-                </p>
+                <div className="flex flex-wrap items-center gap-2 relative z-10">
+                  <button
+                    type="button"
+                    onClick={scrollToCatalog}
+                    className="bg-white hover:bg-emerald-50 text-[#0A5C16] font-extrabold text-xs sm:text-sm px-4 py-2.5 rounded-xl flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer"
+                  >
+                    <span>Shop All Remedies</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsQuickBuyModalOpen(true)}
+                    className="bg-white/15 hover:bg-white/22 text-white border border-white/25 font-bold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer backdrop-blur-xs"
+                  >
+                    <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+                    <span>Quick Buy List</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2.5 relative z-10">
-                <button
-                  type="button"
-                  onClick={scrollToCatalog}
-                  className="bg-white hover:bg-emerald-50 text-[#0A5C16] font-extrabold text-xs sm:text-sm px-5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer"
-                >
-                  <span>Shop All Remedies</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsQuickBuyModalOpen(true)}
-                  className="bg-white/15 hover:bg-white/22 text-white border border-white/25 font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer backdrop-blur-xs"
-                >
-                  <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
-                  <span>Quick Buy List</span>
-                </button>
+              {/* Right Column: Blinkit + JioMart Animated Showcase */}
+              <div className="md:col-span-7 relative z-10 min-w-0">
+                <HeroAnimatedShowcase
+                  products={products}
+                  onAddToCart={handleAddToCart}
+                  onSelectProduct={(p) => setSelectedMedicineDetails(p)}
+                  onSelectCategory={(cat) => {
+                    setSelectedCategory(cat);
+                    scrollToCatalog();
+                  }}
+                  onSelectBrand={(brand) => {
+                    setSelectedBrand(brand);
+                    scrollToCatalog();
+                  }}
+                />
               </div>
             </div>
 
