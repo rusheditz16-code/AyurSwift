@@ -464,17 +464,16 @@ export default function StorefrontPage() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-3 sm:px-5 pt-4 sm:pt-5 flex-1 w-full space-y-6 sm:space-y-8">
-        {/* 2. Compact Quick-Commerce Hero Bento (hidden while actively searching) */}
+        {/* 2. Full-Width Animated Quick-Commerce Hero (hidden while actively searching) */}
         {!searchQuery.trim() && (
-          <section className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
-            {/* Primary Express Hero Card (2-column split: Headline left + Blinkit/JioMart Animated Showcase right) */}
-            <div className="lg:col-span-2 relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0A6B19] via-[#0C831F] to-[#15803D] text-white p-5 sm:p-6 shadow-lg shadow-[#0C831F]/15 grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
+          <section>
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0A6B19] via-[#0C831F] to-[#15803D] text-white p-5 sm:p-7 shadow-lg shadow-[#0C831F]/15 grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6 items-center">
               {/* Subtle geometric rings */}
               <div className="pointer-events-none absolute -right-12 -top-12 w-52 h-52 rounded-full bg-white/10 blur-xl" />
               <div className="pointer-events-none absolute right-10 -bottom-16 w-40 h-40 rounded-full bg-amber-400/15 blur-xl" />
 
               {/* Left Column: Core Promise & Primary Actions */}
-              <div className="md:col-span-5 flex flex-col justify-between gap-4 relative z-10">
+              <div className="lg:col-span-5 flex flex-col justify-between gap-4 relative z-10">
                 <div className="space-y-2.5">
                   <div className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-xs border border-white/20 px-3 py-1 rounded-full text-[11px] font-bold text-emerald-50">
                     <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
@@ -485,13 +484,13 @@ export default function StorefrontPage() {
                     </span>
                   </div>
 
-                  <h1 className="font-extrabold text-2xl sm:text-3xl lg:text-[31px] tracking-tight leading-[1.15]">
+                  <h1 className="font-extrabold text-2xl sm:text-3xl lg:text-[34px] tracking-tight leading-[1.15]">
                     Authentic Ayurveda,
                     <br />
                     <span className="text-amber-300">at your door in 30 mins.</span>
                   </h1>
 
-                  <p className="text-xs sm:text-[13px] text-emerald-50/90 leading-relaxed font-medium">
+                  <p className="text-xs sm:text-sm text-emerald-50/90 leading-relaxed font-medium max-w-lg">
                     100% genuine Dabur, Zandu, Himalaya &amp; Baidyanath essentials packed fresh from our Bhavnagar dark store.{' '}
                     {isLocal && (
                       <strong className="text-white">
@@ -501,11 +500,11 @@ export default function StorefrontPage() {
                   </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 relative z-10">
+                <div className="flex flex-wrap items-center gap-2.5 relative z-10">
                   <button
                     type="button"
                     onClick={scrollToCatalog}
-                    className="bg-white hover:bg-emerald-50 text-[#0A5C16] font-extrabold text-xs sm:text-sm px-4 py-2.5 rounded-xl flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer"
+                    className="bg-white hover:bg-emerald-50 text-[#0A5C16] font-extrabold text-xs sm:text-sm px-5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer"
                   >
                     <span>Shop All Remedies</span>
                     <ArrowRight className="w-4 h-4" />
@@ -513,7 +512,7 @@ export default function StorefrontPage() {
                   <button
                     type="button"
                     onClick={() => setIsQuickBuyModalOpen(true)}
-                    className="bg-white/15 hover:bg-white/22 text-white border border-white/25 font-bold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer backdrop-blur-xs"
+                    className="bg-white/15 hover:bg-white/22 text-white border border-white/25 font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer backdrop-blur-xs"
                   >
                     <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
                     <span>Quick Buy List</span>
@@ -522,7 +521,7 @@ export default function StorefrontPage() {
               </div>
 
               {/* Right Column: Blinkit + JioMart Animated Showcase */}
-              <div className="md:col-span-7 relative z-10 min-w-0">
+              <div className="lg:col-span-7 relative z-10 min-w-0">
                 <HeroAnimatedShowcase
                   products={products}
                   onAddToCart={handleAddToCart}
@@ -536,37 +535,6 @@ export default function StorefrontPage() {
                     scrollToCatalog();
                   }}
                 />
-              </div>
-            </div>
-
-            {/* Right Trust Bento Mini-Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-1 gap-3">
-              <div className="bg-white rounded-2xl border border-gray-200/90 p-4 flex items-start gap-3 shadow-2xs hover:border-[#0C831F]/40 transition-colors">
-                <div className="w-10 h-10 rounded-xl bg-[#ECFDF3] border border-[#BBF7D0] text-[#0C831F] flex items-center justify-center shrink-0">
-                  <QrCode className="w-5 h-5" />
-                </div>
-                <div className="min-w-0">
-                  <div className="font-extrabold text-xs sm:text-sm text-gray-950">
-                    100% Prepaid Zero-Fee UPI
-                  </div>
-                  <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
-                    Instant Bharat QR for GPay, PhonePe &amp; Paytm. ₹0 gateway fees, instant refund guarantee.
-                  </p>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-2xl border border-gray-200/90 p-4 flex items-start gap-3 shadow-2xs hover:border-[#0C831F]/40 transition-colors">
-                <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200/80 text-amber-700 flex items-center justify-center shrink-0">
-                  <ShieldCheck className="w-5 h-5" />
-                </div>
-                <div className="min-w-0">
-                  <div className="font-extrabold text-xs sm:text-sm text-gray-950">
-                    Live Stock Guarantee
-                  </div>
-                  <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
-                    Only physically verified shelf stock is shown — zero cancellations, GST billed.
-                  </p>
-                </div>
               </div>
             </div>
           </section>
