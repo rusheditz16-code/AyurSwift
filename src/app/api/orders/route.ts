@@ -199,12 +199,12 @@ async function loadAllOrders(): Promise<Order[]> {
 
 /**
  * Loads authoritative product catalog on the server for price & stock verification.
+ * Uses Supabase exclusively when configured so deleted SKUs cannot be ordered and new SKUs work immediately.
  */
 async function loadServerCatalog(): Promise<Map<string, Product>> {
   const catalog = new Map<string, Product>();
-  INITIAL_PRODUCTS.forEach((p) => catalog.set(p.id, p));
-
   const supabase = getSupabaseAdminClient();
+
   if (supabase) {
     try {
       const { data, error } = await supabase.from('products').select('*');
@@ -212,34 +212,36 @@ async function loadServerCatalog(): Promise<Map<string, Product>> {
         data.forEach((row: Record<string, unknown>) => {
           const id = String(row.id || '');
           if (!id) return;
-          const base = catalog.get(id);
           catalog.set(id, {
             id,
-            name: String(row.name || base?.name || ''),
-            brand: String(row.brand || base?.brand || ''),
-            category: String(row.category || base?.category || ''),
-            manufacturer: String(row.manufacturer || base?.manufacturer || ''),
-            form: (row.form as Product['form']) || base?.form || 'Tablet',
-            packSize: String(row.pack_size || base?.packSize || ''),
-            agencyCostPrice: Number(row.agency_cost_price ?? base?.agencyCostPrice ?? 0),
-            mrp: Number(row.mrp ?? base?.mrp ?? 0),
-            sellingPrice: Number(row.selling_price ?? base?.sellingPrice ?? 0),
-            stockQuantity: Number(row.stock_quantity ?? base?.stockQuantity ?? 0),
-            isLive: Boolean(row.is_live ?? base?.isLive ?? false),
-            rating: base?.rating ?? 4.8,
-            reviewCount: base?.reviewCount ?? 100,
-            indications: String(row.indications || base?.indications || ''),
-            dosage: String(row.dosage || base?.dosage || ''),
-            composition: String(row.composition || base?.composition || ''),
-            imageUrl: row.image_url ? String(row.image_url) : base?.imageUrl,
+            name: String(row.name || ''),
+            brand: String(row.brand || ''),
+            category: String(row.category || ''),
+            manufacturer: String(row.manufacturer || ''),
+            form: ((row.form as Product['form']) || 'Tablets'),
+            packSize: String(row.pack_size || ''),
+            agencyCostPrice: Number(row.agency_cost_price ?? 0),
+            mrp: Number(row.mrp ?? 0),
+            sellingPrice: Number(row.selling_price ?? 0),
+            stockQuantity: Number(row.stock_quantity ?? 0),
+            isLive: Boolean(row.is_live),
+            indications: String(row.indications || ''),
+            dosage: String(row.dosage || ''),
+            composition: String(row.composition || ''),
+            safetyAdvice: row.safety_advice ? String(row.safety_advice) : undefined,
+            badgeText: row.badge_text ? String(row.badge_text) : undefined,
+            imageUrl: row.image_url ? String(row.image_url) : '',
+            images: Array.isArray(row.images) ? (row.images as string[]) : [],
           });
         });
+        return catalog;
       }
     } catch {
-      // Fallback cleanly to built-in catalog if DB read fails
+      // Fallback to built-in catalog only if DB read throws
     }
   }
 
+  INITIAL_PRODUCTS.forEach((p) => catalog.set(p.id, p));
   return catalog;
 }
 

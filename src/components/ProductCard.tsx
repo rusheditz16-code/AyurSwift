@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Minus, Eye, Zap, Truck } from 'lucide-react';
 import { DeliveryType, Product } from '@/types';
 import { DELIVERY_PROMISE, isVerifiedProductImageUrl } from '@/lib/initialData';
@@ -26,12 +26,18 @@ export function ProductCard({
   compact = false,
 }: ProductCardProps) {
   const [imageError, setImageError] = useState(false);
+  const primaryImage = product.imageUrl || product.images?.[0] || '';
+
+  useEffect(() => {
+    setImageError(false);
+  }, [primaryImage]);
+
   const discountPercent =
     product.mrp > product.sellingPrice
       ? Math.round(((product.mrp - product.sellingPrice) / product.mrp) * 100)
       : 0;
   const isLocal = dispatchType !== 'COURIER_OUTSIDE';
-  const showPhoto = isVerifiedProductImageUrl(product.imageUrl) && !imageError;
+  const showPhoto = isVerifiedProductImageUrl(primaryImage) && !imageError;
 
   return (
     <article
@@ -61,7 +67,7 @@ export function ProductCard({
       >
         {showPhoto ? (
           <img
-            src={product.imageUrl}
+            src={primaryImage}
             alt={`${product.name} (${product.packSize}) by ${product.brand}`}
             width={320}
             height={240}
@@ -92,11 +98,16 @@ export function ProductCard({
 
       {/* Readable Product Body */}
       <div className="p-3 sm:p-4 flex flex-col flex-1">
-        {/* Brand Eyebrow */}
+        {/* Brand Eyebrow & Optional Highlight Badge */}
         <div className="flex items-center justify-between gap-1.5 mb-1">
           <span className="text-[10.5px] sm:text-[11px] font-extrabold text-[#0F766E] uppercase tracking-wide truncate">
             {product.brand}
           </span>
+          {product.badgeText && (
+            <span className="text-[9.5px] font-bold text-[#0A5C16] bg-[#ECFDF3] border border-[#BBF7D0] px-1.5 py-0.5 rounded-md truncate max-w-[52%] shrink-0">
+              {product.badgeText}
+            </span>
+          )}
         </div>
 
         {/* Product Name */}

@@ -20,15 +20,64 @@ import {
   saveStoredOrders,
   getStoredSettings,
   saveStoredSettings,
-  resetToInitialProducts,
   formatRapidoDropText,
   generateSmartAdminWhatsAppUrl,
   syncProductToServer,
   deleteProductOnServer,
   fetchLiveCatalogFromServer,
+  restoreStarterCatalogOnServer,
   exportOrdersToCsv,
   getIstDateKey,
 } from '@/lib/store';
+
+/**
+ * Compresses & resizes uploaded product photos via Canvas (max 1000px, WebP/JPEG)
+ * so phone photos (2-5MB) shrink to ~60-120KB, load instantly on storefront, and
+ * never hit Vercel's 4.5MB serverless payload limit.
+ */
+async function compressImageToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Failed to read image file.'));
+    reader.onload = () => {
+      const rawDataUrl = reader.result as string;
+      const img = new Image();
+      img.onerror = () => reject(new Error('Invalid image file.'));
+      img.onload = () => {
+        const MAX_DIM = 900;
+        let { width, height } = img;
+        if (width > MAX_DIM || height > MAX_DIM) {
+          if (width >= height) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          } else {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, width);
+        canvas.height = Math.max(1, height);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(rawDataUrl);
+          return;
+        }
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const webp = canvas.toDataURL('image/webp', 0.82);
+        if (webp.startsWith('data:image/webp;base64,')) {
+          resolve(webp);
+        } else {
+          resolve(canvas.toDataURL('image/jpeg', 0.82));
+        }
+      };
+      img.src = rawDataUrl;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 /**
  * Verifies real image file magic bytes (PNG, JPEG, WebP only — rejects SVG/HTML/scripts).
@@ -111,6 +160,7 @@ export function AdminDashboard() {
   const [newProd, setNewProd] = useState<Partial<Product>>(DEFAULT_NEW_PROD);
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
   const [imageUrlInput, setImageUrlInput] = useState('');
+  const [isSavingProduct, setIsSavingProduct] = useState(false);
   const [resetToast, setResetToast] = useState(false);
 
   // Dispatch state & live sync
@@ -246,17 +296,18 @@ export function AdminDashboard() {
     }
   }, []);
 
-  // Load orders & products when authenticated + visibility-aware 10s polling (pauses in hidden tabs)
+  const refreshCatalog = useCallback(async () => {
+    const liveProds = await fetchLiveCatalogFromServer(true);
+    if (liveProds !== null) {
+      setProducts(liveProds);
+    }
+  }, []);
+
+  // Load orders & authoritative products when authenticated + visibility-aware 10s polling
   useEffect(() => {
     if (!isAuthenticated) return;
     refreshOrders();
-    fetchLiveCatalogFromServer(true)
-      .then((liveProds) => {
-        if (liveProds && liveProds.length > 0) {
-          setProducts(liveProds);
-        }
-      })
-      .catch(() => {});
+    refreshCatalog();
     if (!isLiveSync) return;
 
     const timer = setInterval(() => {
@@ -268,6 +319,7 @@ export function AdminDashboard() {
     const onVisibilityChange = () => {
       if (!document.hidden) {
         refreshOrders();
+        refreshCatalog();
       }
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
@@ -276,7 +328,7 @@ export function AdminDashboard() {
       clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [isAuthenticated, isLiveSync, refreshOrders]);
+  }, [isAuthenticated, isLiveSync, refreshOrders, refreshCatalog]);
 
   // Lockout countdown
   useEffect(() => {
@@ -344,38 +396,85 @@ export function AdminDashboard() {
     }
   };
 
-  // Inventory actions
-  const handleStockChange = (productId: string, delta: number) => {
+  // Inventory actions (all awaited against Supabase with rollback & clear toast feedback)
+  const handleStockChange = async (productId: string, delta: number) => {
+    const previous = products;
+    let targetItem: Product | null = null;
     const updated = products.map((p) => {
       if (p.id === productId) {
         const newStock = Math.max(0, p.stockQuantity + delta);
-        const isLive = newStock === 0 ? false : p.isLive;
+        const isLive =
+          newStock === 0
+            ? false
+            : p.stockQuantity === 0 && newStock > 0
+            ? true
+            : p.isLive;
         const item = { ...p, stockQuantity: newStock, isLive };
-        syncProductToServer(item);
+        targetItem = item;
         return item;
       }
       return p;
     });
+    if (!targetItem) return;
+
     setProducts(updated);
     saveStoredProducts(updated);
+
+    const res = await syncProductToServer(targetItem);
+    if (!res.ok) {
+      setProducts(previous);
+      saveStoredProducts(previous);
+      if (res.status === 401 || res.status === 403) {
+        setIsAuthenticated(false);
+        setAuthError('Your admin session expired. Please sign in again.');
+      } else {
+        showToast('error', res.error || 'Could not update stock in database.');
+      }
+    }
   };
 
-  const handleToggleLive = (productId: string) => {
+  const handleToggleLive = async (productId: string) => {
+    const previous = products;
+    let targetItem: Product | null = null;
     const updated = products.map((p) => {
       if (p.id === productId && p.stockQuantity > 0) {
         const item = { ...p, isLive: !p.isLive };
-        syncProductToServer(item);
+        targetItem = item;
         return item;
       }
       return p;
     });
+    if (!targetItem) return;
+
     setProducts(updated);
     saveStoredProducts(updated);
+
+    const res = await syncProductToServer(targetItem);
+    if (!res.ok) {
+      setProducts(previous);
+      saveStoredProducts(previous);
+      if (res.status === 401 || res.status === 403) {
+        setIsAuthenticated(false);
+        setAuthError('Your admin session expired. Please sign in again.');
+      } else {
+        showToast('error', res.error || 'Could not update storefront visibility.');
+      }
+    } else {
+      const toggled = targetItem as Product;
+      showToast(
+        'success',
+        toggled.isLive ? `${toggled.name} is now live on storefront` : `${toggled.name} hidden from storefront`
+      );
+    }
   };
 
   const handleOpenAddDrawer = () => {
     setEditingProductId(null);
-    setNewProd(DEFAULT_NEW_PROD);
+    setNewProd({
+      ...DEFAULT_NEW_PROD,
+      badgeText: '',
+      safetyAdvice: 'Store in a cool dry place away from direct sunlight.',
+    });
     setUploadedImages([]);
     setImageUrlInput('');
     setShowAddDrawer(true);
@@ -395,36 +494,60 @@ export function AdminDashboard() {
     setShowAddDrawer(true);
   };
 
-  const handleDeleteProduct = (productId: string) => {
-    if (confirm('Remove this medicine SKU from the dark-store catalog?')) {
-      const updated = products.filter((p) => p.id !== productId);
-      setProducts(updated);
-      saveStoredProducts(updated);
-      deleteProductOnServer(productId);
+  const handleDeleteProduct = async (productId: string) => {
+    const target = products.find((p) => p.id === productId);
+    if (!confirm(`Permanently remove "${target?.name || productId}" from storefront & database?`)) {
+      return;
     }
+
+    const previous = products;
+    const updated = products.filter((p) => p.id !== productId);
+    setProducts(updated);
+    saveStoredProducts(updated);
+
+    const res = await deleteProductOnServer(productId);
+    if (!res.ok) {
+      setProducts(previous);
+      saveStoredProducts(previous);
+      if (res.status === 401 || res.status === 403) {
+        setIsAuthenticated(false);
+        setAuthError('Your admin session expired. Please sign in again.');
+      } else {
+        showToast('error', res.error || 'Failed to delete product from database.');
+      }
+      return;
+    }
+
+    showToast('success', `"${target?.name || 'Product'}" deleted from storefront & database`);
   };
 
   const handleMultipleImageFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    for (const file of Array.from(files)) {
-      if (file.size > 3 * 1024 * 1024) {
-        alert(`File ${file.name} exceeds 3MB limit.`);
+
+    const remainingSlots = Math.max(0, 6 - uploadedImages.length);
+    const chosen = Array.from(files).slice(0, remainingSlots);
+
+    for (const file of chosen) {
+      if (file.size > 10 * 1024 * 1024) {
+        showToast('error', `${file.name} exceeds 10MB limit.`);
         continue;
       }
       const validImage = await hasValidImageMagicBytes(file);
       if (!validImage) {
-        alert(`Rejected ${file.name}: only genuine PNG, JPG, or WebP images are allowed (SVG/HTML blocked).`);
+        showToast('error', `Rejected ${file.name}: only genuine PNG, JPG, or WebP images allowed.`);
         continue;
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        if (result && /^data:image\/(png|jpeg|webp);base64,/.test(result)) {
-          setUploadedImages((prev) => (prev.includes(result) ? prev : [...prev, result]));
+      try {
+        const compressed = await compressImageToDataUrl(file);
+        if (compressed && /^data:image\/(png|jpeg|webp);base64,/.test(compressed)) {
+          setUploadedImages((prev) =>
+            prev.length >= 6 || prev.includes(compressed) ? prev : [...prev, compressed]
+          );
         }
-      };
-      reader.readAsDataURL(file);
+      } catch {
+        showToast('error', `Could not process ${file.name}.`);
+      }
     }
     if (e.target) e.target.value = '';
   };
@@ -432,14 +555,18 @@ export function AdminDashboard() {
   const handleAddImageUrl = () => {
     const url = imageUrlInput.trim();
     if (!url) return;
+    if (uploadedImages.length >= 6) {
+      showToast('error', 'Maximum 6 photos per product.');
+      return;
+    }
     try {
       const parsed = new URL(url);
       if (parsed.protocol !== 'https:') {
-        alert('Only secure https:// image URLs are allowed.');
+        showToast('error', 'Only secure https:// image URLs are allowed.');
         return;
       }
     } catch {
-      alert('Please enter a valid https:// image URL.');
+      showToast('error', 'Please enter a valid https:// image URL.');
       return;
     }
     setUploadedImages((prev) => (prev.includes(url) ? prev : [...prev, url]));
@@ -454,88 +581,116 @@ export function AdminDashboard() {
     setUploadedImages((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSaveProductSubmit = (e: React.FormEvent) => {
+  const handleSaveProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newProd.name || !newProd.packSize) {
-      alert('Please fill in medicine name and pack size.');
+    if (isSavingProduct) return;
+
+    const trimmedName = (newProd.name || '').trim();
+    const trimmedPack = (newProd.packSize || '').trim();
+    const trimmedBrand = (newProd.brand || '').trim();
+    if (!trimmedName || !trimmedPack || !trimmedBrand) {
+      showToast('error', 'Please fill in Medicine Name, Brand, and Pack Size.');
       return;
     }
 
-    const finalImages = uploadedImages.filter(Boolean);
-    const primaryImageUrl = finalImages[0] || newProd.imageUrl || undefined;
+    const mrpVal = Number(newProd.mrp);
+    const sellVal = Number(newProd.sellingPrice);
+    const costVal = Number(newProd.agencyCostPrice) || 0;
+    const stockVal = Math.max(0, Math.floor(Number(newProd.stockQuantity) || 0));
 
-    if (editingProductId) {
-      const updated = products.map((p) => {
-        if (p.id === editingProductId) {
-          const item: Product = {
-            ...p,
-            name: newProd.name!,
-            brand: newProd.brand || p.brand,
-            category: newProd.category || p.category,
-            manufacturer: newProd.manufacturer || p.manufacturer,
-            form: (newProd.form as Product['form']) || p.form,
-            packSize: newProd.packSize!,
-            agencyCostPrice: Number(newProd.agencyCostPrice) || 0,
-            mrp: Number(newProd.mrp) || 0,
-            sellingPrice: Number(newProd.sellingPrice) || 0,
-            stockQuantity: Number(newProd.stockQuantity) || 0,
-            isLive: (Number(newProd.stockQuantity) || 0) > 0 ? newProd.isLive ?? true : false,
-            indications: newProd.indications || p.indications,
-            dosage: newProd.dosage || p.dosage,
-            composition: newProd.composition || p.composition,
-            imageUrl: primaryImageUrl,
-            images: finalImages.length > 0 ? finalImages : undefined,
-          };
-          syncProductToServer(item);
-          return item;
-        }
-        return p;
-      });
-      setProducts(updated);
-      saveStoredProducts(updated);
-    } else {
-      const created: Product = {
-        id: `sku-custom-${Date.now()}`,
-        name: newProd.name!,
-        brand: newProd.brand || 'Dabur',
-        category: newProd.category || 'Joint & Muscle Pain',
-        manufacturer: newProd.manufacturer || 'Ayurvedic Pharmacy',
-        form: (newProd.form as Product['form']) || 'Balm',
-        packSize: newProd.packSize!,
-        agencyCostPrice: Number(newProd.agencyCostPrice) || 0,
-        mrp: Number(newProd.mrp) || 0,
-        sellingPrice: Number(newProd.sellingPrice) || 0,
-        stockQuantity: Number(newProd.stockQuantity) || 0,
-        isLive: (Number(newProd.stockQuantity) || 0) > 0,
-        rating: 4.8,
-        reviewCount: 1,
-        indications: newProd.indications || 'Targeted Ayurvedic health remedy',
-        dosage: newProd.dosage || 'As directed on pack',
-        composition: newProd.composition || 'Herbal Ayurvedic Formulation',
-        safetyAdvice: 'Store in a cool dry place away from sunlight.',
-        imageUrl: primaryImageUrl,
-        images: finalImages.length > 0 ? finalImages : undefined,
-      };
-      const updated = [created, ...products];
-      setProducts(updated);
-      saveStoredProducts(updated);
-      syncProductToServer(created);
+    if (!Number.isFinite(mrpVal) || mrpVal <= 0 || !Number.isFinite(sellVal) || sellVal <= 0) {
+      showToast('error', 'MRP and Selling Price must be greater than ₹0.');
+      return;
     }
 
+    const finalImages = uploadedImages.filter(Boolean).slice(0, 6);
+    const primaryImageUrl = finalImages[0] || '';
+    const isLiveVal = stockVal > 0 ? newProd.isLive !== false : false;
+
+    const existingProd = editingProductId
+      ? products.find((p) => p.id === editingProductId)
+      : undefined;
+
+    const itemToSave: Product = {
+      id: editingProductId || `sku-custom-${Date.now()}`,
+      name: trimmedName,
+      brand: trimmedBrand,
+      category: newProd.category || existingProd?.category || 'Joint & Muscle Pain',
+      manufacturer: (newProd.manufacturer || existingProd?.manufacturer || 'Ayurvedic Pharmacy').trim(),
+      form: ((newProd.form as Product['form']) || existingProd?.form || 'Balm'),
+      packSize: trimmedPack,
+      agencyCostPrice: Math.max(0, costVal),
+      mrp: mrpVal,
+      sellingPrice: sellVal,
+      stockQuantity: stockVal,
+      isLive: isLiveVal,
+      badgeText: (newProd.badgeText || '').trim() || undefined,
+      indications:
+        (newProd.indications || existingProd?.indications || 'Targeted Ayurvedic health remedy').trim(),
+      dosage: (newProd.dosage || existingProd?.dosage || 'As directed on pack').trim(),
+      composition:
+        (newProd.composition || existingProd?.composition || 'Herbal Ayurvedic Formulation').trim(),
+      safetyAdvice: (newProd.safetyAdvice || '').trim() || undefined,
+      imageUrl: primaryImageUrl,
+      images: finalImages,
+    };
+
+    setIsSavingProduct(true);
+    const res = await syncProductToServer(itemToSave);
+    setIsSavingProduct(false);
+
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        setShowAddDrawer(false);
+        setIsAuthenticated(false);
+        setAuthError('Your admin session expired. Please sign in again.');
+      } else {
+        showToast('error', res.error || 'Could not save product to database.');
+      }
+      return;
+    }
+
+    const confirmed = res.product || itemToSave;
+    const updated = editingProductId
+      ? products.map((p) => (p.id === editingProductId ? confirmed : p))
+      : [confirmed, ...products.filter((p) => p.id !== confirmed.id)];
+
+    setProducts(updated);
+    saveStoredProducts(updated);
     setShowAddDrawer(false);
     setEditingProductId(null);
+    showToast(
+      'success',
+      confirmed.isLive
+        ? `"${confirmed.name}" saved & live on storefront!`
+        : `"${confirmed.name}" saved as hidden draft.`
+    );
   };
 
-  const handleResetCatalog = () => {
+  const handleResetCatalog = async () => {
     if (
-      confirm(
-        'Reset catalog to the verified authentic Ayurvedic medicines with real stock? Custom edits will be replaced.'
+      !confirm(
+        'Restore all 20 verified starter Ayurvedic medicines directly into your live Supabase database?'
       )
     ) {
-      setProducts(resetToInitialProducts());
-      setResetToast(true);
-      setTimeout(() => setResetToast(false), 2500);
+      return;
     }
+
+    const res = await restoreStarterCatalogOnServer();
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        setIsAuthenticated(false);
+        setAuthError('Your admin session expired. Please sign in again.');
+      } else {
+        showToast('error', res.error || 'Could not restore starter catalog.');
+      }
+      return;
+    }
+
+    await refreshCatalog();
+    setResetToast(true);
+    showToast('success', '20 starter products restored & live on storefront!');
+    setTimeout(() => setResetToast(false), 3000);
   };
 
   // Shared authenticated order mutation helper with rollback + user feedback
@@ -834,6 +989,7 @@ export function AdminDashboard() {
               onCategoryFilterChange={setCategoryFilter}
               onStockChange={handleStockChange}
               onToggleLive={handleToggleLive}
+              onOpenAdd={handleOpenAddDrawer}
               onOpenEdit={handleOpenEditDrawer}
               onDeleteProduct={handleDeleteProduct}
               onResetCatalog={handleResetCatalog}
@@ -873,6 +1029,7 @@ export function AdminDashboard() {
         onRemoveImage={handleRemoveImageAtIndex}
         onSubmit={handleSaveProductSubmit}
         onClose={() => setShowAddDrawer(false)}
+        isSaving={isSavingProduct}
         dark={dark}
       />
 

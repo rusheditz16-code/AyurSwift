@@ -30,7 +30,6 @@ import {
   fetchLiveCatalogFromServer,
 } from '@/lib/store';
 import {
-  INITIAL_PRODUCTS,
   DEFAULT_SETTINGS,
   DELIVERY_PROMISE,
   isVerifiedProductImageUrl,
@@ -126,7 +125,7 @@ const CATEGORY_CARDS = [
 ];
 
 export default function StorefrontPage() {
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>([]);
   const [isLoadingCatalog, setIsLoadingCatalog] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -166,12 +165,12 @@ export default function StorefrontPage() {
     toastTimerRef.current = setTimeout(() => setToastText(null), 2600);
   }, []);
 
-  const syncLiveCatalog = useCallback(async () => {
-    setIsLoadingCatalog(true);
+  const syncLiveCatalog = useCallback(async (silent = false) => {
+    if (!silent) setIsLoadingCatalog(true);
     setCatalogError(null);
     try {
       const liveProds = await fetchLiveCatalogFromServer(false);
-      if (liveProds && liveProds.length > 0) {
+      if (liveProds !== null) {
         setProducts(liveProds);
         const liveMap = new Map(liveProds.map((p) => [p.id, p]));
         setCart((prev) => {
@@ -191,18 +190,23 @@ export default function StorefrontPage() {
           } catch {}
           return refreshed;
         });
-      } else {
-        setCatalogError('Live inventory could not refresh right now. Showing standard catalog.');
+      } else if (!silent) {
+        setCatalogError('Live inventory could not refresh right now. Please tap Retry.');
       }
     } catch {
-      setCatalogError('Live inventory could not refresh right now. Showing standard catalog.');
+      if (!silent) {
+        setCatalogError('Live inventory could not refresh right now. Please tap Retry.');
+      }
     } finally {
-      setIsLoadingCatalog(false);
+      if (!silent) setIsLoadingCatalog(false);
     }
   }, []);
 
   useEffect(() => {
-    setProducts(getStoredProducts());
+    const cached = getStoredProducts();
+    if (cached.length > 0) {
+      setProducts(cached);
+    }
     setSettings(getStoredSettings());
     try {
       const savedCart = sessionStorage.getItem('ayurswift_cart');
@@ -210,7 +214,26 @@ export default function StorefrontPage() {
       const savedLoc = sessionStorage.getItem('ayurswift_location');
       if (savedLoc) setCurrentLocation(JSON.parse(savedLoc));
     } catch {}
-    syncLiveCatalog();
+    syncLiveCatalog(false);
+
+    // Keep storefront immediately in sync when admin adds/edits/deletes products in another tab
+    const onFocus = () => syncLiveCatalog(true);
+    const onVisibility = () => {
+      if (!document.hidden) syncLiveCatalog(true);
+    };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'ayurswift_products_v3') {
+        syncLiveCatalog(true);
+      }
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('storage', onStorage);
+    };
   }, [syncLiveCatalog]);
 
   const saveCart = (newCart: CartItem[]) => {
@@ -320,7 +343,11 @@ export default function StorefrontPage() {
           p.brand.toLowerCase().includes(q) ||
           p.category.toLowerCase().includes(q) ||
           p.indications.toLowerCase().includes(q) ||
-          (p.composition && p.composition.toLowerCase().includes(q));
+          (p.composition && p.composition.toLowerCase().includes(q)) ||
+          (p.manufacturer && p.manufacturer.toLowerCase().includes(q)) ||
+          (p.packSize && p.packSize.toLowerCase().includes(q)) ||
+          (p.form && p.form.toLowerCase().includes(q)) ||
+          (p.badgeText && p.badgeText.toLowerCase().includes(q));
         if (!matches) return false;
       }
       return true;
@@ -536,7 +563,7 @@ export default function StorefrontPage() {
             </div>
             <button
               type="button"
-              onClick={syncLiveCatalog}
+              onClick={() => syncLiveCatalog(false)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-amber-300 hover:bg-amber-100 font-bold text-amber-950 shrink-0 cursor-pointer"
             >
               <RefreshCw className="w-3.5 h-3.5" />
@@ -923,19 +950,25 @@ export default function StorefrontPage() {
                 <Search className="w-6 h-6" />
               </div>
               <h3 className="font-extrabold text-gray-950 text-base">
-                No matching in-stock medicines found
+                {inStockProducts.length === 0
+                  ? 'Store catalog is being updated'
+                  : 'No matching in-stock medicines found'}
               </h3>
               <p className="text-xs text-gray-600 max-w-sm mx-auto">
-                Try clearing a filter or send your medicine name to our Bhavnagar desk via Quick Buy.
+                {inStockProducts.length === 0
+                  ? 'New Ayurvedic products are being added right now. Need something urgently? Send your list directly on WhatsApp.'
+                  : 'Try clearing a filter or send your medicine name to our Bhavnagar desk via Quick Buy.'}
               </p>
               <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={handleResetFilters}
-                  className="bg-[#0C831F] hover:bg-[#096B19] text-white text-xs font-extrabold px-5 py-2.5 rounded-xl transition-all shadow-xs cursor-pointer"
-                >
-                  Reset All Filters
-                </button>
+                {inStockProducts.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleResetFilters}
+                    className="bg-[#0C831F] hover:bg-[#096B19] text-white text-xs font-extrabold px-5 py-2.5 rounded-xl transition-all shadow-xs cursor-pointer"
+                  >
+                    Reset All Filters
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setIsQuickBuyModalOpen(true)}

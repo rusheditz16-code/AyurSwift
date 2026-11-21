@@ -11,6 +11,8 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Product } from '@/types';
+import { isVerifiedProductImageUrl } from '@/lib/initialData';
+import { MedicinePackVisual } from '@/components/MedicinePackVisual';
 
 interface AdminInventoryTabProps {
   products: Product[];
@@ -20,6 +22,7 @@ interface AdminInventoryTabProps {
   onCategoryFilterChange: (c: string) => void;
   onStockChange: (productId: string, delta: number) => void;
   onToggleLive: (productId: string) => void;
+  onOpenAdd?: () => void;
   onOpenEdit: (product: Product) => void;
   onDeleteProduct: (productId: string) => void;
   onResetCatalog: () => void;
@@ -37,6 +40,7 @@ export function AdminInventoryTab({
   onCategoryFilterChange,
   onStockChange,
   onToggleLive,
+  onOpenAdd,
   onOpenEdit,
   onDeleteProduct,
   onResetCatalog,
@@ -232,55 +236,101 @@ export function AdminInventoryTab({
               </tr>
             </thead>
             <tbody className={`divide-y ${dark ? 'divide-slate-800/80' : 'divide-slate-100'}`}>
-              {filteredProducts.map((product) => {
-                const unitProfit = product.sellingPrice - product.agencyCostPrice;
-                const margin =
-                  product.sellingPrice > 0
-                    ? Math.round((unitProfit / product.sellingPrice) * 100)
-                    : 0;
-                const isZero = product.stockQuantity === 0;
-                const isLow = product.stockQuantity > 0 && product.stockQuantity <= 5;
-
-                return (
-                  <tr
-                    key={product.id}
-                    className={`transition-colors ${
-                      dark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50/90'
-                    } ${isZero ? 'opacity-65' : ''}`}
-                  >
-                    <td className="py-2.5 px-4">
-                      <div className="flex items-center gap-3">
-                        <div className="relative shrink-0">
-                          <div
-                            className={`w-9 h-9 rounded-xl border p-1 flex items-center justify-center overflow-hidden ${
-                              dark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200'
+              {filteredProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="py-12 px-4 text-center">
+                    <div className="max-w-sm mx-auto space-y-2.5">
+                      <div className="font-extrabold text-sm">
+                        {products.length === 0
+                          ? 'Your store catalog is currently empty'
+                          : 'No products match your filter'}
+                      </div>
+                      <p className={`text-xs ${muted}`}>
+                        {products.length === 0
+                          ? 'Add your own Ayurvedic products or restore the 20 starter SKUs directly to Supabase.'
+                          : 'Try clearing your search or category filter.'}
+                      </p>
+                      {products.length === 0 && (
+                        <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                          {onOpenAdd && (
+                            <button
+                              type="button"
+                              onClick={onOpenAdd}
+                              className="bg-[#0C831F] hover:bg-[#096B19] text-white text-xs font-extrabold px-4 py-2 rounded-xl inline-flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Add First Product</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={onResetCatalog}
+                            className={`text-xs font-bold px-4 py-2 rounded-xl border inline-flex items-center gap-1.5 cursor-pointer ${
+                              dark
+                                ? 'border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800'
+                                : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                             }`}
                           >
-                            {product.imageUrl ? (
-                              <img
-                                src={product.imageUrl}
-                                alt={product.name}
-                                className="w-full h-full object-contain"
-                              />
-                            ) : (
-                              <span className="text-xs font-extrabold text-emerald-500">Rx</span>
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>Restore 20 Starter Products</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filteredProducts.map((product) => {
+                  const unitProfit = product.sellingPrice - product.agencyCostPrice;
+                  const margin =
+                    product.sellingPrice > 0
+                      ? Math.round((unitProfit / product.sellingPrice) * 100)
+                      : 0;
+                  const isZero = product.stockQuantity === 0;
+                  const isLow = product.stockQuantity > 0 && product.stockQuantity <= 5;
+                  const showPhoto = isVerifiedProductImageUrl(product.imageUrl);
+
+                  return (
+                    <tr
+                      key={product.id}
+                      className={`transition-colors ${
+                        dark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50/90'
+                      } ${isZero ? 'opacity-65' : ''}`}
+                    >
+                      <td className="py-2.5 px-4">
+                        <div className="flex items-center gap-3">
+                          <div className="relative shrink-0">
+                            <div
+                              className={`w-10 h-10 rounded-xl border p-0.5 flex items-center justify-center overflow-hidden ${
+                                dark ? 'bg-slate-900 border-slate-700' : 'bg-[#F7FAF8] border-slate-200'
+                              }`}
+                            >
+                              {showPhoto ? (
+                                <img
+                                  src={product.imageUrl}
+                                  alt={product.name}
+                                  className="w-full h-full object-contain"
+                                />
+                              ) : (
+                                <MedicinePackVisual product={product} compact className="w-full h-full" />
+                              )}
+                            </div>
+                            {product.images && product.images.length > 1 && (
+                              <span className="absolute -top-1 -right-1 bg-[#0C831F] text-white text-[8.5px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center">
+                                {product.images.length}
+                              </span>
                             )}
                           </div>
-                          {product.images && product.images.length > 1 && (
-                            <span className="absolute -top-1 -right-1 bg-[#0C831F] text-white text-[8.5px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center">
-                              {product.images.length}
-                            </span>
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="font-bold line-clamp-1">{product.name}</div>
-                          <div className={`text-[10.5px] font-semibold ${muted}`}>
-                            <span className="text-emerald-500">{product.brand}</span> •{' '}
-                            {product.category}
+                          <div className="min-w-0">
+                            <div className="font-bold line-clamp-1">{product.name}</div>
+                            <div className={`text-[10.5px] font-semibold ${muted}`}>
+                              <span className="text-emerald-500">{product.brand}</span> •{' '}
+                              {product.category}
+                              {product.badgeText ? ` • ${product.badgeText}` : ''}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </td>
+                      </td>
 
                     <td className={`py-2.5 px-2 font-medium whitespace-nowrap ${muted}`}>
                       {product.packSize}
@@ -391,9 +441,10 @@ export function AdminInventoryTab({
                         </button>
                       </div>
                     </td>
-                  </tr>
-                );
-              })}
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

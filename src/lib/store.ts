@@ -77,17 +77,16 @@ export function saveStoredSettings(settings: MerchantSettings) {
   localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(safeSettings));
 }
 
-// Retrieve products (with fallback to INITIAL_PRODUCTS; strips unverified Unsplash stock URLs)
+// Retrieve cached products (respects explicit empty array [] after server sync)
 export function getStoredProducts(): Product[] {
-  if (typeof window === 'undefined') return INITIAL_PRODUCTS;
+  if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
-      return INITIAL_PRODUCTS;
+    if (raw === null) {
+      return [];
     }
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) return INITIAL_PRODUCTS;
+    if (!Array.isArray(parsed)) return [];
 
     const cleaned: Product[] = parsed.map((p: Product) => {
       const cleanImg = isVerifiedProductImageUrl(p.imageUrl) ? p.imageUrl : '';
@@ -113,7 +112,7 @@ export function getStoredProducts(): Product[] {
 
     return cleaned;
   } catch {
-    return INITIAL_PRODUCTS;
+    return [];
   }
 }
 
@@ -421,15 +420,25 @@ _Please confirm dispatch time!_`;
   return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
 }
 
-// Fetch live product catalog from Supabase via server endpoint
+export interface ProductMutationResult {
+  ok: boolean;
+  status: number;
+  error?: string;
+  product?: Product;
+  products?: Product[];
+}
+
+// Fetch authoritative live product catalog from Supabase via server endpoint (no browser/CDN cache)
 export async function fetchLiveCatalogFromServer(isAdmin = false): Promise<Product[] | null> {
   try {
-    const url = isAdmin ? '/api/admin/products' : '/api/admin/products?public=1';
-    const res = await fetch(url);
+    const url = isAdmin
+      ? `/api/admin/products?_t=${Date.now()}`
+      : `/api/admin/products?public=1&_t=${Date.now()}`;
+    const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) return null;
     const data = await res.json();
-    if (data?.success && Array.isArray(data.products) && data.products.length > 0) {
-      if (typeof window !== 'undefined' && isAdmin) {
+    if (data?.success && Array.isArray(data.products)) {
+      if (typeof window !== 'undefined') {
         saveStoredProducts(data.products);
       }
       return data.products as Product[];
@@ -440,28 +449,89 @@ export async function fetchLiveCatalogFromServer(isAdmin = false): Promise<Produ
   }
 }
 
-// Sync product changes through authenticated server API (never direct browser anon write)
-export async function syncProductToServer(product: Product): Promise<boolean> {
+// Sync product changes through authenticated server API with detailed error reporting
+export async function syncProductToServer(product: Product): Promise<ProductMutationResult> {
   try {
     const res = await fetch('/api/admin/products', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
       body: JSON.stringify(product),
     });
-    return res.ok;
+    if (res.status === 413) {
+      return {
+        ok: false,
+        status: 413,
+        error: 'Product images are too large to upload. Try fewer or smaller photos.',
+      };
+    }
+    const data = (await res.json().catch(() => ({}))) as {
+      success?: boolean;
+      error?: string;
+      product?: Product;
+    };
+    if (!res.ok || !data.success) {
+      return {
+        ok: false,
+        status: res.status,
+        error: data.error || `Server error (${res.status}) while saving product.`,
+      };
+    }
+    return { ok: true, status: res.status, product: data.product || product };
   } catch {
-    return false;
+    return { ok: false, status: 0, error: 'Network error saving product to server.' };
   }
 }
 
-export async function deleteProductOnServer(productId: string): Promise<boolean> {
+export async function deleteProductOnServer(productId: string): Promise<ProductMutationResult> {
   try {
     const res = await fetch(`/api/admin/products?id=${encodeURIComponent(productId)}`, {
       method: 'DELETE',
+      cache: 'no-store',
     });
-    return res.ok;
+    const data = (await res.json().catch(() => ({}))) as {
+      success?: boolean;
+      error?: string;
+    };
+    if (!res.ok || !data.success) {
+      return {
+        ok: false,
+        status: res.status,
+        error: data.error || `Server error (${res.status}) while deleting product.`,
+      };
+    }
+    return { ok: true, status: res.status };
   } catch {
-    return false;
+    return { ok: false, status: 0, error: 'Network error deleting product from server.' };
+  }
+}
+
+export async function restoreStarterCatalogOnServer(): Promise<ProductMutationResult> {
+  try {
+    const res = await fetch('/api/admin/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+      body: JSON.stringify({ action: 'SEED_STARTER' }),
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      success?: boolean;
+      error?: string;
+      products?: Product[];
+    };
+    if (!res.ok || !data.success) {
+      return {
+        ok: false,
+        status: res.status,
+        error: data.error || 'Could not restore starter catalog on server.',
+      };
+    }
+    if (typeof window !== 'undefined' && Array.isArray(data.products)) {
+      saveStoredProducts(data.products);
+    }
+    return { ok: true, status: res.status, products: data.products };
+  } catch {
+    return { ok: false, status: 0, error: 'Network error restoring starter catalog.' };
   }
 }
 

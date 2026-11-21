@@ -25,9 +25,14 @@ CREATE TABLE IF NOT EXISTS products (
   indications TEXT,
   dosage TEXT,
   composition TEXT,
+  safety_advice TEXT,
+  badge_text TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
+
+ALTER TABLE products ADD COLUMN IF NOT EXISTS safety_advice TEXT;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS badge_text TEXT;
 
 -- Storefront query index (strictly only in-stock and live items)
 CREATE INDEX IF NOT EXISTS idx_products_storefront ON products (is_live, stock_quantity)

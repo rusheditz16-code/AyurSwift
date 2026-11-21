@@ -114,77 +114,87 @@ export function QuickBuyModal({
             </div>
 
             <div className="space-y-2">
-              {quickItems.map((product) => {
-                const qty = cart.find((i) => i.product.id === product.id)?.quantity ?? 0;
-                const discount = Math.round(((product.mrp - product.sellingPrice) / product.mrp) * 100);
+              {quickItems.length === 0 ? (
+                <div className="p-4 rounded-2xl border border-dashed border-gray-200 bg-white text-center text-xs text-gray-500">
+                  No catalog products are listed right now. Use the WhatsApp box below to send your medicine list directly.
+                </div>
+              ) : (
+                quickItems.map((product) => {
+                  const qty = cart.find((i) => i.product.id === product.id)?.quantity ?? 0;
+                  const discount =
+                    product.mrp > product.sellingPrice
+                      ? Math.round(((product.mrp - product.sellingPrice) / product.mrp) * 100)
+                      : 0;
+                  const thumbUrl = product.imageUrl || product.images?.[0] || '';
 
-                return (
-                  <div
-                    key={product.id}
-                    className="p-2.5 rounded-2xl border border-gray-200/85 bg-white flex items-center justify-between gap-3 shadow-2xs hover:border-[#0C831F]/40 transition-colors"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                      <div className="w-11 h-11 rounded-xl bg-[#F7FAF8] border border-gray-100 p-1 flex items-center justify-center shrink-0 overflow-hidden">
-                        {isVerifiedProductImageUrl(product.imageUrl) ? (
-                          <img
-                            src={product.imageUrl}
-                            alt={`${product.name} (${product.packSize})`}
-                            width={44}
-                            height={44}
-                            className="w-full h-full object-contain"
-                          />
-                        ) : (
-                          <MedicinePackVisual product={product} compact className="w-full h-full" />
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold text-gray-900 truncate">
-                          {product.name}
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-0.5 text-[11px]">
-                          <span className="font-extrabold text-gray-950 tabular-nums">
-                            ₹{product.sellingPrice}
-                          </span>
-                          {product.mrp > product.sellingPrice && (
-                            <span className="text-[10px] text-gray-400 line-through tabular-nums">
-                              ₹{product.mrp}
-                            </span>
-                          )}
-                          {discount > 0 && (
-                            <span className="text-[10px] text-[#0C831F] font-extrabold">
-                              {discount}% OFF
-                            </span>
-                          )}
-                          <span className="text-gray-400">•</span>
-                          <span className="text-gray-500 truncate">{product.packSize}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => onAddToCart(product)}
-                      className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center gap-1 active:scale-95 shrink-0 cursor-pointer ${
-                        qty > 0
-                          ? 'bg-[#0C831F] text-white'
-                          : 'bg-[#F2FBF4] border border-[#0C831F] text-[#0C831F] hover:bg-[#0C831F] hover:text-white'
-                      }`}
+                  return (
+                    <div
+                      key={product.id}
+                      className="p-2.5 rounded-2xl border border-gray-200/85 bg-white flex items-center justify-between gap-3 shadow-2xs hover:border-[#0C831F]/40 transition-colors"
                     >
-                      {qty > 0 ? (
-                        <>
-                          <Check className="w-3.5 h-3.5" />
-                          <span className="tabular-nums">{qty}</span>
-                        </>
-                      ) : (
-                        <>
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>ADD</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                );
-              })}
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <div className="w-11 h-11 rounded-xl bg-[#F7FAF8] border border-gray-100 p-1 flex items-center justify-center shrink-0 overflow-hidden">
+                          {isVerifiedProductImageUrl(thumbUrl) ? (
+                            <img
+                              src={thumbUrl}
+                              alt={`${product.name} (${product.packSize})`}
+                              width={44}
+                              height={44}
+                              className="w-full h-full object-contain"
+                            />
+                          ) : (
+                            <MedicinePackVisual product={product} compact className="w-full h-full" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-gray-900 truncate">
+                            {product.name}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-0.5 text-[11px]">
+                            <span className="font-extrabold text-gray-950 tabular-nums">
+                              ₹{product.sellingPrice}
+                            </span>
+                            {product.mrp > product.sellingPrice && (
+                              <span className="text-[10px] text-gray-400 line-through tabular-nums">
+                                ₹{product.mrp}
+                              </span>
+                            )}
+                            {discount > 0 && (
+                              <span className="text-[10px] text-[#0C831F] font-extrabold">
+                                {discount}% OFF
+                              </span>
+                            )}
+                            <span className="text-gray-400">•</span>
+                            <span className="text-gray-500 truncate">{product.packSize}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => onAddToCart(product)}
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center gap-1 active:scale-95 shrink-0 cursor-pointer ${
+                          qty > 0
+                            ? 'bg-[#0C831F] text-white'
+                            : 'bg-[#F2FBF4] border border-[#0C831F] text-[#0C831F] hover:bg-[#0C831F] hover:text-white'
+                        }`}
+                      >
+                        {qty > 0 ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span className="tabular-nums">{qty}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>ADD</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
 
