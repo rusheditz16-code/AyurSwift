@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Order, MerchantSettings } from '@/types';
 import { generateUpiUri, generateWhatsAppOrderUrl, submitOrderUtr } from '@/lib/store';
+import { formatDeliverySlotForDisplay } from '@/lib/deliverySlots';
 import { InvoiceModal } from '@/components/InvoiceModal';
 
 interface PaymentModalProps {
@@ -181,6 +182,14 @@ export function PaymentModal({
                 {order.deliveryAddress}, {order.city}
               </span>
             </div>
+            {order.deliverySlot && (
+              <div className="flex justify-between items-center text-gray-600 gap-3">
+                <span className="shrink-0">Delivery Slot</span>
+                <span className="font-extrabold text-[#0A5C16] bg-[#ECFDF3] border border-[#BBF7D0] px-2 py-0.5 rounded-lg text-[11px] text-right">
+                  {formatDeliverySlotForDisplay(order.deliverySlot)}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between items-center border-t border-gray-100 pt-2">
               <span className="font-bold text-gray-700">Total Payable</span>
               <span className="font-extrabold text-lg text-[#0C831F] tabular-nums">

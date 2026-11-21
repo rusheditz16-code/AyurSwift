@@ -71,7 +71,10 @@ export default function TermsPage() {
             <ul className="list-disc pl-5 space-y-1">
               <li>
                 <strong>Local Delivery (Bhavnagar):</strong> Flat ₹35 delivery
-                fee (free above ₹499). Estimated 30–45 mins dispatch once packed.
+                fee (free above ₹499). Delivered in your chosen daily slot
+                (9:00–10:00 AM, 10:00–11:00 AM, 6:00–7:00 PM, or 7:00–8:00 PM).
+                Ongoing/active slots are closed for new orders so we can pack
+                accurately before the next slot.
               </li>
               <li>
                 <strong>Outside-City Courier (India):</strong> Flat ₹60 tracked

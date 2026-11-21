@@ -17,6 +17,7 @@ import {
 import { Order } from '@/types';
 import { AdminOrderCard } from '@/components/admin/AdminOrderCard';
 import { groupOrdersByDate, getDailyOrderStats, getIstDateKey } from '@/lib/store';
+import { DELIVERY_SLOTS } from '@/lib/deliverySlots';
 
 interface AdminDispatchTabProps {
   orders: Order[];
@@ -109,6 +110,7 @@ export function AdminDispatchTab({
   dark,
 }: AdminDispatchTabProps) {
   const [viewMode, setViewMode] = useState<'KANBAN' | 'LIST'>('KANBAN');
+  const [slotFilter, setSlotFilter] = useState<string>('ALL');
   const [onlyUnverifiedUpi, setOnlyUnverifiedUpi] = useState(false);
   const [showCancelledDrawer, setShowCancelledDrawer] = useState(false);
 
@@ -135,6 +137,13 @@ export function AdminDispatchTab({
   const filteredOrders = orders.filter((o) => {
     if (effectiveDateKey && getIstDateKey(o.createdAt || '') !== effectiveDateKey) return false;
     if (orderStatusFilter !== 'ALL' && o.orderStatus !== orderStatusFilter) return false;
+    if (slotFilter !== 'ALL') {
+      if (slotFilter === 'COURIER') {
+        if (o.deliveryType !== 'COURIER_OUTSIDE') return false;
+      } else if (!(o.deliverySlot || '').includes(slotFilter)) {
+        return false;
+      }
+    }
     if (
       onlyUnverifiedUpi &&
       !(o.orderStatus !== 'CANCELLED' && o.paymentMethod === 'UPI' && o.paymentStatus === 'PENDING')
@@ -148,6 +157,7 @@ export function AdminDispatchTab({
         o.customerName.toLowerCase().includes(q) ||
         o.customerPhone.includes(q) ||
         o.city.toLowerCase().includes(q) ||
+        (o.deliverySlot || '').toLowerCase().includes(q) ||
         (o.utrNumber || '').toLowerCase().includes(q);
       if (!match) return false;
     }
@@ -187,7 +197,11 @@ export function AdminDispatchTab({
               <div className="text-[11px] text-emerald-100">
                 {newOrderBanner.customerName} • {newOrderBanner.items.length} items (₹
                 {newOrderBanner.totalAmount}) •{' '}
-                {newOrderBanner.deliveryType === 'RAPIDO_CITY' ? '⚡ Rapido' : '📦 Courier'}
+                {newOrderBanner.deliverySlot
+                  ? `🕒 ${newOrderBanner.deliverySlot}`
+                  : newOrderBanner.deliveryType === 'RAPIDO_CITY'
+                  ? '🕒 Local Slot'
+                  : '📦 Courier'}
               </div>
             </div>
           </div>
@@ -411,6 +425,27 @@ export function AdminDispatchTab({
               <ShieldAlert className="w-3 h-3" />
               <span>Unverified UPI ({unverifiedUpiCount})</span>
             </button>
+
+            <select
+              value={slotFilter}
+              onChange={(e) => setSlotFilter(e.target.value)}
+              aria-label="Filter orders by delivery slot"
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border focus:outline-none cursor-pointer ${
+                slotFilter !== 'ALL'
+                  ? 'bg-emerald-600 text-white border-emerald-500'
+                  : dark
+                  ? 'bg-slate-900 border-slate-700 text-slate-200'
+                  : 'bg-slate-50 border-slate-200 text-slate-800'
+              }`}
+            >
+              <option value="ALL">All Delivery Slots</option>
+              {DELIVERY_SLOTS.map((s) => (
+                <option key={s.id} value={s.label}>
+                  Slot: {s.label}
+                </option>
+              ))}
+              <option value="COURIER">All-India Courier</option>
+            </select>
           </div>
 
           <div className="relative min-w-[220px]">

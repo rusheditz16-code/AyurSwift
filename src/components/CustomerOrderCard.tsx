@@ -14,9 +14,11 @@ import {
   Smartphone,
   Loader2,
   PackageCheck,
+  Clock,
 } from 'lucide-react';
 import { MerchantSettings, Order } from '@/types';
 import { generateUpiUri, submitOrderUtr } from '@/lib/store';
+import { formatDeliverySlotForDisplay } from '@/lib/deliverySlots';
 
 interface CustomerOrderCardProps {
   order: Order;
@@ -196,6 +198,19 @@ export function CustomerOrderCard({
           </span>
         </div>
       </div>
+
+      {/* Scheduled Delivery Slot Badge */}
+      {order.deliverySlot && (
+        <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-[#ECFDF3] border border-[#BBF7D0] text-[11px]">
+          <span className="inline-flex items-center gap-1.5 font-bold text-[#0A5C16]">
+            <Clock className="w-3.5 h-3.5 text-[#0C831F] shrink-0" />
+            <span>Delivery Slot</span>
+          </span>
+          <span className="font-extrabold text-gray-900">
+            {formatDeliverySlotForDisplay(order.deliverySlot)}
+          </span>
+        </div>
+      )}
 
       {/* Clear Stage Explanation */}
       <div

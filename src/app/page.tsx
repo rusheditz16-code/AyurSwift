@@ -34,6 +34,7 @@ import {
   DELIVERY_PROMISE,
   isVerifiedProductImageUrl,
 } from '@/lib/initialData';
+import { getNextAvailableSlot } from '@/lib/deliverySlots';
 import {
   Zap,
   ArrowRight,
@@ -64,7 +65,7 @@ const DEFAULT_LOCATION: LocationInfo = {
   city: 'Bhavnagar',
   pincode: '364001',
   dispatchType: 'RAPIDO_CITY',
-  estimate: `Local Express Delivery (${DELIVERY_PROMISE.localTimeShort})`,
+  estimate: `Scheduled Slot Delivery (${DELIVERY_PROMISE.localSlotsSummary})`,
 };
 
 const CATEGORY_CARDS = [
@@ -142,6 +143,14 @@ export default function StorefrontPage() {
   const [selectedMedicineDetails, setSelectedMedicineDetails] = useState<Product | null>(null);
   const [currentLocation, setCurrentLocation] = useState<LocationInfo>(DEFAULT_LOCATION);
   const [toastText, setToastText] = useState<string | null>(null);
+  const [nextSlotShort, setNextSlotShort] = useState<string>(DELIVERY_PROMISE.localTimeShort);
+
+  useEffect(() => {
+    const refreshNextSlot = () => setNextSlotShort(getNextAvailableSlot(new Date()).shortText);
+    refreshNextSlot();
+    const timer = setInterval(refreshNextSlot, 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Filters & Sorting
   const [searchQuery, setSearchQuery] = useState('');
@@ -486,6 +495,8 @@ export default function StorefrontPage() {
     customerName: string;
     customerPhone: string;
     deliveryType: DeliveryType;
+    deliverySlotId?: string;
+    deliverySlotDate?: string;
     deliveryAddress: string;
     city: string;
     pincode: string;
@@ -497,6 +508,8 @@ export default function StorefrontPage() {
       customerName: orderData.customerName,
       customerPhone: orderData.customerPhone,
       deliveryType: orderData.deliveryType,
+      deliverySlotId: orderData.deliverySlotId,
+      deliverySlotDate: orderData.deliverySlotDate,
       deliveryAddress: orderData.deliveryAddress,
       city: orderData.city,
       pincode: orderData.pincode,
@@ -608,7 +621,7 @@ export default function StorefrontPage() {
                     )}
                     <span>
                       {isLocal
-                        ? `${DELIVERY_PROMISE.localTimeShort} Local Dispatch • ${currentLocation.area}`
+                        ? `Next Slot: ${nextSlotShort} • ${currentLocation.area}`
                         : `All-India Tracked Courier (${DELIVERY_PROMISE.courierTimeShort})`}
                     </span>
                   </div>
@@ -617,16 +630,16 @@ export default function StorefrontPage() {
                     Authentic Ayurvedic &amp; OTC Essentials,{' '}
                     <span className="text-amber-300">
                       {isLocal
-                        ? `delivered in ${DELIVERY_PROMISE.localTimeShort}.`
+                        ? 'delivered in your chosen slot.'
                         : `delivered in ${DELIVERY_PROMISE.courierTimeShort}.`}
                     </span>
                   </h1>
 
                   <p className="text-xs sm:text-sm text-emerald-50/90 leading-relaxed font-medium max-w-lg">
-                    Genuine Dabur, Zandu, Himalaya, Baidyanath &amp; Patanjali remedies dispatched from our Bhavnagar store.{' '}
+                    Genuine Ayurvedic &amp; wellness essentials dispatched from our Bhavnagar store.{' '}
                     {isLocal ? (
                       <strong className="text-white">
-                        Flat ₹{settings.cityDeliveryFee} delivery (Free above ₹{settings.cityFreeDeliveryAbove}).
+                        Daily slots: {DELIVERY_PROMISE.localSlotsSummary} • ₹{settings.cityDeliveryFee} (Free above ₹{settings.cityFreeDeliveryAbove}).
                       </strong>
                     ) : (
                       <strong className="text-white">
@@ -687,10 +700,10 @@ export default function StorefrontPage() {
                 </div>
                 <div className="min-w-0">
                   <div className="text-xs font-extrabold text-gray-950 leading-tight">
-                    Bhavnagar Local ({DELIVERY_PROMISE.localTimeShort})
+                    Bhavnagar Slots ({DELIVERY_PROMISE.localSlotsSummary})
                   </div>
                   <p className="text-[11px] text-gray-600 mt-0.5 leading-snug">
-                    ₹{settings.cityDeliveryFee} • Free above ₹{settings.cityFreeDeliveryAbove}
+                    Next: {nextSlotShort} • ₹{settings.cityDeliveryFee} (Free above ₹{settings.cityFreeDeliveryAbove})
                   </p>
                 </div>
               </button>

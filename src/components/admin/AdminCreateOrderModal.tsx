@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   X,
   Plus,
@@ -14,6 +14,14 @@ import {
   Package,
 } from 'lucide-react';
 import { DeliveryType, MerchantSettings, Order, PaymentMethod, Product } from '@/types';
+import {
+  DELIVERY_SLOTS,
+  DeliveryDayType,
+  DeliverySlotId,
+  getIstClock,
+  getNextAvailableSlot,
+  getTomorrowIstDate,
+} from '@/lib/deliverySlots';
 
 interface AdminCreateOrderModalProps {
   isOpen: boolean;
@@ -37,7 +45,25 @@ export function AdminCreateOrderModal({
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [deliveryType, setDeliveryType] = useState<DeliveryType>('RAPIDO_CITY');
+  const [slotDay, setSlotDay] = useState<DeliveryDayType>('TODAY');
+  const [slotId, setSlotId] = useState<DeliverySlotId>('09:00-10:00');
+  const [slotDateLabels, setSlotDateLabels] = useState<{ today: string; tomorrow: string }>({
+    today: '',
+    tomorrow: '',
+  });
   const [deliveryAddress, setDeliveryAddress] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const now = new Date();
+    const next = getNextAvailableSlot(now);
+    setSlotDay(next.dayType);
+    setSlotId(next.slot.id);
+    setSlotDateLabels({
+      today: getIstClock(now).shortDate,
+      tomorrow: getTomorrowIstDate(now).shortDate,
+    });
+  }, [isOpen]);
   const [city, setCity] = useState('Bhavnagar');
   const [pincode, setPincode] = useState('364001');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('UPI');
@@ -90,6 +116,9 @@ export function AdminCreateOrderModal({
     setCustomerName('');
     setCustomerPhone('');
     setDeliveryType('RAPIDO_CITY');
+    const next = getNextAvailableSlot();
+    setSlotDay(next.dayType);
+    setSlotId(next.slot.id);
     setDeliveryAddress('');
     setCity('Bhavnagar');
     setPincode('364001');
@@ -143,6 +172,13 @@ export function AdminCreateOrderModal({
           customerName: customerName.trim(),
           customerPhone: customerPhone.replace(/\D/g, '').slice(-10),
           deliveryType,
+          ...(deliveryType === 'RAPIDO_CITY'
+            ? {
+                deliverySlotId: slotId,
+                deliverySlotDate:
+                  slotDay === 'TODAY' ? getIstClock().dateKey : getTomorrowIstDate().dateKey,
+              }
+            : {}),
           deliveryAddress: deliveryAddress.trim(),
           city: city.trim(),
           pincode: pincode.replace(/\D/g, '').slice(0, 6),
@@ -336,7 +372,7 @@ export function AdminCreateOrderModal({
                     }`}
                   >
                     <Zap className="w-3.5 h-3.5" />
-                    <span>Rapido City</span>
+                    <span>Bhavnagar Slot</span>
                   </button>
                   <button
                     type="button"
@@ -382,6 +418,40 @@ export function AdminCreateOrderModal({
                 </div>
               </div>
             </div>
+
+            {deliveryType === 'RAPIDO_CITY' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold mb-1">Slot Day</label>
+                  <select
+                    value={slotDay}
+                    onChange={(e) => setSlotDay(e.target.value as DeliveryDayType)}
+                    className={inputCls}
+                  >
+                    <option value="TODAY">
+                      Today{slotDateLabels.today ? ` (${slotDateLabels.today})` : ''}
+                    </option>
+                    <option value="TOMORROW">
+                      Tomorrow{slotDateLabels.tomorrow ? ` (${slotDateLabels.tomorrow})` : ''}
+                    </option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold mb-1">Delivery Slot</label>
+                  <select
+                    value={slotId}
+                    onChange={(e) => setSlotId(e.target.value as DeliverySlotId)}
+                    className={inputCls}
+                  >
+                    {DELIVERY_SLOTS.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.label} ({s.period})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
 
             {/* Product Picker */}
             <div className="space-y-2">

@@ -1,9 +1,10 @@
 import { Product, MerchantSettings } from '@/types';
 
 export const DELIVERY_PROMISE = {
-  localTimeShort: '30–45 mins',
-  localTimeBadge: '30–45 MINS',
-  localLabel: 'Bhavnagar Express (30–45 mins)',
+  localTimeShort: '4 Daily Slots',
+  localTimeBadge: 'SLOT DELIVERY',
+  localLabel: 'Bhavnagar Slot Delivery (9–11 AM & 6–8 PM)',
+  localSlotsSummary: '9–10 AM, 10–11 AM, 6–7 PM & 7–8 PM',
   courierTimeShort: '2–4 days',
   courierTimeBadge: '2–4 DAYS',
   courierLabel: 'All-India Courier (2–4 days)',

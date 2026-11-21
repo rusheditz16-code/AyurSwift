@@ -17,6 +17,8 @@ import {
   Receipt,
   Smartphone,
   Trash2,
+  Clock,
+  CalendarDays,
 } from 'lucide-react';
 import {
   CartItem,
@@ -26,6 +28,15 @@ import {
   Product,
 } from '@/types';
 import { DELIVERY_PROMISE, isVerifiedProductImageUrl } from '@/lib/initialData';
+import {
+  DeliveryDayType,
+  DeliverySlotId,
+  getIstClock,
+  getNextAvailableSlot,
+  getSlotsForDay,
+  getTomorrowIstDate,
+  hasAnyAvailableSlotToday,
+} from '@/lib/deliverySlots';
 import { MedicinePackVisual } from '@/components/MedicinePackVisual';
 
 interface CartDrawerProps {
@@ -40,6 +51,8 @@ interface CartDrawerProps {
     customerName: string;
     customerPhone: string;
     deliveryType: DeliveryType;
+    deliverySlotId?: string;
+    deliverySlotDate?: string;
     deliveryAddress: string;
     city: string;
     pincode: string;
@@ -76,9 +89,79 @@ export function CartDrawer({
   const [formError, setFormError] = useState('');
   const [hasSavedProfile, setHasSavedProfile] = useState(false);
 
+  // Live IST delivery slot state (populated strictly in useEffect to stay Next.js 16 prerender-safe)
+  const [slotClockNow, setSlotClockNow] = useState<Date | null>(null);
+  const [selectedSlotDay, setSelectedSlotDay] = useState<DeliveryDayType>('TODAY');
+  const [selectedSlotId, setSelectedSlotId] = useState<DeliverySlotId>('09:00-10:00');
+
   useEffect(() => {
     setDeliveryType(defaultDeliveryType);
   }, [defaultDeliveryType]);
+
+  // Refresh IST clock immediately when drawer opens and every 30s while open
+  useEffect(() => {
+    if (!isOpen) return;
+    const syncClock = () => {
+      const now = new Date();
+      setSlotClockNow(now);
+      setSelectedSlotDay((prevDay) => {
+        const nextOverall = getNextAvailableSlot(now);
+        if (prevDay === 'TODAY' && !hasAnyAvailableSlotToday(now)) {
+          return nextOverall.dayType;
+        }
+        return prevDay;
+      });
+    };
+    const now = new Date();
+    const nextInit = getNextAvailableSlot(now);
+    setSlotClockNow(now);
+    setSelectedSlotDay(nextInit.dayType);
+    setSelectedSlotId(nextInit.slot.id);
+    const timer = setInterval(syncClock, 30_000);
+    return () => clearInterval(timer);
+  }, [isOpen]);
+
+  const todayClock = useMemo(
+    () => (slotClockNow ? getIstClock(slotClockNow) : null),
+    [slotClockNow]
+  );
+  const tomorrowDate = useMemo(
+    () => (slotClockNow ? getTomorrowIstDate(slotClockNow) : null),
+    [slotClockNow]
+  );
+  const todayHasOpenSlots = useMemo(
+    () => (slotClockNow ? hasAnyAvailableSlotToday(slotClockNow) : true),
+    [slotClockNow]
+  );
+  const daySlots = useMemo(
+    () => (slotClockNow ? getSlotsForDay(selectedSlotDay, slotClockNow) : []),
+    [selectedSlotDay, slotClockNow]
+  );
+
+  // Auto-advance selection whenever current chosen slot becomes in-progress or closed
+  useEffect(() => {
+    if (!slotClockNow || daySlots.length === 0) return;
+    const activeChoice = daySlots.find((opt) => opt.slot.id === selectedSlotId);
+    if (!activeChoice || !activeChoice.isSelectable) {
+      const firstInSelectedDay = daySlots.find((opt) => opt.isSelectable);
+      if (firstInSelectedDay) {
+        setSelectedSlotId(firstInSelectedDay.slot.id);
+      } else {
+        const nextOverall = getNextAvailableSlot(slotClockNow);
+        setSelectedSlotDay(nextOverall.dayType);
+        setSelectedSlotId(nextOverall.slot.id);
+      }
+    }
+  }, [daySlots, selectedSlotId, slotClockNow]);
+
+  const activeSlotOption = useMemo(() => {
+    if (!slotClockNow) return null;
+    return (
+      daySlots.find((opt) => opt.slot.id === selectedSlotId && opt.isSelectable) ||
+      daySlots.find((opt) => opt.isSelectable) ||
+      getSlotsForDay('TOMORROW', slotClockNow)[0]
+    );
+  }, [slotClockNow, daySlots, selectedSlotId]);
 
   useEffect(() => {
     try {
@@ -181,12 +264,35 @@ export function CartDrawer({
       );
     } catch {}
 
+    if (deliveryType === 'RAPIDO_CITY') {
+      // Re-verify against real-time IST clock right at submit so a just-started slot cannot be submitted
+      const freshNow = new Date();
+      const freshSlots = getSlotsForDay(selectedSlotDay, freshNow);
+      const chosenNow = freshSlots.find((opt) => opt.slot.id === selectedSlotId);
+      if (!chosenNow || !chosenNow.isSelectable) {
+        setSlotClockNow(freshNow);
+        const next = getNextAvailableSlot(freshNow);
+        setSelectedSlotDay(next.dayType);
+        setSelectedSlotId(next.slot.id);
+        setFormError(
+          `That delivery slot just closed. We moved your selection to the next available slot (${next.shortText}) — please review and tap Place Order again.`
+        );
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
       await onPlaceOrder({
         customerName: customerName.trim(),
         customerPhone: cleanPhone,
         deliveryType,
+        ...(deliveryType === 'RAPIDO_CITY' && activeSlotOption
+          ? {
+              deliverySlotId: activeSlotOption.slot.id,
+              deliverySlotDate: activeSlotOption.dateKey,
+            }
+          : {}),
         deliveryAddress: deliveryAddress.trim(),
         city: city.trim(),
         pincode: pincode.trim(),
@@ -285,12 +391,12 @@ export function CartDrawer({
                 <div className="px-3.5 py-3 border-b border-gray-100 flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200/70 flex items-center justify-center shrink-0">
-                      <Zap className="w-4 h-4 text-amber-600 fill-amber-500" />
+                      <Clock className="w-4 h-4 text-[#0C831F]" />
                     </div>
                     <div>
                       <div className="text-xs sm:text-[13px] font-extrabold text-gray-950">
-                        {deliveryType === 'RAPIDO_CITY'
-                          ? 'Delivery in 30–45 minutes'
+                        {deliveryType === 'RAPIDO_CITY' && activeSlotOption
+                          ? `${activeSlotOption.dayType === 'TODAY' ? 'Today' : 'Tomorrow'} • ${activeSlotOption.slot.label}`
                           : 'Tracked Courier (2–4 days)'}
                       </div>
                       <div className="text-[11px] text-gray-500 font-medium">
@@ -494,7 +600,7 @@ export function CartDrawer({
 
               {/* Delivery Mode Toggle */}
               <div className="bg-white rounded-2xl border border-gray-200/90 p-3.5 space-y-2.5 shadow-2xs">
-                <div className="text-xs font-extrabold text-gray-900">Delivery speed</div>
+                <div className="text-xs font-extrabold text-gray-900">Delivery mode</div>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
@@ -506,11 +612,11 @@ export function CartDrawer({
                     }`}
                   >
                     <div className="flex items-center gap-1.5 text-xs font-extrabold text-gray-950">
-                      <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                      <span>Bhavnagar ({DELIVERY_PROMISE.localTimeShort})</span>
+                      <Clock className="w-3.5 h-3.5 text-[#0C831F]" />
+                      <span>Bhavnagar Slots</span>
                     </div>
                     <div className="text-[10.5px] text-gray-600 mt-0.5">
-                      Local dispatch • {subtotal >= settings.cityFreeDeliveryAbove ? 'FREE' : `₹${settings.cityDeliveryFee}`} • Prepaid UPI
+                      Pick slot • {subtotal >= settings.cityFreeDeliveryAbove ? 'FREE' : `₹${settings.cityDeliveryFee}`} • Prepaid UPI
                     </div>
                   </button>
 
@@ -532,6 +638,124 @@ export function CartDrawer({
                     </div>
                   </button>
                 </div>
+
+                {/* Scheduled Bhavnagar Delivery Slot Selector */}
+                {deliveryType === 'RAPIDO_CITY' && (
+                  <div className="pt-2.5 border-t border-gray-100 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 text-xs font-extrabold text-gray-900">
+                        <CalendarDays className="w-3.5 h-3.5 text-[#0C831F]" />
+                        <span>Choose Delivery Slot</span>
+                      </div>
+                      <span className="text-[10px] font-bold text-gray-500">
+                        Current slot locked • Next open
+                      </span>
+                    </div>
+
+                    {/* Today / Tomorrow Switcher */}
+                    <div className="grid grid-cols-2 gap-1.5 bg-gray-100 p-1 rounded-xl">
+                      <button
+                        type="button"
+                        disabled={!todayHasOpenSlots}
+                        onClick={() => setSelectedSlotDay('TODAY')}
+                        className={`py-1.5 px-2.5 rounded-lg text-[11px] font-extrabold transition-all flex items-center justify-center gap-1.5 ${
+                          !todayHasOpenSlots
+                            ? 'text-gray-400 cursor-not-allowed'
+                            : selectedSlotDay === 'TODAY'
+                            ? 'bg-white text-[#0C831F] shadow-2xs cursor-pointer'
+                            : 'text-gray-600 hover:text-gray-900 cursor-pointer'
+                        }`}
+                      >
+                        <span>Today{todayClock ? ` (${todayClock.shortDate})` : ''}</span>
+                        {!todayHasOpenSlots && (
+                          <span className="text-[9.5px] font-bold bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded">
+                            Closed
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSlotDay('TOMORROW')}
+                        className={`py-1.5 px-2.5 rounded-lg text-[11px] font-extrabold transition-all cursor-pointer ${
+                          selectedSlotDay === 'TOMORROW'
+                            ? 'bg-white text-[#0C831F] shadow-2xs'
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        Tomorrow{tomorrowDate ? ` (${tomorrowDate.shortDate})` : ''}
+                      </button>
+                    </div>
+
+                    {/* 4 Delivery Time Slot Cards */}
+                    <div
+                      className="grid grid-cols-2 gap-2"
+                      role="radiogroup"
+                      aria-label="Bhavnagar delivery time slots"
+                    >
+                      {daySlots.map((opt) => {
+                        const isSelected =
+                          opt.isSelectable && activeSlotOption?.slot.id === opt.slot.id;
+                        return (
+                          <button
+                            key={`${opt.dayType}-${opt.slot.id}`}
+                            type="button"
+                            role="radio"
+                            aria-checked={isSelected}
+                            disabled={!opt.isSelectable}
+                            onClick={() => setSelectedSlotId(opt.slot.id)}
+                            className={`p-2.5 rounded-xl border text-left transition-all ${
+                              !opt.isSelectable
+                                ? 'bg-gray-50 border-gray-200/80 text-gray-400 cursor-not-allowed opacity-75'
+                                : isSelected
+                                ? 'bg-[#ECFDF3] border-[#0C831F] ring-1 ring-[#0C831F] text-gray-950 cursor-pointer shadow-2xs'
+                                : 'bg-white border-gray-200 hover:border-[#0C831F]/60 hover:bg-emerald-50/30 text-gray-900 cursor-pointer'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-1">
+                              <span
+                                className={`text-[10px] font-extrabold uppercase tracking-wide ${
+                                  !opt.isSelectable
+                                    ? 'text-gray-400'
+                                    : isSelected
+                                    ? 'text-[#0C831F]'
+                                    : 'text-gray-500'
+                                }`}
+                              >
+                                {opt.slot.period}
+                              </span>
+                              {isSelected ? (
+                                <CheckCircle2 className="w-3.5 h-3.5 text-[#0C831F] shrink-0" />
+                              ) : opt.isNextAvailable ? (
+                                <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-100 text-[#0A5C16]">
+                                  Next
+                                </span>
+                              ) : opt.status === 'IN_PROGRESS' ? (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                                  Active • Closed
+                                </span>
+                              ) : opt.status === 'PASSED' ? (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gray-200 text-gray-600">
+                                  Passed
+                                </span>
+                              ) : null}
+                            </div>
+                            <div
+                              className={`text-xs font-extrabold mt-1 tabular-nums ${
+                                !opt.isSelectable ? 'line-through text-gray-400' : ''
+                              }`}
+                            >
+                              {opt.slot.label}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <p className="text-[10.5px] text-gray-500 leading-snug">
+                      An ongoing slot cannot be booked so we have dedicated time to verify stock and pack your order before dispatch.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Delivery Details Form */}

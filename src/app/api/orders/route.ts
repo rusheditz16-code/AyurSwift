@@ -6,6 +6,10 @@ import { DeliveryType, Order, PaymentMethod, Product } from '@/types';
 type OrderItem = Order['items'][number];
 import { DEFAULT_SETTINGS, INITIAL_PRODUCTS } from '@/lib/initialData';
 import {
+  getNextAvailableSlot,
+  validateDeliverySlotSelection,
+} from '@/lib/deliverySlots';
+import {
   checkRateLimit,
   generateSecureOrderId,
   getSupabaseAdminClient,
@@ -115,6 +119,7 @@ function mapDbRowToOrder(row: Record<string, unknown>): Order {
     customerName: String(row.customer_name || ''),
     customerPhone: String(row.customer_phone || ''),
     deliveryType: (row.delivery_type as DeliveryType) || 'RAPIDO_CITY',
+    deliverySlot: row.delivery_slot ? String(row.delivery_slot) : undefined,
     deliveryAddress: String(row.delivery_address || ''),
     city: String(row.city || ''),
     pincode: String(row.pincode || ''),
@@ -140,6 +145,7 @@ function mapOrderToDbRow(order: Order) {
     customer_name: order.customerName,
     customer_phone: order.customerPhone,
     delivery_type: order.deliveryType,
+    delivery_slot: order.deliverySlot || null,
     delivery_address: order.deliveryAddress,
     city: order.city,
     pincode: order.pincode,
@@ -461,6 +467,31 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Validate scheduled delivery slot for Bhavnagar local orders (cannot book current active or passed slot)
+    let resolvedDeliverySlot: string | undefined;
+    if (deliveryType === 'RAPIDO_CITY') {
+      const hasSlotSelection =
+        typeof body.deliverySlotId === 'string' && body.deliverySlotId.trim().length > 0;
+      if (hasSlotSelection) {
+        const slotCheck = validateDeliverySlotSelection(
+          body.deliverySlotId,
+          body.deliverySlotDate,
+          new Date(),
+          isAdmin
+        );
+        if (!slotCheck.ok) {
+          return NextResponse.json(
+            { success: false, error: slotCheck.error },
+            { status: 400 }
+          );
+        }
+        resolvedDeliverySlot = slotCheck.canonicalValue;
+      } else {
+        resolvedDeliverySlot = getNextAvailableSlot(new Date()).canonicalValue;
+      }
+    }
+
     if (!Array.isArray(rawItems) || rawItems.length === 0 || rawItems.length > 30) {
       return NextResponse.json(
         { success: false, error: 'Order must contain between 1 and 30 valid items.' },
@@ -543,6 +574,7 @@ export async function POST(request: NextRequest) {
       customerName,
       customerPhone,
       deliveryType,
+      ...(resolvedDeliverySlot ? { deliverySlot: resolvedDeliverySlot } : {}),
       deliveryAddress,
       city,
       pincode: pincodeRaw,

@@ -116,7 +116,7 @@ export function LocationModal({
           <div className="space-y-1">
             <div className="text-[10.5px] font-extrabold text-gray-500 uppercase tracking-wider px-2 py-1 flex items-center gap-1.5">
               <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-              <span>Bhavnagar 30–45 Min Express</span>
+              <span>Bhavnagar Daily Slots (9–11 AM &amp; 6–8 PM)</span>
             </div>
 
             {filteredAreas.length === 0 ? (
@@ -144,7 +144,7 @@ export function LocationModal({
                         city: 'Bhavnagar',
                         pincode: item.pincode,
                         dispatchType: 'RAPIDO_CITY',
-                        estimate: 'Local Express Delivery (30–45 mins)',
+                        estimate: 'Scheduled Slots (9–10 AM, 10–11 AM, 6–7 PM, 7–8 PM)',
                       });
                       onClose();
                     }}
@@ -215,7 +215,7 @@ export function LocationModal({
             Active: <strong className="text-gray-900">{currentLocation.area}</strong>
           </span>
           <span className="text-[11px] text-[#0C831F] font-extrabold">
-            {currentLocation.dispatchType === 'RAPIDO_CITY' ? '⚡ 30–45 Mins' : '📦 2–4 Days'}
+            {currentLocation.dispatchType === 'RAPIDO_CITY' ? '🕒 4 Daily Slots' : '📦 2–4 Days'}
           </span>
         </div>
       </div>

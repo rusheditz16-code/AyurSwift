@@ -148,6 +148,8 @@ export interface PlaceOrderPayload {
   customerName: string;
   customerPhone: string;
   deliveryType: DeliveryType;
+  deliverySlotId?: string;
+  deliverySlotDate?: string;
   deliveryAddress: string;
   city: string;
   pincode: string;
@@ -323,11 +325,13 @@ export function generateSmartAdminWhatsAppUrl(order: Order): string {
   const cleanPhone = phoneDigits.length === 10 ? `91${phoneDigits}` : phoneDigits;
 
   let msg = '';
+  const slotLine = order.deliverySlot ? `\n*Delivery Slot:* ${order.deliverySlot}` : '';
   if (order.orderStatus === 'DISPATCHED') {
     msg =
       `Hi ${order.customerName}! 🌿 Your AyurSwift order *${order.id}* is *Out for Delivery* via ${
-        order.deliveryType === 'RAPIDO_CITY' ? 'Rapido Bike Parcel ⚡' : 'Express Courier 📦'
+        order.deliveryType === 'RAPIDO_CITY' ? 'Bhavnagar Local Delivery ⚡' : 'Express Courier 📦'
       }!` +
+      slotLine +
       (order.courierTracking ? `\n\n*Rider / Tracking:* ${order.courierTracking}` : '') +
       `\nTrack live anytime at https://ayurswift.vercel.app`;
   } else if (order.orderStatus === 'DELIVERED') {
@@ -338,13 +342,16 @@ export function generateSmartAdminWhatsAppUrl(order: Order): string {
     msg =
       `Hi ${order.customerName}! 🌿 Your AyurSwift order *${order.id}*` +
       (order.paymentStatus === 'VERIFIED' ? ' (UPI Payment Verified ✓)' : '') +
-      ` is *Packed & Ready* at our Bhavnagar dark store! We are assigning dispatch shortly.\nTrack live: https://ayurswift.vercel.app`;
+      ` is *Packed & Ready* at our Bhavnagar store!` +
+      slotLine +
+      `\nTrack live: https://ayurswift.vercel.app`;
   } else {
     msg =
       `Hi ${order.customerName}! 🌿 We have received your AyurSwift order *${order.id}* (₹${order.totalAmount}).` +
+      slotLine +
       (order.paymentStatus === 'VERIFIED'
-        ? ' Your UPI payment is verified ✓ and packing is starting now.'
-        : ' Our dark store is verifying stock & payment.') +
+        ? '\nYour UPI payment is verified ✓ and we will pack it for your chosen slot.'
+        : '\nOur store is verifying stock & payment for your chosen slot.') +
       `\nTrack live: https://ayurswift.vercel.app`;
   }
 
@@ -354,8 +361,9 @@ export function generateSmartAdminWhatsAppUrl(order: Order): string {
 // Format Rapido drop info in 1 tap for rider dispatch
 export function formatRapidoDropText(order: Order): string {
   const cleanPhone = order.customerPhone.replace(/\D/g, '').slice(-10);
+  const slotPart = order.deliverySlot ? `\nSlot: ${order.deliverySlot}` : '';
   return `Drop to: ${order.customerName}
-Phone: ${cleanPhone}
+Phone: ${cleanPhone}${slotPart}
 Address: ${order.deliveryAddress}${order.landmark ? ', Landmark: ' + order.landmark : ''}, ${order.city} - ${order.pincode}
 Order: ${order.id} | Collect: ${order.paymentMethod === 'COD' ? '₹' + order.totalAmount + ' (COD)' : 'PAID (UPI)'}`;
 }
@@ -389,8 +397,10 @@ export function generateWhatsAppOrderUrl(order: Order, merchantWhatsApp: string)
     .join('\n');
 
   const deliveryTypeLabel = order.deliveryType === 'RAPIDO_CITY' 
-    ? '⚡ Rapid In-City (Rapido 30-45m)' 
+    ? '🕒 Bhavnagar Slot Delivery' 
     : '📦 Outside-City (Speed Post / Courier)';
+
+  const slotLine = order.deliverySlot ? `\n*Delivery Slot:* ${order.deliverySlot}` : '';
 
   const paymentLabel = order.paymentMethod === 'COD' 
     ? '💵 Cash on Delivery (COD)' 
@@ -402,7 +412,7 @@ export function generateWhatsAppOrderUrl(order: Order, merchantWhatsApp: string)
 *Customer:* ${order.customerName}
 *Phone:* ${order.customerPhone}
 
-*Delivery Type:* ${deliveryTypeLabel}
+*Delivery Type:* ${deliveryTypeLabel}${slotLine}
 *Delivery Address:*
 ${order.deliveryAddress}${order.landmark ? '\nLandmark: ' + order.landmark : ''}
 ${order.city} - ${order.pincode}
@@ -661,6 +671,7 @@ export function exportOrdersToCsv(orders: Order[]): string {
     'Customer Name',
     'Customer Phone',
     'Delivery Type',
+    'Delivery Slot',
     'Address',
     'Landmark',
     'City',
@@ -696,6 +707,7 @@ export function exportOrdersToCsv(orders: Order[]): string {
       `"${(o.customerName || '').replace(/"/g, '""')}"`,
       `"${o.customerPhone}"`,
       `"${o.deliveryType}"`,
+      `"${(o.deliverySlot || '').replace(/"/g, '""')}"`,
       `"${(o.deliveryAddress || '').replace(/"/g, '""')}"`,
       `"${(o.landmark || '').replace(/"/g, '""')}"`,
       `"${o.city}"`,

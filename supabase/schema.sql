@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS orders (
   customer_name TEXT NOT NULL,
   customer_phone TEXT NOT NULL,
   delivery_type TEXT NOT NULL, -- 'RAPIDO_CITY' or 'COURIER_OUTSIDE'
+  delivery_slot TEXT, -- e.g. '22 Nov 2026 • 9:00 AM – 10:00 AM'
   delivery_address TEXT NOT NULL,
   landmark TEXT,
   city TEXT NOT NULL,
@@ -64,6 +65,7 @@ CREATE TABLE IF NOT EXISTS orders (
 );
 
 -- Idempotent column migrations for existing databases
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_slot TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS utr_number TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS courier_tracking TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS admin_note TEXT;

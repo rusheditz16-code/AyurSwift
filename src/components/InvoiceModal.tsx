@@ -77,6 +77,7 @@ export function InvoiceModal({
       `🌿 *AyurSwift - Official Cash Memo / Bill*\n\n` +
       `Bill No: ${invoiceNo}\n` +
       `Order Ref: ${order.id}\n` +
+      (order.deliverySlot ? `Delivery Slot: ${order.deliverySlot}\n` : '') +
       `Date: ${invoiceDate} at ${invoiceTime}\n` +
       `Customer: ${order.customerName}\n\n` +
       `*Items Ordered:*\n` +
@@ -195,7 +196,7 @@ export function InvoiceModal({
                     Authentic Ayurveda &amp; Everyday Health Quick Delivery
                   </p>
                   <p className="text-[11px] text-gray-600">
-                    Bhavnagar, Gujarat • Local 30–45 Mins Express Delivery
+                    Bhavnagar, Gujarat • Scheduled Daily Delivery Slots (9–11 AM &amp; 6–8 PM)
                   </p>
                 </div>
 
@@ -244,10 +245,16 @@ export function InvoiceModal({
                     <span className="text-gray-600">Dispatch Mode:</span>{' '}
                     <span className="font-semibold text-gray-800">
                       {order.deliveryType === 'RAPIDO_CITY'
-                        ? '⚡ Local Express 30–45 Mins (Bhavnagar)'
+                        ? '🕒 Bhavnagar Scheduled Slot Delivery'
                         : '📦 Standard Surface Courier (All India)'}
                     </span>
                   </div>
+                  {order.deliverySlot && (
+                    <div>
+                      <span className="text-gray-600">Delivery Slot:</span>{' '}
+                      <strong className="text-[#143d29]">{order.deliverySlot}</strong>
+                    </div>
+                  )}
                 </div>
 
                 {/* Right: Bill Info */}
@@ -440,6 +447,9 @@ export function InvoiceModal({
               <div className="space-y-0.5 text-[10px] leading-tight">
                 <div><strong>Order ID:</strong> {order.id}</div>
                 <div><strong>Date:</strong> {invoiceDate} {invoiceTime}</div>
+                {order.deliverySlot && (
+                  <div><strong>Slot:</strong> {order.deliverySlot}</div>
+                )}
                 <div><strong>Customer:</strong> {order.customerName}</div>
                 <div><strong>Phone:</strong> {order.customerPhone}</div>
                 <div><strong>Address:</strong> {order.deliveryAddress}{order.landmark ? `, Near ${order.landmark}` : ''}, {order.city} - {order.pincode}</div>

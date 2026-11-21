@@ -16,6 +16,7 @@ import {
   StickyNote,
 } from 'lucide-react';
 import { Order } from '@/types';
+import { formatDeliverySlotForDisplay } from '@/lib/deliverySlots';
 
 interface AdminOrderCardProps {
   order: Order;
@@ -157,6 +158,22 @@ export function AdminOrderCard({
           <span>{elapsed.label}</span>
         </span>
       </div>
+
+      {/* Scheduled Delivery Slot Pill */}
+      {order.deliverySlot && (
+        <div
+          className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl border text-[11px] ${
+            dark
+              ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300'
+              : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+          }`}
+        >
+          <span className="inline-flex items-center gap-1.5 font-extrabold">
+            <Clock className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            <span>Slot: {formatDeliverySlotForDisplay(order.deliverySlot)}</span>
+          </span>
+        </div>
+      )}
 
       {/* Customer Submitted UTR Reference Badge */}
       {order.utrNumber && (
