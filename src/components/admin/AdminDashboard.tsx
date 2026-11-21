@@ -82,6 +82,7 @@ const DEFAULT_NEW_PROD: Partial<Product> = {
 export function AdminDashboard() {
   // Auth state (verified strictly by server HttpOnly session cookie)
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [openAuthInResetMode, setOpenAuthInResetMode] = useState(false);
   const [emailInput, setEmailInput] = useState('');
   const [pinInput, setPinInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -630,6 +631,7 @@ export function AdminDashboard() {
         lockoutSeconds={lockoutSeconds}
         onSubmit={handleAuthSubmit}
         dark={dark}
+        initialResetOpen={openAuthInResetMode}
       />
     );
   }
@@ -736,6 +738,10 @@ export function AdminDashboard() {
               settings={settings}
               onChangeSettings={setSettings}
               onSaveSettings={handleSaveSettings}
+              onOpenCredentialReset={async () => {
+                setOpenAuthInResetMode(true);
+                await handleLogout();
+              }}
               savedToast={settingsSavedToast}
               dark={dark}
             />

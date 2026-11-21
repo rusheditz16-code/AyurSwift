@@ -62,10 +62,31 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   reset_at TIMESTAMPTZ NOT NULL
 );
 
--- 4. Row Level Security (RLS) — LOCKED DOWN
+-- 4. Server-Only Admin Credentials & Reset OTPs (service_role ONLY)
+CREATE TABLE IF NOT EXISTS admin_credentials (
+  id TEXT PRIMARY KEY DEFAULT 'primary',
+  admin_emails TEXT[] NOT NULL,
+  pin_hash TEXT NOT NULL,
+  token_version INTEGER NOT NULL DEFAULT 1,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS admin_otps (
+  id TEXT PRIMARY KEY,
+  purpose TEXT NOT NULL, -- 'PIN' | 'EMAIL' | 'BOTH'
+  otp_hash TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  used BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 5. Row Level Security (RLS) — LOCKED DOWN
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rate_limits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE admin_credentials ENABLE ROW LEVEL SECURITY;
+ALTER TABLE admin_otps ENABLE ROW LEVEL SECURITY;
 
 -- Drop any legacy open/demo policies immediately
 DROP POLICY IF EXISTS "Full access with anon for demo" ON products;
@@ -76,6 +97,8 @@ DROP POLICY IF EXISTS "Public can view live in-stock products" ON products;
 -- Revoke excessive default grants from anon/authenticated roles
 REVOKE ALL ON TABLE orders FROM anon, authenticated;
 REVOKE ALL ON TABLE rate_limits FROM anon, authenticated;
+REVOKE ALL ON TABLE admin_credentials FROM anon, authenticated;
+REVOKE ALL ON TABLE admin_otps FROM anon, authenticated;
 REVOKE ALL ON TABLE products FROM anon, authenticated;
 
 -- Column-level SELECT grant only: hides wholesale agency_cost_price and raw stock_quantity from public anon queries

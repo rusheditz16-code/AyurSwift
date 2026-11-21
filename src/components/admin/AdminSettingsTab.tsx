@@ -8,6 +8,7 @@ interface AdminSettingsTabProps {
   settings: MerchantSettings;
   onChangeSettings: (s: MerchantSettings) => void;
   onSaveSettings: (e: React.FormEvent) => void;
+  onOpenCredentialReset?: () => void;
   savedToast: boolean;
   dark: boolean;
 }
@@ -16,6 +17,7 @@ export function AdminSettingsTab({
   settings,
   onChangeSettings,
   onSaveSettings,
+  onOpenCredentialReset,
   savedToast,
   dark,
 }: AdminSettingsTabProps) {
@@ -141,15 +143,24 @@ export function AdminSettingsTab({
           </div>
         </div>
 
-        <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3.5 text-xs space-y-1">
+        <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3.5 text-xs space-y-2.5">
           <div className="font-extrabold text-emerald-700 dark:text-emerald-400">
-            Server-Side Admin Credentials
+            Server-Side Admin Credentials &amp; OTP Reset
           </div>
           <p className={`text-[11px] leading-relaxed ${muted}`}>
-            For your security, your Admin PIN is no longer stored in browser storage. Update{' '}
-            <code className="font-mono">ADMIN_EMAILS</code> and{' '}
-            <code className="font-mono">ADMIN_PIN_HASH</code> in Vercel Environment Variables to rotate credentials.
+            Your Admin login email and hashed PIN are verified strictly on the server. To change
+            your email or PIN anytime, request a 6-digit recovery OTP sent strictly to your 2
+            authorized recovery Gmail accounts.
           </p>
+          {onOpenCredentialReset && (
+            <button
+              type="button"
+              onClick={onOpenCredentialReset}
+              className="px-3.5 py-2 rounded-lg bg-[#0C831F] hover:bg-[#096B19] text-white font-bold text-[11px] transition-colors cursor-pointer"
+            >
+              Reset Admin Email or PIN via OTP →
+            </button>
+          )}
         </div>
 
         <div className="pt-2 flex items-center justify-between gap-3">

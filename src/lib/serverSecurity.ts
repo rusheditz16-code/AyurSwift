@@ -1,4 +1,7 @@
 import crypto from 'crypto';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
@@ -203,29 +206,61 @@ function safeParseOrigin(urlStr: string): string | null {
   }
 }
 
-export function isAdminAuthConfigured(): boolean {
-  const hash = (process.env.ADMIN_PIN_HASH || '').trim();
-  const secret = (process.env.ADMIN_SESSION_SECRET || '').trim();
-  const emails = (process.env.ADMIN_EMAILS || '').trim();
-  return Boolean(hash.startsWith('scrypt:') && secret.length >= 32 && emails.length > 0);
+// Locked 2-email recovery allowlist (can be overridden strictly via server env ADMIN_RECOVERY_EMAILS)
+const DEFAULT_RECOVERY_EMAILS = ['rushirajdabhi16@gmail.com', 'ayurswift.care@gmail.com'];
+const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const MAX_OTP_ATTEMPTS = 5;
+
+export interface EffectiveAdminCredentials {
+  adminEmails: string[];
+  pinHash: string;
+  tokenVersion: number;
 }
 
-export function isAllowedAdminEmail(email: string): boolean {
-  const configured = (process.env.ADMIN_EMAILS || '')
-    .split(',')
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-  if (configured.length === 0) return false;
-  return configured.includes(email.trim().toLowerCase());
+interface StoredOtpRecord {
+  id: string;
+  purpose: 'PIN' | 'EMAIL' | 'BOTH';
+  otpHash: string;
+  expiresAt: string;
+  attempts: number;
+  used: boolean;
+  createdAt: string;
 }
 
-/**
- * Verifies admin PIN/password against salted scrypt hash in process.env.ADMIN_PIN_HASH.
- * Format: scrypt:<saltHex>:<hashHex>
- */
-export function verifyAdminPassword(candidate: string): boolean {
-  const stored = (process.env.ADMIN_PIN_HASH || '').trim();
-  const parts = stored.split(':');
+interface LocalAdminStateFile {
+  credentials?: EffectiveAdminCredentials;
+  latestOtp?: StoredOtpRecord;
+}
+
+function getLocalAdminStatePath(): string {
+  return path.join(os.tmpdir(), 'ayurswift_admin_security_state.json');
+}
+
+function readLocalAdminState(): LocalAdminStateFile {
+  try {
+    const filePath = getLocalAdminStatePath();
+    if (fs.existsSync(filePath)) {
+      const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as LocalAdminStateFile;
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
+  } catch {}
+  return {};
+}
+
+function writeLocalAdminState(state: LocalAdminStateFile): void {
+  try {
+    fs.writeFileSync(getLocalAdminStatePath(), JSON.stringify(state, null, 2), 'utf-8');
+  } catch {}
+}
+
+export function hashSecretWithScrypt(plain: string): string {
+  const saltHex = crypto.randomBytes(16).toString('hex');
+  const hashHex = crypto.scryptSync(plain, saltHex, 64).toString('hex');
+  return `scrypt:${saltHex}:${hashHex}`;
+}
+
+export function verifyScryptHash(candidate: string, storedHash: string): boolean {
+  const parts = storedHash.trim().split(':');
   if (parts.length !== 3 || parts[0] !== 'scrypt') return false;
 
   const [, saltHex, hashHex] = parts;
@@ -241,9 +276,277 @@ export function verifyAdminPassword(candidate: string): boolean {
   }
 }
 
+/**
+ * Returns the strictly locked recovery Gmail allowlist (at most 2 authorized emails).
+ */
+export function getAllowedRecoveryEmails(): string[] {
+  const fromEnv = (process.env.ADMIN_RECOVERY_EMAILS || '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+  if (fromEnv.length > 0) return Array.from(new Set(fromEnv)).slice(0, 2);
+  return [...DEFAULT_RECOVERY_EMAILS];
+}
+
+export function isAuthorizedRecoveryEmail(email: string): boolean {
+  const clean = email.trim().toLowerCase();
+  return getAllowedRecoveryEmails().includes(clean);
+}
+
+/**
+ * Loads active admin credentials from Supabase admin_credentials (if updated via OTP reset),
+ * falling back to server-only env vars ADMIN_EMAILS & ADMIN_PIN_HASH.
+ */
+export async function loadEffectiveAdminCredentials(): Promise<EffectiveAdminCredentials | null> {
+  const supabase = getSupabaseAdminClient();
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('admin_credentials')
+        .select('admin_emails, pin_hash, token_version')
+        .eq('id', 'primary')
+        .maybeSingle();
+
+      if (
+        !error &&
+        data &&
+        Array.isArray(data.admin_emails) &&
+        data.admin_emails.length > 0 &&
+        typeof data.pin_hash === 'string' &&
+        data.pin_hash.startsWith('scrypt:')
+      ) {
+        return {
+          adminEmails: data.admin_emails.map((e: string) => e.trim().toLowerCase()).filter(Boolean),
+          pinHash: data.pin_hash.trim(),
+          tokenVersion: Number(data.token_version) || 1,
+        };
+      }
+    } catch {}
+  }
+
+  // Local fallback file (for local dev or when Supabase service_role isn't configured yet)
+  const local = readLocalAdminState().credentials;
+  if (
+    local &&
+    Array.isArray(local.adminEmails) &&
+    local.adminEmails.length > 0 &&
+    typeof local.pinHash === 'string' &&
+    local.pinHash.startsWith('scrypt:')
+  ) {
+    return local;
+  }
+
+  // Fallback to server-only env vars
+  const envHash = (process.env.ADMIN_PIN_HASH || '').trim();
+  const envEmails = (process.env.ADMIN_EMAILS || '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (envHash.startsWith('scrypt:') && envEmails.length > 0) {
+    return {
+      adminEmails: envEmails,
+      pinHash: envHash,
+      tokenVersion: 1,
+    };
+  }
+
+  return null;
+}
+
+export async function saveUpdatedAdminCredentials(update: {
+  adminEmails: string[];
+  pinHash: string;
+}): Promise<EffectiveAdminCredentials> {
+  const current = await loadEffectiveAdminCredentials();
+  const nextVersion = (current?.tokenVersion || 1) + 1;
+  const nextCreds: EffectiveAdminCredentials = {
+    adminEmails: Array.from(
+      new Set(update.adminEmails.map((e) => e.trim().toLowerCase()).filter(Boolean))
+    ),
+    pinHash: update.pinHash,
+    tokenVersion: nextVersion,
+  };
+
+  const supabase = getSupabaseAdminClient();
+  if (supabase) {
+    const { error } = await supabase.from('admin_credentials').upsert({
+      id: 'primary',
+      admin_emails: nextCreds.adminEmails,
+      pin_hash: nextCreds.pinHash,
+      token_version: nextCreds.tokenVersion,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) {
+      console.warn('Supabase admin_credentials upsert error');
+    }
+  }
+
+  const localState = readLocalAdminState();
+  localState.credentials = nextCreds;
+  writeLocalAdminState(localState);
+
+  return nextCreds;
+}
+
+/**
+ * Generates a cryptographically random 6-digit single-use OTP, hashes it with scrypt,
+ * invalidates prior unused OTPs, and stores only the hash.
+ */
+export async function createAndStoreAdminOtp(
+  purpose: 'PIN' | 'EMAIL' | 'BOTH'
+): Promise<{ otp: string; expiresAt: string }> {
+  const otp = String(crypto.randomInt(100000, 1000000));
+  const id = crypto.randomBytes(12).toString('hex');
+  const otpHash = hashSecretWithScrypt(otp);
+  const expiresAt = new Date(Date.now() + OTP_TTL_MS).toISOString();
+  const createdAt = new Date().toISOString();
+
+  const record: StoredOtpRecord = {
+    id,
+    purpose,
+    otpHash,
+    expiresAt,
+    attempts: 0,
+    used: false,
+    createdAt,
+  };
+
+  const supabase = getSupabaseAdminClient();
+  if (supabase) {
+    try {
+      // Invalidate any previously active unused OTPs
+      await supabase.from('admin_otps').update({ used: true }).eq('used', false);
+      await supabase.from('admin_otps').insert({
+        id: record.id,
+        purpose: record.purpose,
+        otp_hash: record.otpHash,
+        expires_at: record.expiresAt,
+        attempts: 0,
+        used: false,
+        created_at: record.createdAt,
+      });
+    } catch {
+      console.warn('Supabase admin_otps insert fallback');
+    }
+  }
+
+  const localState = readLocalAdminState();
+  localState.latestOtp = record;
+  writeLocalAdminState(localState);
+
+  return { otp, expiresAt };
+}
+
+/**
+ * Verifies a 6-digit OTP against the latest unused, non-expired OTP hash.
+ * Enforces single-use and locks out after MAX_OTP_ATTEMPTS failed guesses.
+ */
+export async function verifyAndConsumeAdminOtp(
+  candidateOtp: string
+): Promise<{ valid: boolean; reason?: string }> {
+  const cleanOtp = candidateOtp.replace(/\D/g, '');
+  if (cleanOtp.length !== 6) {
+    return { valid: false, reason: 'Please enter a valid 6-digit OTP.' };
+  }
+
+  const now = Date.now();
+  const supabase = getSupabaseAdminClient();
+
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('admin_otps')
+        .select('*')
+        .eq('used', false)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!error && data) {
+        const expMs = new Date(String(data.expires_at)).getTime();
+        const attempts = Number(data.attempts) || 0;
+
+        if (expMs <= now) {
+          await supabase.from('admin_otps').update({ used: true }).eq('id', data.id);
+          return { valid: false, reason: 'OTP has expired. Please request a new OTP.' };
+        }
+        if (attempts >= MAX_OTP_ATTEMPTS) {
+          await supabase.from('admin_otps').update({ used: true }).eq('id', data.id);
+          return {
+            valid: false,
+            reason: 'Too many invalid OTP attempts. Please request a new OTP.',
+          };
+        }
+
+        const matched = verifyScryptHash(cleanOtp, String(data.otp_hash || ''));
+        if (!matched) {
+          const nextAttempts = attempts + 1;
+          await supabase
+            .from('admin_otps')
+            .update({
+              attempts: nextAttempts,
+              used: nextAttempts >= MAX_OTP_ATTEMPTS,
+            })
+            .eq('id', data.id);
+          return { valid: false, reason: 'Invalid OTP code. Please check your email and try again.' };
+        }
+
+        // Single-use: consume OTP immediately
+        await supabase.from('admin_otps').update({ used: true }).eq('id', data.id);
+        const localState = readLocalAdminState();
+        if (localState.latestOtp) {
+          localState.latestOtp.used = true;
+          writeLocalAdminState(localState);
+        }
+        return { valid: true };
+      }
+    } catch {}
+  }
+
+  // Fallback to local state file
+  const localState = readLocalAdminState();
+  const rec = localState.latestOtp;
+  if (!rec || rec.used) {
+    return { valid: false, reason: 'No active OTP found. Please request a new OTP first.' };
+  }
+
+  if (new Date(rec.expiresAt).getTime() <= now) {
+    rec.used = true;
+    writeLocalAdminState(localState);
+    return { valid: false, reason: 'OTP has expired. Please request a new OTP.' };
+  }
+
+  if (rec.attempts >= MAX_OTP_ATTEMPTS) {
+    rec.used = true;
+    writeLocalAdminState(localState);
+    return { valid: false, reason: 'Too many invalid OTP attempts. Please request a new OTP.' };
+  }
+
+  const matched = verifyScryptHash(cleanOtp, rec.otpHash);
+  if (!matched) {
+    rec.attempts += 1;
+    if (rec.attempts >= MAX_OTP_ATTEMPTS) rec.used = true;
+    writeLocalAdminState(localState);
+    return { valid: false, reason: 'Invalid OTP code. Please check your email and try again.' };
+  }
+
+  rec.used = true;
+  writeLocalAdminState(localState);
+  return { valid: true };
+}
+
+export async function isAdminAuthConfigured(): Promise<boolean> {
+  const secret = (process.env.ADMIN_SESSION_SECRET || '').trim();
+  if (secret.length < 32) return false;
+  const creds = await loadEffectiveAdminCredentials();
+  return Boolean(creds && creds.adminEmails.length > 0 && creds.pinHash.startsWith('scrypt:'));
+}
+
 export interface AdminSessionPayload {
   email: string;
   role: 'admin';
+  tv?: number;
   iat: number;
   exp: number;
   jti: string;
@@ -254,7 +557,7 @@ function getSessionSecret(): string | null {
   return secret.length >= 32 ? secret : null;
 }
 
-export function createAdminSessionToken(email: string): string | null {
+export function createAdminSessionToken(email: string, tokenVersion = 1): string | null {
   const secret = getSessionSecret();
   if (!secret) return null;
 
@@ -262,6 +565,7 @@ export function createAdminSessionToken(email: string): string | null {
   const payload: AdminSessionPayload = {
     email: email.trim().toLowerCase(),
     role: 'admin',
+    tv: tokenVersion,
     iat: nowSec,
     exp: nowSec + SESSION_TTL_SECONDS,
     jti: crypto.randomBytes(16).toString('hex'),

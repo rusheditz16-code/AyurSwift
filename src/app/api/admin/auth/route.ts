@@ -5,30 +5,34 @@ import {
   createAdminSessionToken,
   getTrustedClientIp,
   isAdminAuthConfigured,
-  isAllowedAdminEmail,
+  loadEffectiveAdminCredentials,
   logSecurityEvent,
   maskIpForLog,
   revokeAdminSession,
   sanitizeText,
   setAdminSessionCookie,
-  verifyAdminPassword,
   verifyAdminSession,
   verifySameOrigin,
+  verifyScryptHash,
 } from '@/lib/serverSecurity';
 
 const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
 /**
  * GET /api/admin/auth
- * Returns current server-verified admin session status.
+ * Returns current server-verified admin session status (including tokenVersion check).
  */
 export async function GET(request: NextRequest) {
   const session = verifyAdminSession(request);
-  if (!session) {
-    return NextResponse.json({
+  const creds = await loadEffectiveAdminCredentials();
+
+  if (!session || (creds && session.tv && session.tv < creds.tokenVersion)) {
+    const res = NextResponse.json({
       authenticated: false,
-      configured: isAdminAuthConfigured(),
+      configured: await isAdminAuthConfigured(),
     });
+    if (session) clearAdminSessionCookie(res);
+    return res;
   }
 
   return NextResponse.json({
@@ -40,7 +44,8 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/admin/auth
- * Verifies admin Gmail + PIN/password on the server and issues a signed HttpOnly cookie.
+ * Verifies admin Gmail + PIN/password against active server credentials (env or OTP-updated DB)
+ * and issues a signed HttpOnly cookie.
  */
 export async function POST(request: NextRequest) {
   const ip = getTrustedClientIp(request);
@@ -53,11 +58,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (!isAdminAuthConfigured()) {
+  const configured = await isAdminAuthConfigured();
+  const creds = await loadEffectiveAdminCredentials();
+  if (!configured || !creds) {
     return NextResponse.json(
       {
         success: false,
-        error: 'Admin login is not configured on the server yet. Set ADMIN_EMAILS, ADMIN_PIN_HASH, and ADMIN_SESSION_SECRET.',
+        error:
+          'Admin login is not configured on the server yet. Set ADMIN_SESSION_SECRET (plus ADMIN_EMAILS & ADMIN_PIN_HASH or complete a Recovery OTP reset).',
       },
       { status: 503 }
     );
@@ -111,8 +119,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const emailOk = isAllowedAdminEmail(cleanEmail);
-    const pinOk = verifyAdminPassword(cleanPin);
+    const emailOk = creds.adminEmails.includes(cleanEmail);
+    const pinOk = verifyScryptHash(cleanPin, creds.pinHash);
 
     if (!emailOk || !pinOk) {
       logSecurityEvent('admin_login_failed', { ip: maskIpForLog(ip) });
@@ -122,7 +130,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const token = createAdminSessionToken(cleanEmail);
+    const token = createAdminSessionToken(cleanEmail, creds.tokenVersion);
     if (!token) {
       return NextResponse.json(
         { success: false, error: 'Session signing unavailable.' },
