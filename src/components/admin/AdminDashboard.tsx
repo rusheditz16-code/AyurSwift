@@ -616,7 +616,12 @@ export function AdminDashboard() {
       name: trimmedName,
       brand: trimmedBrand,
       category: newProd.category || existingProd?.category || 'Joint & Muscle Pain',
-      manufacturer: (newProd.manufacturer || existingProd?.manufacturer || 'Ayurvedic Pharmacy').trim(),
+      manufacturer: (
+        newProd.manufacturer ||
+        existingProd?.manufacturer ||
+        trimmedBrand ||
+        'Ayurvedic Pharmacy'
+      ).trim(),
       form: ((newProd.form as Product['form']) || existingProd?.form || 'Balm'),
       packSize: trimmedPack,
       agencyCostPrice: Math.max(0, costVal),

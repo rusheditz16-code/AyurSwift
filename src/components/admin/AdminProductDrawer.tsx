@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { X, Upload, Plus, TrendingUp, Loader2, Eye, EyeOff } from 'lucide-react';
 import { Product } from '@/types';
 
@@ -54,6 +54,17 @@ export function AdminProductDrawer({
   isSaving = false,
   dark,
 }: AdminProductDrawerProps) {
+  const [useCustomBrand, setUseCustomBrand] = useState(false);
+  const customBrandInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const initialBrand = String(newProd.brand ?? '').trim();
+    setUseCustomBrand(Boolean(initialBrand) && !PRESET_BRANDS.includes(initialBrand));
+    // Re-sync custom brand mode only when opening the drawer or switching which SKU is edited
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, editingProductId]);
+
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -73,8 +84,9 @@ export function AdminProductDrawer({
   const marginPct = sell > 0 ? Math.round((unitProfit / sell) * 100) : 0;
   const discountPct = mrp > 0 ? Math.max(0, Math.round(((mrp - sell) / mrp) * 100)) : 0;
 
-  const currentBrand = String(newProd.brand || 'Dabur');
-  const isCustomBrand = !PRESET_BRANDS.includes(currentBrand);
+  const rawBrand = typeof newProd.brand === 'string' ? newProd.brand : '';
+  const isCustomBrand =
+    useCustomBrand || (rawBrand.trim().length > 0 && !PRESET_BRANDS.includes(rawBrand));
 
   const inputClass = `w-full px-3 py-2 rounded-xl text-xs font-semibold border focus:outline-none focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15 ${
     dark
@@ -302,13 +314,29 @@ export function AdminProductDrawer({
               </label>
               <select
                 id="admin-sku-brand"
-                value={isCustomBrand ? 'Other' : currentBrand}
+                value={isCustomBrand ? '__OTHER__' : rawBrand || 'Dabur'}
                 onChange={(e) => {
                   const val = e.target.value;
-                  onChangeProd({
-                    ...newProd,
-                    brand: val === 'Other' ? '' : val,
-                  });
+                  if (val === '__OTHER__') {
+                    setUseCustomBrand(true);
+                    const nextBrand = PRESET_BRANDS.includes(rawBrand) ? '' : rawBrand;
+                    const nextMfg =
+                      !editingProductId && newProd.manufacturer === 'Dabur India Ltd.'
+                        ? ''
+                        : newProd.manufacturer;
+                    onChangeProd({
+                      ...newProd,
+                      brand: nextBrand,
+                      manufacturer: nextMfg,
+                    });
+                    setTimeout(() => customBrandInputRef.current?.focus(), 0);
+                  } else {
+                    setUseCustomBrand(false);
+                    onChangeProd({
+                      ...newProd,
+                      brand: val,
+                    });
+                  }
                 }}
                 className={inputClass}
               >
@@ -317,22 +345,29 @@ export function AdminProductDrawer({
                     {b}
                   </option>
                 ))}
-                <option value="Other">Other / Custom Brand</option>
+                <option value="__OTHER__">Other / Custom Brand</option>
               </select>
             </div>
           </div>
 
           {isCustomBrand && (
-            <div>
-              <label htmlFor="admin-sku-custom-brand" className="block text-[11px] font-bold mb-1">
+            <div
+              className={`rounded-xl border p-3 ${
+                dark
+                  ? 'bg-emerald-950/25 border-emerald-800/70'
+                  : 'bg-emerald-50/70 border-emerald-200'
+              }`}
+            >
+              <label htmlFor="admin-sku-custom-brand" className="block text-[11px] font-extrabold mb-1">
                 Custom Brand Name *
               </label>
               <input
+                ref={customBrandInputRef}
                 id="admin-sku-custom-brand"
                 type="text"
-                value={currentBrand === 'Other' ? '' : currentBrand}
+                value={rawBrand === 'Other' ? '' : rawBrand}
                 onChange={(e) => onChangeProd({ ...newProd, brand: e.target.value })}
-                placeholder="e.g. Kottakkal, Sandu, Organic India"
+                placeholder="Type any brand name (e.g. Kottakkal, Sandu, Organic India)"
                 required
                 className={inputClass}
               />
