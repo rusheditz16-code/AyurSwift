@@ -1,66 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
-import { createClient } from '@supabase/supabase-js';
-import { Order } from '@/types';
+import { DeliveryType, Order, PaymentMethod, Product } from '@/types';
+type OrderItem = Order['items'][number];
+import { DEFAULT_SETTINGS, INITIAL_PRODUCTS } from '@/lib/initialData';
+import {
+  checkRateLimit,
+  generateSecureOrderId,
+  getSupabaseAdminClient,
+  getTrustedClientIp,
+  logSecurityEvent,
+  maskIpForLog,
+  normalizeIndianPhone,
+  sanitizeText,
+  verifyAdminSession,
+  verifySameOrigin,
+  verifyTurnstileIfConfigured,
+} from '@/lib/serverSecurity';
 
-// Admin Authorization Token
-const ADMIN_AUTH_TOKEN = 'ayurswift_admin_secret_auth_token_2026';
+const ALLOWED_ORDER_STATUSES = new Set<Order['orderStatus']>([
+  'NEW',
+  'PACKED',
+  'DISPATCHED',
+  'DELIVERED',
+  'CANCELLED',
+]);
 
-// Rate Limiter State (in-memory)
-interface RateLimitRecord {
-  count: number;
-  resetAt: number;
-}
-const rateLimitMap = new Map<string, RateLimitRecord>();
+const ALLOWED_PAYMENT_STATUSES = new Set<Order['paymentStatus']>(['PENDING', 'VERIFIED']);
+const ALLOWED_DELIVERY_TYPES = new Set<DeliveryType>(['RAPIDO_CITY', 'COURIER_OUTSIDE']);
+const ALLOWED_PAYMENT_METHODS = new Set<PaymentMethod>(['UPI', 'COD']);
 
-function checkRateLimit(ip: string, limit = 40, windowMs = 60000): boolean {
-  const now = Date.now();
-  const record = rateLimitMap.get(ip);
-  if (!record || now > record.resetAt) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
-  if (record.count >= limit) {
-    return false;
-  }
-  record.count += 1;
-  return true;
-}
-
-// Client IP extractor
-function getClientIp(request: NextRequest): string {
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) {
-    return forwarded.split(',')[0].trim();
-  }
-  return request.headers.get('x-real-ip') || '127.0.0.1';
+interface PublicOrderView extends Omit<Order, 'rapidoCopied'> {
+  rapidoCopied: false;
 }
 
-// Input sanitizer to prevent Stored XSS / Injection
-function sanitizeText(val: any, maxLen = 200): string {
-  if (typeof val !== 'string') return '';
-  return val
-    .replace(/[<>]/g, '') // Strip HTML brackets
-    .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Strip control characters
-    .trim()
-    .slice(0, maxLen);
-}
-
-// Check whether the request carries valid Admin credentials
-function isAuthorizedAdmin(request: NextRequest): boolean {
-  const adminKey = request.headers.get('x-ayurswift-admin-key');
-  const authHeader = request.headers.get('authorization');
-  return (
-    adminKey === ADMIN_AUTH_TOKEN ||
-    authHeader === `Bearer ${ADMIN_AUTH_TOKEN}` ||
-    request.headers.get('x-admin-role') === 'store_owner'
-  );
-}
-
-// Customer Privacy Masking (India DPDP Act Compliance)
-// Masks phone and street address for unauthenticated public lookups
-function maskOrderForPublic(order: Order): Order {
+/**
+ * Customer Privacy Masking (India DPDP Act Compliance)
+ * Masks phone, street address, landmark, and strips internal dispatch flags.
+ */
+function maskOrderForPublic(order: Order): PublicOrderView {
   const cleanPhone = order.customerPhone.replace(/\D/g, '');
   const maskedPhone =
     cleanPhone.length >= 6
@@ -68,11 +47,13 @@ function maskOrderForPublic(order: Order): Order {
       : '••••••••••';
 
   let maskedAddress = order.deliveryAddress;
-  const parts = order.deliveryAddress.split(',');
-  if (parts.length > 1) {
-    maskedAddress = `••••, ${parts.slice(1).join(',').trim()}`;
-  } else if (order.deliveryAddress.length > 8) {
-    maskedAddress = `•••• ${order.deliveryAddress.slice(6)}`;
+  if (maskedAddress !== '[REDACTED]') {
+    const parts = order.deliveryAddress.split(',');
+    if (parts.length > 1) {
+      maskedAddress = `••••, ${parts.slice(1).join(',').trim()}`;
+    } else if (order.deliveryAddress.length > 8) {
+      maskedAddress = `•••• ${order.deliveryAddress.slice(6)}`;
+    }
   }
 
   return {
@@ -80,27 +61,15 @@ function maskOrderForPublic(order: Order): Order {
     customerPhone: maskedPhone,
     deliveryAddress: maskedAddress,
     landmark: order.landmark ? '••••' : undefined,
+    rapidoCopied: false,
   };
 }
 
-// Supabase Serverless Client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const isSupabaseConfigured = Boolean(
-  supabaseUrl &&
-  supabaseAnonKey &&
-  supabaseUrl.startsWith('https://') &&
-  supabaseUrl !== 'https://your-project.supabase.co'
-);
-
-const supabase = isSupabaseConfigured ? createClient(supabaseUrl, supabaseAnonKey) : null;
-
-// In-memory store across function invocations
 let memoryOrders: Order[] = [];
 
 function getStorageFilePath(): string {
   if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
-    return path.join('/tmp', 'ayurswift_orders_store.json');
+    return path.join(os.tmpdir(), 'ayurswift_orders_store.json');
   }
   return path.join(process.cwd(), '.orders_store.json');
 }
@@ -115,8 +84,8 @@ function loadOrdersFromFile(): Order[] {
         return parsed;
       }
     }
-  } catch (err) {
-    console.error('Failed to load orders from file:', err);
+  } catch {
+    // Ignore corrupt local file fallback
   }
   return [];
 }
@@ -125,35 +94,33 @@ function saveOrdersToFile(orders: Order[]): void {
   try {
     const filePath = getStorageFilePath();
     fs.writeFileSync(filePath, JSON.stringify(orders, null, 2), 'utf-8');
-  } catch (err) {
-    console.error('Failed to persist orders to file:', err);
+  } catch {
+    // Ignore read-only disk fallback
   }
 }
 
-// Convert Supabase DB row to Order type
-function mapDbRowToOrder(row: any): Order {
+function mapDbRowToOrder(row: Record<string, unknown>): Order {
   return {
-    id: row.id,
-    customerName: row.customer_name,
-    customerPhone: row.customer_phone,
-    deliveryType: row.delivery_type,
-    deliveryAddress: row.delivery_address,
-    city: row.city,
-    pincode: row.pincode,
-    landmark: row.landmark || '',
-    items: row.items || [],
+    id: String(row.id || ''),
+    customerName: String(row.customer_name || ''),
+    customerPhone: String(row.customer_phone || ''),
+    deliveryType: (row.delivery_type as DeliveryType) || 'RAPIDO_CITY',
+    deliveryAddress: String(row.delivery_address || ''),
+    city: String(row.city || ''),
+    pincode: String(row.pincode || ''),
+    landmark: row.landmark ? String(row.landmark) : '',
+    items: Array.isArray(row.items) ? (row.items as OrderItem[]) : [],
     subtotal: Number(row.subtotal) || 0,
     deliveryFee: Number(row.delivery_fee) || 0,
     totalAmount: Number(row.total_amount) || 0,
-    paymentMethod: row.payment_method,
-    paymentStatus: row.payment_status,
-    orderStatus: row.order_status,
+    paymentMethod: (row.payment_method as PaymentMethod) || 'UPI',
+    paymentStatus: (row.payment_status as Order['paymentStatus']) || 'PENDING',
+    orderStatus: (row.order_status as Order['orderStatus']) || 'NEW',
     rapidoCopied: Boolean(row.rapido_copied),
-    createdAt: row.created_at,
+    createdAt: String(row.created_at || new Date().toISOString()),
   };
 }
 
-// Convert Order type to Supabase DB row
 function mapOrderToDbRow(order: Order) {
   return {
     id: order.id,
@@ -177,19 +144,103 @@ function mapOrderToDbRow(order: Order) {
   };
 }
 
-// Initialize memory cache
-if (memoryOrders.length === 0) {
-  memoryOrders = loadOrdersFromFile();
+async function loadAllOrders(): Promise<Order[]> {
+  const diskOrders = loadOrdersFromFile();
+  const allOrdersMap = new Map<string, Order>();
+
+  const supabase = getSupabaseAdminClient();
+  if (supabase) {
+    try {
+      const { data: dbOrders, error } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(500);
+
+      if (!error && Array.isArray(dbOrders)) {
+        dbOrders.forEach((row) => {
+          const ord = mapDbRowToOrder(row as Record<string, unknown>);
+          if (ord.id) allOrdersMap.set(ord.id, ord);
+        });
+      }
+    } catch {
+      // Fallback safely to memory/disk
+    }
+  }
+
+  [...memoryOrders, ...diskOrders].forEach((o) => {
+    if (o && o.id && !allOrdersMap.has(o.id)) {
+      allOrdersMap.set(o.id, o);
+    }
+  });
+
+  const sorted = Array.from(allOrdersMap.values()).sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+  memoryOrders = sorted;
+  return sorted;
+}
+
+/**
+ * Loads authoritative product catalog on the server for price & stock verification.
+ */
+async function loadServerCatalog(): Promise<Map<string, Product>> {
+  const catalog = new Map<string, Product>();
+  INITIAL_PRODUCTS.forEach((p) => catalog.set(p.id, p));
+
+  const supabase = getSupabaseAdminClient();
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from('products').select('*');
+      if (!error && Array.isArray(data)) {
+        data.forEach((row: Record<string, unknown>) => {
+          const id = String(row.id || '');
+          if (!id) return;
+          const base = catalog.get(id);
+          catalog.set(id, {
+            id,
+            name: String(row.name || base?.name || ''),
+            brand: String(row.brand || base?.brand || ''),
+            category: String(row.category || base?.category || ''),
+            manufacturer: String(row.manufacturer || base?.manufacturer || ''),
+            form: (row.form as Product['form']) || base?.form || 'Tablet',
+            packSize: String(row.pack_size || base?.packSize || ''),
+            agencyCostPrice: Number(row.agency_cost_price ?? base?.agencyCostPrice ?? 0),
+            mrp: Number(row.mrp ?? base?.mrp ?? 0),
+            sellingPrice: Number(row.selling_price ?? base?.sellingPrice ?? 0),
+            stockQuantity: Number(row.stock_quantity ?? base?.stockQuantity ?? 0),
+            isLive: Boolean(row.is_live ?? base?.isLive ?? false),
+            rating: base?.rating ?? 4.8,
+            reviewCount: base?.reviewCount ?? 100,
+            indications: String(row.indications || base?.indications || ''),
+            dosage: String(row.dosage || base?.dosage || ''),
+            composition: String(row.composition || base?.composition || ''),
+            imageUrl: row.image_url ? String(row.image_url) : base?.imageUrl,
+          });
+        });
+      }
+    } catch {
+      // Fallback cleanly to built-in catalog if DB read fails
+    }
+  }
+
+  return catalog;
+}
+
+function normalizeOrderIdForCompare(id: string): string {
+  return id.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
 /**
  * GET /api/orders
- * Public queries require ?q= (Order ID or 10-digit phone) or ?ids= (list of Order IDs)
- * Complete unfiltered ledger requires Admin Authorization header
+ * - Verified admin cookie: returns paginated full order ledger (?limit=50&offset=0).
+ * - Public lookup: requires exact full Order ID (?q=#AS-XXXXXXXX) or exact 10-digit phone,
+ *   or exact ID list (?ids=...), always masked and capped.
  */
 export async function GET(request: NextRequest) {
-  const ip = getClientIp(request);
-  if (!checkRateLimit(ip)) {
+  const ip = getTrustedClientIp(request);
+  const rl = await checkRateLimit(`orders_get:${ip}`, 40, 60_000);
+  if (!rl.allowed) {
     return NextResponse.json(
       { success: false, error: 'Too many requests. Please try again in 1 minute.' },
       { status: 429 }
@@ -197,68 +248,42 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url);
-  const q = (searchParams.get('q') || '').trim();
-  const idsParam = (searchParams.get('ids') || '').trim();
-  const isAdmin = isAuthorizedAdmin(request);
+  const q = sanitizeText(searchParams.get('q'), 64);
+  const idsParam = sanitizeText(searchParams.get('ids'), 600);
+  const limitParam = Number(searchParams.get('limit') || 50);
+  const offsetParam = Number(searchParams.get('offset') || 0);
+  const adminSession = verifyAdminSession(request);
+  const isAdmin = Boolean(adminSession);
 
-  // Reload to pick up updates from disk
-  const diskOrders = loadOrdersFromFile();
-  const allOrdersMap = new Map<string, Order>();
+  const allOrders = await loadAllOrders();
 
-  // If Supabase is active, fetch from PostgreSQL cloud database
-  if (supabase) {
-    try {
-      const { data: dbOrders, error } = await supabase
-        .from('orders')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (!error && Array.isArray(dbOrders)) {
-        dbOrders.forEach((row) => {
-          const ord = mapDbRowToOrder(row);
-          if (ord.id) allOrdersMap.set(ord.id, ord);
-        });
-      }
-    } catch (e) {
-      console.warn('Supabase read error in API route:', e);
-    }
+  // 1. Authorized Admin: paginated unmasked ledger
+  if (isAdmin && !q && !idsParam) {
+    const safeLimit = Math.min(Math.max(1, Math.floor(limitParam || 50)), 100);
+    const safeOffset = Math.max(0, Math.floor(offsetParam || 0));
+    const page = allOrders.slice(safeOffset, safeOffset + safeLimit);
+    return NextResponse.json({
+      success: true,
+      count: page.length,
+      total: allOrders.length,
+      limit: safeLimit,
+      offset: safeOffset,
+      orders: page,
+    });
   }
 
-  // Merge with memory and disk orders
-  [...memoryOrders, ...diskOrders].forEach((o) => {
-    if (o && o.id) {
-      if (!allOrdersMap.has(o.id)) {
-        allOrdersMap.set(o.id, o);
-      }
-    }
-  });
-
-  const allOrders = Array.from(allOrdersMap.values()).sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
-  memoryOrders = allOrders;
-
-  // 1. Authorized Admin: Full access without masking
-  if (isAdmin) {
-    if (!q && !idsParam) {
-      return NextResponse.json({ success: true, count: allOrders.length, orders: allOrders });
-    }
-  }
-
-  // 2. Client Status Sync by specific Order IDs (?ids=AS-1001,AS-1002)
+  // 2. Client Status Sync by exact Order IDs (?ids=#AS-XXXX,#AS-YYYY)
   if (idsParam) {
-    const idSet = new Set(
-      idsParam
-        .split(',')
-        .map((id) => id.trim().toLowerCase().replace(/^#/, ''))
-        .filter(Boolean)
-    );
+    const requestedIds = idsParam
+      .split(',')
+      .map(normalizeOrderIdForCompare)
+      .filter((id) => id.length >= 6)
+      .slice(0, 20);
 
-    const matched = allOrders.filter((o) =>
-      idSet.has(o.id.toLowerCase().replace(/^#/, ''))
-    );
-
+    const idSet = new Set(requestedIds);
+    const matched = allOrders.filter((o) => idSet.has(normalizeOrderIdForCompare(o.id)));
     const safeOrders = isAdmin ? matched : matched.map(maskOrderForPublic);
+
     return NextResponse.json({
       success: true,
       count: safeOrders.length,
@@ -266,39 +291,43 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // 3. Unauthenticated request without search query: BLOCKED to protect privacy
+  // 3. Unauthenticated unscoped ledger query: BLOCKED
   if (!q) {
     return NextResponse.json(
       {
         success: false,
-        error: 'Unauthorized: Merchant credentials required to query full order ledger.',
+        error: 'Unauthorized: Merchant sign-in required to query order ledger.',
       },
       { status: 403 }
     );
   }
 
-  // 4. Targeted Query by Order ID or Mobile Number
-  const cleanQ = q.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const digitsQ = q.replace(/\D/g, '');
+  // 4. Strict Exact Lookup (NO partial/substring matching!)
+  const cleanIdQuery = normalizeOrderIdForCompare(q);
+  const phoneQuery = normalizeIndianPhone(q);
 
   const matches = allOrders.filter((order) => {
-    const cleanId = order.id.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const cleanPhone = order.customerPhone.replace(/\D/g, '');
+    const cleanOrderId = normalizeOrderIdForCompare(order.id);
+    const orderPhone = normalizeIndianPhone(order.customerPhone);
 
-    // Match Order ID (e.g., #AS-1001, AS-1001, 1001)
-    if (cleanId.includes(cleanQ) || cleanQ.includes(cleanId)) return true;
+    // Exact full Order ID match only (min 6 alphanumeric chars e.g. as1001 or as7k4m9x2p)
+    if (cleanIdQuery.length >= 6 && cleanOrderId === cleanIdQuery) {
+      return true;
+    }
 
-    // Match verified 10-digit phone
-    if (digitsQ.length >= 10 && cleanPhone === digitsQ) return true;
+    // Exact 10-digit Indian mobile match
+    if (phoneQuery && orderPhone === phoneQuery) {
+      return true;
+    }
 
     return false;
   });
 
-  const returnedOrders = isAdmin ? matches : matches.map(maskOrderForPublic);
+  const capped = matches.slice(0, 20);
+  const returnedOrders = isAdmin ? capped : capped.map(maskOrderForPublic);
 
   return NextResponse.json({
     success: true,
-    query: q,
     count: returnedOrders.length,
     orders: returnedOrders,
   });
@@ -306,75 +335,239 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/orders
- * Adds new customer order (sanitized & rate-limited)
+ * Creates a single new customer order with 100% server-verified pricing,
+ * strict input validation, bot check, and random unpredictable Order ID.
  */
 export async function POST(request: NextRequest) {
-  const ip = getClientIp(request);
-  if (!checkRateLimit(ip, 25)) {
+  const ip = getTrustedClientIp(request);
+  const rl = await checkRateLimit(`orders_post:${ip}`, 15, 60_000);
+  if (!rl.allowed) {
     return NextResponse.json(
-      { success: false, error: 'Order submission rate limit reached. Please wait.' },
+      { success: false, error: 'Order submission limit reached. Please wait a minute.' },
       { status: 429 }
     );
   }
 
   try {
-    const body = await request.json();
-    const incoming: Order[] = Array.isArray(body) ? body : [body];
+    const body = (await request.json()) as Record<string, unknown>;
 
-    const currentOrders = loadOrdersFromFile();
-    const ordersMap = new Map<string, Order>();
+    // Reject arrays or non-object payloads
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid order request format.' },
+        { status: 400 }
+      );
+    }
 
-    currentOrders.forEach((o) => {
-      if (o && o.id) ordersMap.set(o.id, o);
-    });
+    // Bot protection: hidden honeypot field must remain blank
+    const honeypot = sanitizeText(body.website ?? body._hp, 100);
+    if (honeypot) {
+      logSecurityEvent('order_bot_honeypot_triggered', { ip: maskIpForLog(ip) });
+      return NextResponse.json(
+        { success: false, error: 'Order validation failed.' },
+        { status: 400 }
+      );
+    }
 
-    const sanitizedIncoming: Order[] = incoming.map((order) => {
-      return {
-        ...order,
-        id: sanitizeText(order.id, 30),
-        customerName: sanitizeText(order.customerName, 80),
-        customerPhone: order.customerPhone.replace(/\D/g, '').slice(0, 15),
-        deliveryAddress: sanitizeText(order.deliveryAddress, 250),
-        city: sanitizeText(order.city, 60),
-        pincode: sanitizeText(order.pincode, 10),
-        landmark: order.landmark ? sanitizeText(order.landmark, 100) : undefined,
-      };
-    });
+    // Optional Cloudflare Turnstile verification (active if TURNSTILE_SECRET_KEY is configured)
+    const turnstileOk = await verifyTurnstileIfConfigured(body.turnstileToken, ip);
+    if (!turnstileOk) {
+      logSecurityEvent('order_bot_turnstile_failed', { ip: maskIpForLog(ip) });
+      return NextResponse.json(
+        { success: false, error: 'Bot verification failed. Please retry.' },
+        { status: 400 }
+      );
+    }
 
-    sanitizedIncoming.forEach((order) => {
-      if (order && order.id) {
-        ordersMap.set(order.id, {
-          ...ordersMap.get(order.id),
-          ...order,
-        });
+    // Strict input validation (allowlisted fields only)
+    const customerName = sanitizeText(body.customerName, 80);
+    const customerPhone = normalizeIndianPhone(body.customerPhone);
+    const deliveryType = body.deliveryType as DeliveryType;
+    const deliveryAddress = sanitizeText(body.deliveryAddress, 250);
+    const city = sanitizeText(body.city, 60);
+    const pincodeRaw = sanitizeText(body.pincode, 10).replace(/\D/g, '');
+    const landmark = body.landmark ? sanitizeText(body.landmark, 100) : undefined;
+    const paymentMethod = body.paymentMethod as PaymentMethod;
+    const rawItems = body.items;
+
+    if (customerName.length < 2) {
+      return NextResponse.json(
+        { success: false, error: 'Please enter a valid customer name.' },
+        { status: 400 }
+      );
+    }
+    if (!customerPhone) {
+      return NextResponse.json(
+        { success: false, error: 'Please enter a valid 10-digit Indian mobile number.' },
+        { status: 400 }
+      );
+    }
+    if (!ALLOWED_DELIVERY_TYPES.has(deliveryType)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid delivery option selected.' },
+        { status: 400 }
+      );
+    }
+    if (deliveryAddress.length < 5) {
+      return NextResponse.json(
+        { success: false, error: 'Please enter a complete delivery address.' },
+        { status: 400 }
+      );
+    }
+    if (city.length < 2) {
+      return NextResponse.json(
+        { success: false, error: 'Please enter a valid city.' },
+        { status: 400 }
+      );
+    }
+    if (!/^\d{6}$/.test(pincodeRaw)) {
+      return NextResponse.json(
+        { success: false, error: 'Please enter a valid 6-digit pincode.' },
+        { status: 400 }
+      );
+    }
+    if (!ALLOWED_PAYMENT_METHODS.has(paymentMethod)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid payment method.' },
+        { status: 400 }
+      );
+    }
+    if (deliveryType === 'COURIER_OUTSIDE' && paymentMethod === 'COD') {
+      return NextResponse.json(
+        { success: false, error: 'Outside-city courier orders require prepaid UPI payment.' },
+        { status: 400 }
+      );
+    }
+    if (!Array.isArray(rawItems) || rawItems.length === 0 || rawItems.length > 30) {
+      return NextResponse.json(
+        { success: false, error: 'Order must contain between 1 and 30 valid items.' },
+        { status: 400 }
+      );
+    }
+
+    // Server-side authoritative pricing & stock check
+    const catalog = await loadServerCatalog();
+    const verifiedItems: OrderItem[] = [];
+    let subtotal = 0;
+
+    for (const rawItem of rawItems) {
+      if (!rawItem || typeof rawItem !== 'object') {
+        return NextResponse.json(
+          { success: false, error: 'Invalid item in order.' },
+          { status: 400 }
+        );
       }
-    });
 
-    const updated = Array.from(ordersMap.values()).sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
+      const itemObj = rawItem as Record<string, unknown>;
+      const productId = sanitizeText(itemObj.productId, 64);
+      const qty = Number(itemObj.quantity);
 
-    memoryOrders = updated;
-    saveOrdersToFile(updated);
+      if (!productId || !Number.isInteger(qty) || qty < 1 || qty > 20) {
+        return NextResponse.json(
+          { success: false, error: 'Each item must have an integer quantity between 1 and 20.' },
+          { status: 400 }
+        );
+      }
 
-    // Sync to Supabase PostgreSQL database
-    if (supabase && sanitizedIncoming.length > 0) {
-      try {
-        const rows = sanitizedIncoming.map(mapOrderToDbRow);
-        await supabase.from('orders').upsert(rows);
-      } catch (dbErr) {
-        console.warn('Supabase upsert error in POST /api/orders:', dbErr);
+      const product = catalog.get(productId);
+      if (!product || !product.isLive || product.stockQuantity <= 0) {
+        return NextResponse.json(
+          { success: false, error: 'One or more requested items are currently unavailable.' },
+          { status: 400 }
+        );
+      }
+
+      if (qty > product.stockQuantity) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Requested quantity for ${product.name} exceeds available store stock.`,
+          },
+          { status: 400 }
+        );
+      }
+
+      const unitPrice = product.sellingPrice;
+      const totalPrice = Number((unitPrice * qty).toFixed(2));
+      subtotal = Number((subtotal + totalPrice).toFixed(2));
+
+      verifiedItems.push({
+        productId: product.id,
+        name: product.name,
+        brand: product.brand,
+        packSize: product.packSize,
+        quantity: qty,
+        mrp: product.mrp,
+        unitPrice,
+        totalPrice,
+      });
+    }
+
+    const deliveryFee =
+      deliveryType === 'RAPIDO_CITY'
+        ? subtotal >= DEFAULT_SETTINGS.cityFreeDeliveryAbove
+          ? 0
+          : DEFAULT_SETTINGS.cityDeliveryFee
+        : DEFAULT_SETTINGS.courierDeliveryFee;
+
+    const totalAmount = Number((subtotal + deliveryFee).toFixed(2));
+
+    // Server always generates random unpredictable ID and forces initial statuses
+    const newOrder: Order = {
+      id: generateSecureOrderId(),
+      customerName,
+      customerPhone,
+      deliveryType,
+      deliveryAddress,
+      city,
+      pincode: pincodeRaw,
+      landmark,
+      items: verifiedItems,
+      subtotal,
+      deliveryFee,
+      totalAmount,
+      paymentMethod,
+      paymentStatus: 'PENDING',
+      orderStatus: 'NEW',
+      rapidoCopied: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Persist to Supabase via server-only service_role key
+    const supabase = getSupabaseAdminClient();
+    if (supabase) {
+      const { error: dbErr } = await supabase
+        .from('orders')
+        .insert(mapOrderToDbRow(newOrder));
+      if (dbErr) {
+        console.warn('Supabase insert error in POST /api/orders');
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      message: 'Order recorded securely',
-      totalCount: updated.length,
+    // Update memory + local file store
+    const currentOrders = loadOrdersFromFile();
+    const updated = [newOrder, ...currentOrders.filter((o) => o.id !== newOrder.id)];
+    memoryOrders = updated;
+    saveOrdersToFile(updated);
+
+    logSecurityEvent('order_created', {
+      orderId: newOrder.id,
+      totalAmount: newOrder.totalAmount,
+      paymentMethod: newOrder.paymentMethod,
+      ip: maskIpForLog(ip),
     });
-  } catch (err: any) {
+
     return NextResponse.json(
-      { success: false, error: err.message || 'Failed to sync orders' },
+      {
+        success: true,
+        message: 'Order recorded securely',
+        order: newOrder,
+      },
+      { status: 201 }
+    );
+  } catch {
+    return NextResponse.json(
+      { success: false, error: 'Unable to process order right now. Please try again.' },
       { status: 500 }
     );
   }
@@ -382,23 +575,77 @@ export async function POST(request: NextRequest) {
 
 /**
  * PUT /api/orders
- * Updates order status (Customer can only cancel NEW orders; admin can transition any)
+ * - Admin (verified HttpOnly cookie + Same-Origin): transitions orderStatus or paymentStatus.
+ * - Customer (unauthenticated): ONLY allows cancelling a NEW order with matching 10-digit phone.
  */
 export async function PUT(request: NextRequest) {
+  const ip = getTrustedClientIp(request);
+  const rl = await checkRateLimit(`orders_put:${ip}`, 25, 60_000);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { success: false, error: 'Too many requests. Please try again shortly.' },
+      { status: 429 }
+    );
+  }
+
   try {
-    const { orderId, orderStatus, paymentStatus } = await request.json();
+    const body = (await request.json()) as {
+      orderId?: unknown;
+      orderStatus?: unknown;
+      paymentStatus?: unknown;
+      customerPhone?: unknown;
+    };
+
+    const orderId = sanitizeText(body?.orderId, 32);
+    const orderStatus =
+      typeof body?.orderStatus === 'string'
+        ? (body.orderStatus as Order['orderStatus'])
+        : undefined;
+    const paymentStatus =
+      typeof body?.paymentStatus === 'string'
+        ? (body.paymentStatus as Order['paymentStatus'])
+        : undefined;
+
     if (!orderId || (!orderStatus && !paymentStatus)) {
       return NextResponse.json(
-        { success: false, error: 'orderId and either orderStatus or paymentStatus are required' },
+        { success: false, error: 'Valid orderId and status update are required.' },
         { status: 400 }
       );
     }
 
-    const isAdmin = isAuthorizedAdmin(request);
-    const currentOrders = loadOrdersFromFile();
-    const existing = currentOrders.find((o) => o.id === orderId);
+    if (orderStatus && !ALLOWED_ORDER_STATUSES.has(orderStatus)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid orderStatus value.' },
+        { status: 400 }
+      );
+    }
+    if (paymentStatus && !ALLOWED_PAYMENT_STATUSES.has(paymentStatus)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid paymentStatus value.' },
+        { status: 400 }
+      );
+    }
 
-    // Non-admins can only cancel NEW unpacked orders and cannot modify paymentStatus
+    const adminSession = verifyAdminSession(request);
+    const isAdmin = Boolean(adminSession);
+
+    if (isAdmin && !verifySameOrigin(request)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid request origin.' },
+        { status: 403 }
+      );
+    }
+
+    const allOrders = await loadAllOrders();
+    const existing = allOrders.find((o) => o.id === orderId);
+
+    if (!existing) {
+      return NextResponse.json(
+        { success: false, error: 'Order not found.' },
+        { status: 404 }
+      );
+    }
+
     if (!isAdmin) {
       if (paymentStatus || orderStatus !== 'CANCELLED') {
         return NextResponse.json(
@@ -406,46 +653,64 @@ export async function PUT(request: NextRequest) {
           { status: 403 }
         );
       }
-      if (existing && existing.orderStatus !== 'NEW') {
+
+      // Ownership verification: caller must prove matching 10-digit phone
+      const suppliedPhone = normalizeIndianPhone(body?.customerPhone);
+      const storedPhone = normalizeIndianPhone(existing.customerPhone);
+      if (!suppliedPhone || !storedPhone || suppliedPhone !== storedPhone) {
+        logSecurityEvent('order_cancel_ownership_denied', {
+          orderId,
+          ip: maskIpForLog(ip),
+        });
         return NextResponse.json(
-          { success: false, error: 'Order is already packed or in dispatch and cannot be cancelled.' },
+          { success: false, error: 'Registered phone verification required to cancel this order.' },
+          { status: 403 }
+        );
+      }
+
+      if (existing.orderStatus !== 'NEW') {
+        return NextResponse.json(
+          { success: false, error: 'Order is already packed or dispatched and cannot be cancelled.' },
           { status: 400 }
         );
       }
     }
 
-    let found = false;
-    const updated = currentOrders.map((o) => {
-      if (o.id === orderId) {
-        found = true;
-        return {
-          ...o,
-          ...(orderStatus ? { orderStatus } : {}),
-          ...(paymentStatus ? { paymentStatus } : {}),
-        };
-      }
-      return o;
-    });
+    const updatedOrders = allOrders.map((o) =>
+      o.id === orderId
+        ? {
+            ...o,
+            ...(orderStatus ? { orderStatus } : {}),
+            ...(paymentStatus ? { paymentStatus } : {}),
+          }
+        : o
+    );
+    memoryOrders = updatedOrders;
+    saveOrdersToFile(updatedOrders);
 
-    if (found) {
-      memoryOrders = updated;
-      saveOrdersToFile(updated);
-    }
-
-    // Sync status to Supabase
+    const supabase = getSupabaseAdminClient();
     if (supabase) {
-      try {
-        const dbPatch: Record<string, string> = {
-          updated_at: new Date().toISOString(),
-        };
-        if (orderStatus) dbPatch.order_status = orderStatus;
-        if (paymentStatus) dbPatch.payment_status = paymentStatus;
+      const dbPatch: Record<string, string> = {
+        updated_at: new Date().toISOString(),
+      };
+      if (orderStatus) dbPatch.order_status = orderStatus;
+      if (paymentStatus) dbPatch.payment_status = paymentStatus;
 
-        await supabase.from('orders').update(dbPatch).eq('id', orderId);
-      } catch (dbErr) {
-        console.warn('Supabase status update error:', dbErr);
+      const { error: dbErr } = await supabase
+        .from('orders')
+        .update(dbPatch)
+        .eq('id', orderId);
+      if (dbErr) {
+        console.warn('Supabase update error in PUT /api/orders');
       }
     }
+
+    logSecurityEvent(isAdmin ? 'admin_order_updated' : 'customer_order_cancelled', {
+      orderId,
+      orderStatus: orderStatus || existing.orderStatus,
+      paymentStatus: paymentStatus || existing.paymentStatus,
+      ip: maskIpForLog(ip),
+    });
 
     return NextResponse.json({
       success: true,
@@ -453,9 +718,9 @@ export async function PUT(request: NextRequest) {
       ...(orderStatus ? { orderStatus } : {}),
       ...(paymentStatus ? { paymentStatus } : {}),
     });
-  } catch (err: any) {
+  } catch {
     return NextResponse.json(
-      { success: false, error: err.message || 'Failed to update order' },
+      { success: false, error: 'Unable to update order right now.' },
       { status: 500 }
     );
   }
@@ -463,49 +728,67 @@ export async function PUT(request: NextRequest) {
 
 /**
  * DELETE /api/orders?id=...
- * Admin only: Removes an order
+ * Admin only: Removes an order (verified HttpOnly cookie + Same-Origin).
  */
 export async function DELETE(request: NextRequest) {
-  if (!isAuthorizedAdmin(request)) {
+  const ip = getTrustedClientIp(request);
+  const rl = await checkRateLimit(`orders_delete:${ip}`, 20, 60_000);
+  if (!rl.allowed) {
     return NextResponse.json(
-      { success: false, error: 'Unauthorized: Admin authentication required to delete orders.' },
+      { success: false, error: 'Too many requests.' },
+      { status: 429 }
+    );
+  }
+
+  if (!verifySameOrigin(request)) {
+    return NextResponse.json(
+      { success: false, error: 'Invalid request origin.' },
+      { status: 403 }
+    );
+  }
+
+  const adminSession = verifyAdminSession(request);
+  if (!adminSession) {
+    return NextResponse.json(
+      { success: false, error: 'Unauthorized: Admin authentication required.' },
       { status: 403 }
     );
   }
 
   try {
-    const { searchParams } = new URL(request.url);
-    const orderId = searchParams.get('id');
+    const orderId = sanitizeText(new URL(request.url).searchParams.get('id'), 32);
     if (!orderId) {
       return NextResponse.json(
-        { success: false, error: 'id query parameter required' },
+        { success: false, error: 'id query parameter required.' },
         { status: 400 }
       );
     }
 
-    const currentOrders = loadOrdersFromFile();
+    const currentOrders = await loadAllOrders();
     const updated = currentOrders.filter((o) => o.id !== orderId);
-
     memoryOrders = updated;
     saveOrdersToFile(updated);
 
-    // Delete from Supabase
+    const supabase = getSupabaseAdminClient();
     if (supabase) {
-      try {
-        await supabase.from('orders').delete().eq('id', orderId);
-      } catch (dbErr) {
-        console.warn('Supabase delete error:', dbErr);
+      const { error: dbErr } = await supabase.from('orders').delete().eq('id', orderId);
+      if (dbErr) {
+        console.warn('Supabase delete error in DELETE /api/orders');
       }
     }
 
+    logSecurityEvent('admin_order_deleted', {
+      orderId,
+      ip: maskIpForLog(ip),
+    });
+
     return NextResponse.json({
       success: true,
-      message: `Order ${orderId} removed securely`,
-      remainingCount: updated.length,
+      message: 'Order removed securely.',
     });
-  } catch (err: any) {
+  } catch {
     return NextResponse.json(
-      { success: false, error: err.message || 'Failed to delete order' },
+      { success: false, error: 'Unable to delete order right now.' },
       { status: 500 }
     );
   }

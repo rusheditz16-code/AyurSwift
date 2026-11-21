@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import {
   X,
   Plus,
@@ -43,7 +44,8 @@ interface CartDrawerProps {
     pincode: string;
     landmark?: string;
     paymentMethod: PaymentMethod;
-  }) => void;
+    website?: string;
+  }) => Promise<void>;
   settings: MerchantSettings;
   defaultDeliveryType?: DeliveryType;
 }
@@ -68,6 +70,8 @@ export function CartDrawer({
   const [landmark, setLandmark] = useState('');
   const [city, setCity] = useState('Bhavnagar');
   const [pincode, setPincode] = useState('364001');
+  const [honeypot, setHoneypot] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [hasSavedProfile, setHasSavedProfile] = useState(false);
 
@@ -132,8 +136,9 @@ export function CartDrawer({
     setDeliveryType(type);
   };
 
-  const handleCheckoutSubmit = (e: React.FormEvent) => {
+  const handleCheckoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setFormError('');
 
     if (cart.length === 0) {
@@ -176,16 +181,28 @@ export function CartDrawer({
       );
     } catch {}
 
-    onPlaceOrder({
-      customerName: customerName.trim(),
-      customerPhone: cleanPhone,
-      deliveryType,
-      deliveryAddress: deliveryAddress.trim(),
-      city: city.trim(),
-      pincode: pincode.trim(),
-      landmark: landmark.trim() || undefined,
-      paymentMethod,
-    });
+    setIsSubmitting(true);
+    try {
+      await onPlaceOrder({
+        customerName: customerName.trim(),
+        customerPhone: cleanPhone,
+        deliveryType,
+        deliveryAddress: deliveryAddress.trim(),
+        city: city.trim(),
+        pincode: pincode.trim(),
+        landmark: landmark.trim() || undefined,
+        paymentMethod,
+        website: honeypot,
+      });
+    } catch (err) {
+      setFormError(
+        err instanceof Error
+          ? err.message
+          : 'Could not place order right now. Please try again.'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -609,9 +626,30 @@ export function CartDrawer({
                   </div>
                 )}
 
+                {/* Hidden anti-bot honeypot field */}
+                <input
+                  type="text"
+                  name="website"
+                  value={honeypot}
+                  onChange={(e) => setHoneypot(e.target.value)}
+                  tabIndex={-1}
+                  autoComplete="off"
+                  aria-hidden="true"
+                  className="hidden"
+                />
+
                 <div className="flex items-center gap-1.5 text-[10.5px] text-gray-500 pt-0.5">
                   <ShieldCheck className="w-3.5 h-3.5 text-[#0C831F] shrink-0" />
-                  <span>Sealed GST-billed packs • Full instant refund if any item is unavailable</span>
+                  <span>
+                    18+ India orders • By ordering you agree to our{' '}
+                    <Link href="/privacy" className="text-[#0C831F] font-semibold underline">
+                      Privacy Policy
+                    </Link>{' '}
+                    &amp;{' '}
+                    <Link href="/terms" className="text-[#0C831F] font-semibold underline">
+                      Terms
+                    </Link>
+                  </span>
                 </div>
               </div>
             </form>
@@ -624,7 +662,8 @@ export function CartDrawer({
             <button
               type="submit"
               form="ayurswift-checkout-form"
-              className="w-full bg-[#0C831F] hover:bg-[#096B19] text-white rounded-2xl px-4 py-3 flex items-center justify-between transition-all shadow-lg shadow-[#0C831F]/25 active:scale-[0.98] cursor-pointer"
+              disabled={isSubmitting}
+              className="w-full bg-[#0C831F] hover:bg-[#096B19] disabled:opacity-60 text-white rounded-2xl px-4 py-3 flex items-center justify-between transition-all shadow-lg shadow-[#0C831F]/25 active:scale-[0.98] cursor-pointer"
             >
               <div className="text-left leading-tight">
                 <div className="text-base font-extrabold tabular-nums">₹{grandTotal}</div>
@@ -633,7 +672,7 @@ export function CartDrawer({
                 </div>
               </div>
               <div className="flex items-center gap-1.5 font-extrabold text-sm">
-                <span>Place Order</span>
+                <span>{isSubmitting ? 'Confirming...' : 'Place Order'}</span>
                 <ArrowRight className="w-4 h-4" />
               </div>
             </button>

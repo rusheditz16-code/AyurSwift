@@ -141,16 +141,15 @@ export function AdminSettingsTab({
           </div>
         </div>
 
-        <div>
-          <label className="block text-xs font-bold mb-1">Admin Security PIN (4–6 digits)</label>
-          <input
-            type="password"
-            maxLength={6}
-            value={settings.adminPin}
-            onChange={(e) => onChangeSettings({ ...settings, adminPin: e.target.value })}
-            required
-            className={`${inputClass} max-w-[200px] font-mono tracking-widest`}
-          />
+        <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3.5 text-xs space-y-1">
+          <div className="font-extrabold text-emerald-700 dark:text-emerald-400">
+            Server-Side Admin Credentials
+          </div>
+          <p className={`text-[11px] leading-relaxed ${muted}`}>
+            For your security, your Admin PIN is no longer stored in browser storage. Update{' '}
+            <code className="font-mono">ADMIN_EMAILS</code> and{' '}
+            <code className="font-mono">ADMIN_PIN_HASH</code> in Vercel Environment Variables to rotate credentials.
+          </p>
         </div>
 
         <div className="pt-2 flex items-center justify-between gap-3">

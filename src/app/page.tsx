@@ -24,10 +24,8 @@ import {
 } from '@/types';
 import {
   getStoredProducts,
-  getStoredOrders,
-  saveStoredOrders,
   getStoredSettings,
-  generateNextOrderId,
+  placeOrderOnServer,
 } from '@/lib/store';
 import { INITIAL_PRODUCTS, DEFAULT_SETTINGS } from '@/lib/initialData';
 import {
@@ -383,7 +381,7 @@ export default function StorefrontPage() {
     window.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' });
   };
 
-  const handlePlaceOrder = (orderData: {
+  const handlePlaceOrder = async (orderData: {
     customerName: string;
     customerPhone: string;
     deliveryType: DeliveryType;
@@ -392,19 +390,9 @@ export default function StorefrontPage() {
     pincode: string;
     landmark?: string;
     paymentMethod: PaymentMethod;
+    website?: string;
   }) => {
-    const existingOrders = getStoredOrders();
-    const orderId = generateNextOrderId(existingOrders);
-
-    const deliveryFee =
-      orderData.deliveryType === 'RAPIDO_CITY'
-        ? cartSubtotal >= settings.cityFreeDeliveryAbove
-          ? 0
-          : settings.cityDeliveryFee
-        : settings.courierDeliveryFee;
-
-    const order: Order = {
-      id: orderId,
+    const order = await placeOrderOnServer({
       customerName: orderData.customerName,
       customerPhone: orderData.customerPhone,
       deliveryType: orderData.deliveryType,
@@ -412,27 +400,14 @@ export default function StorefrontPage() {
       city: orderData.city,
       pincode: orderData.pincode,
       landmark: orderData.landmark,
+      paymentMethod: orderData.paymentMethod,
       items: cart.map((item) => ({
         productId: item.product.id,
-        name: item.product.name,
-        brand: item.product.brand,
-        packSize: item.product.packSize,
         quantity: item.quantity,
-        mrp: item.product.mrp,
-        unitPrice: item.product.sellingPrice,
-        totalPrice: item.product.sellingPrice * item.quantity,
       })),
-      subtotal: cartSubtotal,
-      deliveryFee,
-      totalAmount: cartSubtotal + deliveryFee,
-      paymentMethod: orderData.paymentMethod,
-      paymentStatus: 'PENDING',
-      orderStatus: 'NEW',
-      rapidoCopied: false,
-      createdAt: new Date().toISOString(),
-    };
+      website: orderData.website,
+    });
 
-    saveStoredOrders([order, ...existingOrders]);
     setIsCartOpen(false);
     setActiveOrder(order);
     handleClearCart();
@@ -944,6 +919,14 @@ export default function StorefrontPage() {
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 font-semibold">
+            <Link href="/privacy" className="hover:text-[#0C831F]">
+              Privacy Policy
+            </Link>
+            <span className="text-gray-300">•</span>
+            <Link href="/terms" className="hover:text-[#0C831F]">
+              Terms &amp; Refunds
+            </Link>
+            <span className="text-gray-300">•</span>
             <a href="mailto:ayurswift.care@gmail.com" className="hover:text-[#0C831F]">
               ayurswift.care@gmail.com
             </a>

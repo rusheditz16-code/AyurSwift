@@ -42,3 +42,6 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# Local security audit report (never commit)
+AUDIT.md

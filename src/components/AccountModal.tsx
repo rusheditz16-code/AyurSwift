@@ -161,25 +161,74 @@ export function AccountModal({
   };
 
   const handleCancelOrder = async (orderId: string) => {
+    const target = orders.find((o) => o.id === orderId);
     const confirmed = window.confirm(
       `Cancel Order ${orderId}?\n\nAs this order has not yet been packed by our Bhavnagar dark store, it will be cancelled immediately.`
     );
     if (!confirmed) return;
 
-    const updated = orders.map((o) =>
-      o.id === orderId ? { ...o, orderStatus: 'CANCELLED' as const } : o
-    );
-    setOrders(updated);
-    saveStoredOrders(updated);
+    let phoneToVerify = (target?.customerPhone || '').replace(/\D/g, '');
+    if (phoneToVerify.length !== 10) {
+      const entered = window.prompt(
+        'For your security, please enter the 10-digit mobile number used for this order:'
+      );
+      if (!entered) return;
+      phoneToVerify = entered.replace(/\D/g, '').slice(-10);
+    }
 
     try {
-      await fetch('/api/orders', {
+      const res = await fetch('/api/orders', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, orderStatus: 'CANCELLED' }),
+        body: JSON.stringify({
+          orderId,
+          orderStatus: 'CANCELLED',
+          customerPhone: phoneToVerify,
+        }),
       });
-    } catch (err) {
-      console.error('Failed to sync cancellation:', err);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        window.alert(data.error || 'Could not cancel order. Please verify your mobile number.');
+        return;
+      }
+
+      const updated = orders.map((o) =>
+        o.id === orderId ? { ...o, orderStatus: 'CANCELLED' as const } : o
+      );
+      setOrders(updated);
+      saveStoredOrders(updated);
+    } catch {
+      window.alert('Network error while cancelling order. Please try again.');
+    }
+  };
+
+  const handleRequestServerErasure = async () => {
+    const orderId = window.prompt(
+      'Enter the exact Order ID of your delivered/cancelled order to erase your personal details from our servers (e.g. #AS-7K4M9X2P):'
+    );
+    if (!orderId || !orderId.trim()) return;
+    const phone = window.prompt(
+      'Enter the 10-digit mobile number used for that order to verify ownership:'
+    );
+    if (!phone || !phone.trim()) return;
+
+    try {
+      const res = await fetch('/api/privacy/erase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: orderId.trim(),
+          customerPhone: phone.trim(),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        window.alert(data.error || 'Unable to erase data for that order.');
+        return;
+      }
+      window.alert(data.message || 'Personal details erased from our servers.');
+    } catch {
+      window.alert('Network error while submitting erasure request.');
     }
   };
 
@@ -528,15 +577,38 @@ export function AccountModal({
                   </button>
                 </div>
 
-                <div className="pt-2.5 border-t border-gray-100 flex items-center justify-between">
-                  <span className="text-[11px] text-gray-500 font-medium">Store Owner Portal</span>
+                <div className="pt-2.5 border-t border-gray-100 flex items-center justify-between gap-2">
+                  <div>
+                    <div className="font-extrabold text-gray-950">Server Data Erasure (DPDP)</div>
+                    <div className="text-[11px] text-gray-500">
+                      Erase your name, phone &amp; address from a completed order
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRequestServerErasure}
+                    className="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold text-[11px] shrink-0 cursor-pointer"
+                  >
+                    Erase Data
+                  </button>
+                </div>
+
+                <div className="pt-2.5 border-t border-gray-100 flex items-center justify-between text-[11px]">
+                  <div className="flex items-center gap-3 font-semibold">
+                    <Link href="/privacy" onClick={onClose} className="text-[#0C831F] hover:underline">
+                      Privacy Policy
+                    </Link>
+                    <Link href="/terms" onClick={onClose} className="text-[#0C831F] hover:underline">
+                      Terms &amp; Refunds
+                    </Link>
+                  </div>
                   <Link
                     href="/admin"
                     onClick={onClose}
                     className="inline-flex items-center gap-1.5 text-xs font-extrabold text-[#0C831F] hover:underline"
                   >
                     <Lock className="w-3.5 h-3.5" />
-                    <span>Open Merchant Hub</span>
+                    <span>Merchant Hub</span>
                   </Link>
                 </div>
               </div>

@@ -9,7 +9,6 @@ export const DEFAULT_SETTINGS: MerchantSettings = {
   cityDeliveryFee: 35,
   cityFreeDeliveryAbove: 499,
   courierDeliveryFee: 60,
-  adminPin: '1602',
   adminEmail: 'ayurswift.care@gmail.com',
 };
 

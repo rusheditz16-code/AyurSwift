@@ -126,7 +126,7 @@ export function AdminAuthPortal({
               <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
               <input
                 type={showPassword ? 'text' : 'password'}
-                maxLength={6}
+                maxLength={64}
                 value={pinInput}
                 onChange={(e) => onPinChange(e.target.value)}
                 placeholder="••••"

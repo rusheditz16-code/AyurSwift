@@ -114,19 +114,42 @@ export function OrderTrackingModal({
   };
 
   const handleCancelOrder = async (orderId: string) => {
+    const target = orders.find((o) => o.id === orderId);
     if (!window.confirm(`Cancel Order ${orderId}?`)) return;
-    const updated = orders.map((o) =>
-      o.id === orderId ? { ...o, orderStatus: 'CANCELLED' as const } : o
-    );
-    setOrders(updated);
-    saveStoredOrders(updated);
+
+    let phoneToVerify = (target?.customerPhone || '').replace(/\D/g, '');
+    if (phoneToVerify.length !== 10) {
+      const entered = window.prompt(
+        'For your security, enter the 10-digit mobile number used for this order:'
+      );
+      if (!entered) return;
+      phoneToVerify = entered.replace(/\D/g, '').slice(-10);
+    }
+
     try {
-      await fetch('/api/orders', {
+      const res = await fetch('/api/orders', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, orderStatus: 'CANCELLED' }),
+        body: JSON.stringify({
+          orderId,
+          orderStatus: 'CANCELLED',
+          customerPhone: phoneToVerify,
+        }),
       });
-    } catch {}
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        window.alert(data.error || 'Could not cancel order. Please verify your mobile number.');
+        return;
+      }
+
+      const updated = orders.map((o) =>
+        o.id === orderId ? { ...o, orderStatus: 'CANCELLED' as const } : o
+      );
+      setOrders(updated);
+      saveStoredOrders(updated);
+    } catch {
+      window.alert('Network error while cancelling order. Please try again.');
+    }
   };
 
   if (!isOpen) return null;

@@ -1,6 +1,9 @@
 -- ==============================================================================
--- AyurSwift 🌿⚡ Supabase Schema (100% Free Tier)
+-- AyurSwift Supabase Schema (Hardened Production RLS)
 -- Dark Store Micro-Fulfillment for Ayurvedic & Primary OTC
+-- ==============================================================================
+-- IMPORTANT: Run this script in Supabase Dashboard -> SQL Editor to lock down
+-- your live database and remove open demo policies.
 -- ==============================================================================
 
 -- 1. Products & Dark Store Inventory
@@ -9,6 +12,8 @@ CREATE TABLE IF NOT EXISTS products (
   name TEXT NOT NULL,
   brand TEXT NOT NULL,
   category TEXT NOT NULL,
+  manufacturer TEXT DEFAULT '',
+  form TEXT DEFAULT 'Tablet',
   pack_size TEXT NOT NULL,
   agency_cost_price NUMERIC(10,2) NOT NULL DEFAULT 0,
   mrp NUMERIC(10,2) NOT NULL DEFAULT 0,
@@ -16,6 +21,7 @@ CREATE TABLE IF NOT EXISTS products (
   stock_quantity INTEGER NOT NULL DEFAULT 0,
   is_live BOOLEAN NOT NULL DEFAULT true,
   image_url TEXT,
+  images JSONB DEFAULT '[]'::jsonb,
   indications TEXT,
   dosage TEXT,
   composition TEXT,
@@ -29,7 +35,7 @@ CREATE INDEX IF NOT EXISTS idx_products_storefront ON products (is_live, stock_q
 
 -- 2. Orders Table
 CREATE TABLE IF NOT EXISTS orders (
-  id TEXT PRIMARY KEY, -- e.g. '#AS-1001'
+  id TEXT PRIMARY KEY, -- Random unpredictable ID e.g. '#AS-7K4M9X2P'
   customer_name TEXT NOT NULL,
   customer_phone TEXT NOT NULL,
   delivery_type TEXT NOT NULL, -- 'RAPIDO_CITY' or 'COURIER_OUTSIDE'
@@ -37,32 +43,51 @@ CREATE TABLE IF NOT EXISTS orders (
   landmark TEXT,
   city TEXT NOT NULL,
   pincode TEXT NOT NULL,
-  items JSONB NOT NULL, -- [{productId, name, brand, packSize, quantity, unitPrice, totalPrice}]
+  items JSONB NOT NULL,
   subtotal NUMERIC(10,2) NOT NULL,
   delivery_fee NUMERIC(10,2) NOT NULL DEFAULT 0,
   total_amount NUMERIC(10,2) NOT NULL,
   payment_method TEXT NOT NULL, -- 'COD' or 'UPI'
-  payment_status TEXT NOT NULL DEFAULT 'PENDING',
+  payment_status TEXT NOT NULL DEFAULT 'PENDING', -- 'PENDING' or 'VERIFIED'
   order_status TEXT NOT NULL DEFAULT 'NEW', -- 'NEW', 'PACKED', 'DISPATCHED', 'DELIVERED', 'CANCELLED'
   rapido_copied BOOLEAN DEFAULT false,
-  created_at TIMESTAMPTZ DEFAULT now()
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 3. Row Level Security (RLS)
+-- 3. Shared Rate Limits Table (Server-only via service_role)
+CREATE TABLE IF NOT EXISTS rate_limits (
+  key TEXT PRIMARY KEY,
+  count INTEGER NOT NULL DEFAULT 1,
+  reset_at TIMESTAMPTZ NOT NULL
+);
+
+-- 4. Row Level Security (RLS) — LOCKED DOWN
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE rate_limits ENABLE ROW LEVEL SECURITY;
 
--- Allow public read access to live, in-stock products
+-- Drop any legacy open/demo policies immediately
+DROP POLICY IF EXISTS "Full access with anon for demo" ON products;
+DROP POLICY IF EXISTS "Full access with anon for demo orders" ON orders;
+DROP POLICY IF EXISTS "Public can place orders" ON orders;
+DROP POLICY IF EXISTS "Public can view live in-stock products" ON products;
+
+-- Revoke excessive default grants from anon/authenticated roles
+REVOKE ALL ON TABLE orders FROM anon, authenticated;
+REVOKE ALL ON TABLE rate_limits FROM anon, authenticated;
+REVOKE ALL ON TABLE products FROM anon, authenticated;
+
+-- Column-level SELECT grant only: hides wholesale agency_cost_price and raw stock_quantity from public anon queries
+GRANT SELECT (
+  id, name, brand, category, manufacturer, form, pack_size,
+  mrp, selling_price, is_live, image_url, images,
+  indications, dosage, composition
+) ON TABLE products TO anon, authenticated;
+
+-- Allow public read-only access ONLY to live, in-stock products
+-- Note: All order reads/writes, admin inventory writes, and rate limiting run
+-- exclusively on the Next.js server using SUPABASE_SERVICE_ROLE_KEY.
 CREATE POLICY "Public can view live in-stock products" ON products
-  FOR SELECT USING (is_live = true AND stock_quantity > 0);
-
--- Allow public to insert orders from the storefront
-CREATE POLICY "Public can place orders" ON orders
-  FOR INSERT WITH CHECK (true);
-
--- Allow merchant full access
-CREATE POLICY "Full access with anon for demo" ON products
-  FOR ALL USING (true);
-
-CREATE POLICY "Full access with anon for demo orders" ON orders
-  FOR ALL USING (true);
+  FOR SELECT TO anon, authenticated
+  USING (is_live = true AND stock_quantity > 0);

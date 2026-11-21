@@ -21,13 +21,43 @@ import {
   saveStoredSettings,
   resetToInitialProducts,
   formatRapidoDropText,
-  syncProductToSupabase,
+  syncProductToServer,
+  deleteProductOnServer,
   exportOrdersToCsv,
 } from '@/lib/store';
 
-const PRIMARY_ADMIN_GMAIL = 'ayurswift.care@gmail.com';
-const BACKUP_ADMIN_GMAIL = 'rushirajdabhi16@gmail.com';
-const DEFAULT_PIN = '1602';
+/**
+ * Verifies real image file magic bytes (PNG, JPEG, WebP only — rejects SVG/HTML/scripts).
+ */
+async function hasValidImageMagicBytes(file: File): Promise<boolean> {
+  const allowedMimes = new Set(['image/png', 'image/jpeg', 'image/webp']);
+  if (!allowedMimes.has(file.type)) return false;
+
+  const headerBuf = await file.slice(0, 12).arrayBuffer();
+  const bytes = new Uint8Array(headerBuf);
+  if (bytes.length < 12) return false;
+
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  const isPng =
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47;
+  // JPEG: FF D8 FF
+  const isJpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  // WebP: RIFF....WEBP
+  const isWebp =
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50;
+
+  return isPng || isJpeg || isWebp;
+}
 
 const DEFAULT_NEW_PROD: Partial<Product> = {
   name: '',
@@ -50,13 +80,12 @@ const DEFAULT_NEW_PROD: Partial<Product> = {
 };
 
 export function AdminDashboard() {
-  // Auth state
+  // Auth state (verified strictly by server HttpOnly session cookie)
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [emailInput, setEmailInput] = useState('');
   const [pinInput, setPinInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockoutSeconds, setLockoutSeconds] = useState(0);
 
   // Shell & Theme state
@@ -100,7 +129,7 @@ export function AdminDashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Initial load + theme + session restore
+  // Initial load + theme + server-verified session check
   useEffect(() => {
     setProducts(getStoredProducts());
     const localOrders = getStoredOrders();
@@ -112,29 +141,16 @@ export function AdminDashboard() {
       if (localStorage.getItem('ayurswift_admin_theme') === 'dark') {
         setDark(true);
       }
-      if (sessionStorage.getItem('ayurswift_admin_session') === 'authenticated') {
-        setIsAuthenticated(true);
-      }
+      // Clean up any legacy client-side auth flags
+      sessionStorage.removeItem('ayurswift_admin_session');
+      sessionStorage.removeItem('ayurswift_admin_email');
     } catch {}
 
-    fetch('/api/orders', {
-      headers: {
-        'x-ayurswift-admin-key': 'ayurswift_admin_secret_auth_token_2026',
-        'x-admin-role': 'store_owner',
-      },
-    })
+    fetch('/api/admin/auth')
       .then((res) => res.json())
       .then((data) => {
-        if (data.success && Array.isArray(data.orders)) {
-          const map = new Map<string, Order>();
-          getStoredOrders().forEach((o) => map.set(o.id, o));
-          data.orders.forEach((o: Order) => map.set(o.id, o));
-          const merged = Array.from(map.values()).sort(
-            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          );
-          prevOrderCountRef.current = merged.length;
-          setOrders(merged);
-          saveStoredOrders(merged);
+        if (data?.authenticated) {
+          setIsAuthenticated(true);
         }
       })
       .catch(() => {});
@@ -187,12 +203,11 @@ export function AdminDashboard() {
   const refreshOrders = useCallback(async () => {
     setIsRefreshingOrders(true);
     try {
-      const res = await fetch('/api/orders', {
-        headers: {
-          'x-ayurswift-admin-key': 'ayurswift_admin_secret_auth_token_2026',
-          'x-admin-role': 'store_owner',
-        },
-      });
+      const res = await fetch('/api/orders?limit=100');
+      if (res.status === 401 || res.status === 403) {
+        setIsAuthenticated(false);
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         if (data.success && Array.isArray(data.orders)) {
@@ -212,72 +227,86 @@ export function AdminDashboard() {
           saveStoredOrders(merged);
         }
       }
-    } catch (err) {
-      console.error('Failed to sync orders:', err);
+    } catch {
+      // Ignore transient refresh error
     } finally {
       setIsRefreshingOrders(false);
     }
   }, []);
 
-  // 10s auto polling
+  // Load orders when authenticated + visibility-aware 10s polling (pauses in hidden tabs)
   useEffect(() => {
-    if (!isAuthenticated || !isLiveSync) return;
-    const timer = setInterval(() => refreshOrders(), 10000);
-    return () => clearInterval(timer);
+    if (!isAuthenticated) return;
+    refreshOrders();
+    if (!isLiveSync) return;
+
+    const timer = setInterval(() => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        refreshOrders();
+      }
+    }, 10000);
+
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        refreshOrders();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [isAuthenticated, isLiveSync, refreshOrders]);
 
   // Lockout countdown
   useEffect(() => {
     if (lockoutSeconds <= 0) return;
-    const timer = setInterval(() => setLockoutSeconds((p) => p - 1), 1000);
+    const timer = setInterval(() => setLockoutSeconds((p) => Math.max(0, p - 1)), 1000);
     return () => clearInterval(timer);
   }, [lockoutSeconds]);
 
-  // Dual-Factor Auth
-  const handleAuthSubmit = (e: React.FormEvent) => {
+  // Server-Verified Admin Auth (HttpOnly signed session cookie + server rate limit)
+  const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (lockoutSeconds > 0) return;
+    setAuthError(null);
 
-    const cleanEmail = emailInput.trim().toLowerCase();
-    const cleanPin = pinInput.trim();
-    const targetPin = settings.adminPin || DEFAULT_PIN;
-    const configuredEmail = (settings.adminEmail || PRIMARY_ADMIN_GMAIL).toLowerCase();
+    try {
+      const res = await fetch('/api/admin/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: emailInput.trim(),
+          pin: pinInput.trim(),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
 
-    const isEmailValid =
-      cleanEmail === configuredEmail ||
-      cleanEmail === PRIMARY_ADMIN_GMAIL ||
-      cleanEmail === BACKUP_ADMIN_GMAIL;
-    const isPinValid = cleanPin === targetPin;
-
-    if (isEmailValid && isPinValid) {
-      setIsAuthenticated(true);
-      setAuthError(null);
-      setFailedAttempts(0);
-      try {
-        sessionStorage.setItem('ayurswift_admin_session', 'authenticated');
-        sessionStorage.setItem('ayurswift_admin_email', cleanEmail);
-      } catch {}
-    } else {
-      const next = failedAttempts + 1;
-      setFailedAttempts(next);
-      if (next >= 5) {
-        setLockoutSeconds(30);
-        setAuthError('Too many failed attempts. Security lockout active for 30 seconds.');
-      } else {
-        setAuthError('Invalid email address or security PIN. Access denied.');
+      if (res.ok && data.authenticated) {
+        setIsAuthenticated(true);
+        setAuthError(null);
+        setPinInput('');
+        return;
       }
+
+      if (res.status === 429 && typeof data.retryAfterSec === 'number') {
+        setLockoutSeconds(data.retryAfterSec);
+      }
+      setAuthError(data.error || 'Invalid email address or security PIN. Access denied.');
+    } catch {
+      setAuthError('Unable to reach authentication server. Please try again.');
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/admin/auth', { method: 'DELETE' });
+    } catch {}
     setIsAuthenticated(false);
     setEmailInput('');
     setPinInput('');
     setAuthError(null);
-    try {
-      sessionStorage.removeItem('ayurswift_admin_session');
-      sessionStorage.removeItem('ayurswift_admin_email');
-    } catch {}
   };
 
   // Global search syncs into active view cleanly
@@ -303,7 +332,7 @@ export function AdminDashboard() {
         const newStock = Math.max(0, p.stockQuantity + delta);
         const isLive = newStock === 0 ? false : p.isLive;
         const item = { ...p, stockQuantity: newStock, isLive };
-        syncProductToSupabase(item);
+        syncProductToServer(item);
         return item;
       }
       return p;
@@ -316,7 +345,7 @@ export function AdminDashboard() {
     const updated = products.map((p) => {
       if (p.id === productId && p.stockQuantity > 0) {
         const item = { ...p, isLive: !p.isLive };
-        syncProductToSupabase(item);
+        syncProductToServer(item);
         return item;
       }
       return p;
@@ -352,30 +381,48 @@ export function AdminDashboard() {
       const updated = products.filter((p) => p.id !== productId);
       setProducts(updated);
       saveStoredProducts(updated);
+      deleteProductOnServer(productId);
     }
   };
 
-  const handleMultipleImageFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMultipleImageFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    Array.from(files).forEach((file) => {
-      if (file.size > 5 * 1024 * 1024) {
-        alert(`File ${file.name} exceeds 5MB.`);
-        return;
+    for (const file of Array.from(files)) {
+      if (file.size > 3 * 1024 * 1024) {
+        alert(`File ${file.name} exceeds 3MB limit.`);
+        continue;
+      }
+      const validImage = await hasValidImageMagicBytes(file);
+      if (!validImage) {
+        alert(`Rejected ${file.name}: only genuine PNG, JPG, or WebP images are allowed (SVG/HTML blocked).`);
+        continue;
       }
       const reader = new FileReader();
       reader.onloadend = () => {
         const result = reader.result as string;
-        setUploadedImages((prev) => (prev.includes(result) ? prev : [...prev, result]));
+        if (result && /^data:image\/(png|jpeg|webp);base64,/.test(result)) {
+          setUploadedImages((prev) => (prev.includes(result) ? prev : [...prev, result]));
+        }
       };
       reader.readAsDataURL(file);
-    });
+    }
     if (e.target) e.target.value = '';
   };
 
   const handleAddImageUrl = () => {
     const url = imageUrlInput.trim();
     if (!url) return;
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== 'https:') {
+        alert('Only secure https:// image URLs are allowed.');
+        return;
+      }
+    } catch {
+      alert('Please enter a valid https:// image URL.');
+      return;
+    }
     setUploadedImages((prev) => (prev.includes(url) ? prev : [...prev, url]));
     setImageUrlInput('');
   };
@@ -420,7 +467,7 @@ export function AdminDashboard() {
             imageUrl: primaryImageUrl,
             images: finalImages.length > 0 ? finalImages : undefined,
           };
-          syncProductToSupabase(item);
+          syncProductToServer(item);
           return item;
         }
         return p;
@@ -453,7 +500,7 @@ export function AdminDashboard() {
       const updated = [created, ...products];
       setProducts(updated);
       saveStoredProducts(updated);
-      syncProductToSupabase(created);
+      syncProductToServer(created);
     }
 
     setShowAddDrawer(false);
@@ -472,7 +519,7 @@ export function AdminDashboard() {
     }
   };
 
-  // Dispatch actions
+  // Dispatch actions (authenticated automatically via HttpOnly session cookie)
   const handleCopyForRapido = (order: Order) => {
     navigator.clipboard.writeText(formatRapidoDropText(order));
     setCopiedOrderId(order.id);
@@ -483,10 +530,7 @@ export function AdminDashboard() {
     saveStoredOrders(updated);
     fetch('/api/orders', {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-ayurswift-admin-key': 'ayurswift_admin_secret_auth_token_2026',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ orderId: order.id, orderStatus: 'DISPATCHED' }),
     }).catch(() => {});
     setTimeout(() => setCopiedOrderId(null), 2500);
@@ -498,10 +542,7 @@ export function AdminDashboard() {
     saveStoredOrders(updated);
     fetch('/api/orders', {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-ayurswift-admin-key': 'ayurswift_admin_secret_auth_token_2026',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ orderId, orderStatus: status }),
     }).catch(() => {});
   };
@@ -519,10 +560,7 @@ export function AdminDashboard() {
     saveStoredOrders(updated);
     fetch('/api/orders', {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-ayurswift-admin-key': 'ayurswift_admin_secret_auth_token_2026',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ orderId, paymentStatus: nextStatus }),
     }).catch(() => {});
   };
@@ -542,7 +580,6 @@ export function AdminDashboard() {
     try {
       await fetch(`/api/orders?id=${encodeURIComponent(orderId)}`, {
         method: 'DELETE',
-        headers: { 'x-ayurswift-admin-key': 'ayurswift_admin_secret_auth_token_2026' },
       });
     } catch {}
   };

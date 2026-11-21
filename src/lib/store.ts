@@ -1,17 +1,16 @@
 'use client';
 
-import { Product, Order, MerchantSettings, CartItem } from '@/types';
+import { Product, Order, MerchantSettings, DeliveryType, PaymentMethod } from '@/types';
 import { INITIAL_PRODUCTS, DEFAULT_SETTINGS } from './initialData';
-import { supabase, isSupabaseConfigured } from './supabase';
 
 const STORAGE_KEYS = {
-  PRODUCTS: 'ayurswift_products_v3', // Updated key for multiple image support & real catalog
+  PRODUCTS: 'ayurswift_products_v3',
   ORDERS: 'ayurswift_orders_v1',
-  SETTINGS: 'ayurswift_settings_v2', // Updated key for real WhatsApp (9624766242) & UPI (9624766242@fam)
+  SETTINGS: 'ayurswift_settings_v2',
   CART: 'ayurswift_cart_v1',
 };
 
-// Retrieve settings
+// Retrieve settings (automatically strips any legacy plain-text adminPin)
 export function getStoredSettings(): MerchantSettings {
   if (typeof window === 'undefined') return DEFAULT_SETTINGS;
   try {
@@ -20,27 +19,53 @@ export function getStoredSettings(): MerchantSettings {
       localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(DEFAULT_SETTINGS));
       return DEFAULT_SETTINGS;
     }
-    const parsed = JSON.parse(raw);
-    // If old demo whatsapp, old upi, or old pin is detected, automatically migrate to user's real details
-    if (
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const hasLegacyPin = 'adminPin' in parsed;
+    const needsMigration =
+      hasLegacyPin ||
       parsed.merchantUpiId === 'ayurswift@okhdfcbank' ||
       parsed.merchantWhatsApp === '919876543210' ||
-      parsed.adminPin === '1234' ||
       !parsed.adminEmail ||
-      !parsed.merchantUpiId
-    ) {
-      const updated: MerchantSettings = {
-        ...parsed,
-        adminPin: DEFAULT_SETTINGS.adminPin,
-        adminEmail: DEFAULT_SETTINGS.adminEmail,
-        merchantWhatsApp: DEFAULT_SETTINGS.merchantWhatsApp,
-        merchantUpiId: DEFAULT_SETTINGS.merchantUpiId,
-        merchantUpiName: DEFAULT_SETTINGS.merchantUpiName,
-      };
-      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(updated));
-      return updated;
+      !parsed.merchantUpiId;
+
+    const clean: MerchantSettings = {
+      ...DEFAULT_SETTINGS,
+      storeName: typeof parsed.storeName === 'string' ? parsed.storeName : DEFAULT_SETTINGS.storeName,
+      tagline: typeof parsed.tagline === 'string' ? parsed.tagline : DEFAULT_SETTINGS.tagline,
+      merchantWhatsApp:
+        typeof parsed.merchantWhatsApp === 'string' && parsed.merchantWhatsApp !== '919876543210'
+          ? parsed.merchantWhatsApp
+          : DEFAULT_SETTINGS.merchantWhatsApp,
+      merchantUpiId:
+        typeof parsed.merchantUpiId === 'string' && parsed.merchantUpiId !== 'ayurswift@okhdfcbank'
+          ? parsed.merchantUpiId
+          : DEFAULT_SETTINGS.merchantUpiId,
+      merchantUpiName:
+        typeof parsed.merchantUpiName === 'string'
+          ? parsed.merchantUpiName
+          : DEFAULT_SETTINGS.merchantUpiName,
+      cityDeliveryFee:
+        typeof parsed.cityDeliveryFee === 'number'
+          ? parsed.cityDeliveryFee
+          : DEFAULT_SETTINGS.cityDeliveryFee,
+      cityFreeDeliveryAbove:
+        typeof parsed.cityFreeDeliveryAbove === 'number'
+          ? parsed.cityFreeDeliveryAbove
+          : DEFAULT_SETTINGS.cityFreeDeliveryAbove,
+      courierDeliveryFee:
+        typeof parsed.courierDeliveryFee === 'number'
+          ? parsed.courierDeliveryFee
+          : DEFAULT_SETTINGS.courierDeliveryFee,
+      adminEmail:
+        typeof parsed.adminEmail === 'string' && parsed.adminEmail
+          ? parsed.adminEmail
+          : DEFAULT_SETTINGS.adminEmail,
+    };
+
+    if (needsMigration) {
+      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(clean));
     }
-    return { ...DEFAULT_SETTINGS, ...parsed };
+    return clean;
   } catch {
     return DEFAULT_SETTINGS;
   }
@@ -48,7 +73,8 @@ export function getStoredSettings(): MerchantSettings {
 
 export function saveStoredSettings(settings: MerchantSettings) {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+  const { ...safeSettings } = settings;
+  localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(safeSettings));
 }
 
 // Retrieve products (with fallback to INITIAL_PRODUCTS)
@@ -93,100 +119,49 @@ export function getStoredOrders(): Order[] {
 export function saveStoredOrders(orders: Order[]) {
   if (typeof window === 'undefined') return;
   localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
-  // 1. Asynchronously sync to server API for cross-device visibility
-  try {
-    fetch('/api/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(orders),
-    }).catch(() => {});
-  } catch {}
-
-  // 2. Asynchronously sync to Supabase database if configured
-  if (isSupabaseConfigured && supabase) {
-    orders.forEach((o) => {
-      syncOrderToSupabase(o).catch(() => {});
-    });
-  }
 }
 
-// Sync individual order to Supabase PostgreSQL database
-export async function syncOrderToSupabase(order: Order): Promise<boolean> {
-  if (!isSupabaseConfigured || !supabase) return false;
-  try {
-    const { error } = await supabase.from('orders').upsert({
-      id: order.id,
-      customer_name: order.customerName,
-      customer_phone: order.customerPhone,
-      delivery_type: order.deliveryType,
-      delivery_address: order.deliveryAddress,
-      city: order.city,
-      pincode: order.pincode,
-      landmark: order.landmark || null,
-      items: order.items,
-      subtotal: order.subtotal,
-      delivery_fee: order.deliveryFee,
-      total_amount: order.totalAmount,
-      payment_method: order.paymentMethod,
-      payment_status: order.paymentStatus,
-      order_status: order.orderStatus,
-      rapido_copied: order.rapidoCopied,
-      created_at: order.createdAt,
-      updated_at: new Date().toISOString(),
-    });
-    if (error) {
-      console.warn('Supabase order upsert note:', error.message);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error('Supabase order sync error:', err);
-    return false;
-  }
+export interface PlaceOrderPayload {
+  customerName: string;
+  customerPhone: string;
+  deliveryType: DeliveryType;
+  deliveryAddress: string;
+  city: string;
+  pincode: string;
+  landmark?: string;
+  paymentMethod: PaymentMethod;
+  items: { productId: string; quantity: number }[];
+  website?: string; // honeypot field
 }
 
-// Fetch orders directly from Supabase PostgreSQL database
-export async function fetchOrdersFromSupabase(): Promise<Order[] | null> {
-  if (!isSupabaseConfigured || !supabase) return null;
-  try {
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*')
-      .order('created_at', { ascending: false });
+/**
+ * Places a new order strictly through the server API so prices, fees, stock,
+ * and unpredictable random Order IDs are computed authoritatively on the server.
+ */
+export async function placeOrderOnServer(payload: PlaceOrderPayload): Promise<Order> {
+  const res = await fetch('/api/orders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
 
-    if (error) {
-      console.warn('Supabase fetch orders notice:', error.message);
-      return null;
-    }
+  const data = (await res.json().catch(() => ({}))) as {
+    success?: boolean;
+    order?: Order;
+    error?: string;
+  };
 
-    if (Array.isArray(data) && data.length > 0) {
-      return data.map((row: any) => ({
-        id: row.id,
-        customerName: row.customer_name,
-        customerPhone: row.customer_phone,
-        deliveryType: row.delivery_type,
-        deliveryAddress: row.delivery_address,
-        city: row.city,
-        pincode: row.pincode,
-        landmark: row.landmark || '',
-        items: row.items || [],
-        subtotal: Number(row.subtotal) || 0,
-        deliveryFee: Number(row.delivery_fee) || 0,
-        totalAmount: Number(row.total_amount) || 0,
-        paymentMethod: row.payment_method,
-        paymentStatus: row.payment_status,
-        orderStatus: row.order_status,
-        rapidoCopied: Boolean(row.rapido_copied),
-        createdAt: row.created_at,
-      }));
-    }
-  } catch (err) {
-    console.error('Supabase fetch orders error:', err);
+  if (!res.ok || !data.success || !data.order) {
+    throw new Error(data.error || 'Could not confirm your order on the server. Please try again.');
   }
-  return null;
+
+  const existing = getStoredOrders();
+  const next = [data.order, ...existing.filter((o) => o.id !== data.order!.id)];
+  saveStoredOrders(next);
+  return data.order;
 }
 
-// Cross-device order lookup by 10-digit phone number or Order ID (e.g. #AS-1001)
+// Cross-device order lookup by exact 10-digit phone number or exact Order ID
 export async function lookupOrdersCrossDevice(query: string): Promise<Order[]> {
   const cleanQ = query.trim();
   if (!cleanQ) return [];
@@ -199,9 +174,8 @@ export async function lookupOrdersCrossDevice(query: string): Promise<Order[]> {
     const cleanId = o.id.toLowerCase().replace(/[^a-z0-9]/g, '');
     const cleanPhone = o.customerPhone.replace(/\D/g, '');
     return (
-      cleanId.includes(cleanStrQ) ||
-      cleanStrQ.includes(cleanId) ||
-      (digitsQ.length >= 4 && cleanPhone.includes(digitsQ))
+      (cleanStrQ.length >= 6 && cleanId === cleanStrQ) ||
+      (digitsQ.length === 10 && cleanPhone.slice(-10) === digitsQ)
     );
   });
 
@@ -210,7 +184,6 @@ export async function lookupOrdersCrossDevice(query: string): Promise<Order[]> {
     if (res.ok) {
       const data = await res.json();
       if (data.success && Array.isArray(data.orders) && data.orders.length > 0) {
-        // Automatically pin discovered orders to local device storage
         if (typeof window !== 'undefined') {
           const mergedMap = new Map<string, Order>();
           local.forEach((o) => mergedMap.set(o.id, o));
@@ -223,20 +196,21 @@ export async function lookupOrdersCrossDevice(query: string): Promise<Order[]> {
         return data.orders;
       }
     }
-  } catch (err) {
-    console.error('Server order lookup error:', err);
+  } catch {
+    // Fallback cleanly to local matches
   }
 
   return localMatches;
 }
 
-// Check server for real-time status updates (e.g. PACKED, DISPATCHED, DELIVERED)
+// Check server for real-time status updates (orderStatus + paymentStatus)
 export async function syncOrderStatuses(): Promise<Order[]> {
   const local = getStoredOrders();
   if (typeof window === 'undefined' || local.length === 0) return local;
 
   try {
-    const ids = local.map((o) => o.id).filter(Boolean).join(',');
+    const ids = local.map((o) => o.id).filter(Boolean).slice(0, 20).join(',');
+    if (!ids) return local;
     const res = await fetch(`/api/orders?ids=${encodeURIComponent(ids)}`);
     if (res.ok) {
       const data = await res.json();
@@ -247,9 +221,17 @@ export async function syncOrderStatuses(): Promise<Order[]> {
         let changed = false;
         const updated = local.map((locOrder) => {
           const srv = serverMap.get(locOrder.id);
-          if (srv && srv.orderStatus !== locOrder.orderStatus) {
+          if (
+            srv &&
+            (srv.orderStatus !== locOrder.orderStatus ||
+              srv.paymentStatus !== locOrder.paymentStatus)
+          ) {
             changed = true;
-            return { ...locOrder, orderStatus: srv.orderStatus };
+            return {
+              ...locOrder,
+              orderStatus: srv.orderStatus,
+              paymentStatus: srv.paymentStatus,
+            };
           }
           return locOrder;
         });
@@ -263,13 +245,6 @@ export async function syncOrderStatuses(): Promise<Order[]> {
   } catch {}
 
   return local;
-}
-
-// Generate human-friendly sequential order ID
-export function generateNextOrderId(existingOrders: Order[]): string {
-  const currentCount = existingOrders.length;
-  const num = 1001 + currentCount;
-  return `#AS-${num}`;
 }
 
 // Format Rapido drop info in 1 tap for rider dispatch
@@ -341,29 +316,28 @@ _Please confirm dispatch time!_`;
   return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
 }
 
-// Asynchronously sync product stock to Supabase if configured
-export async function syncProductToSupabase(product: Product) {
-  if (!isSupabaseConfigured || !supabase) return;
+// Sync product changes through authenticated server API (never direct browser anon write)
+export async function syncProductToServer(product: Product): Promise<boolean> {
   try {
-    await supabase.from('products').upsert({
-      id: product.id,
-      name: product.name,
-      brand: product.brand,
-      category: product.category,
-      pack_size: product.packSize,
-      agency_cost_price: product.agencyCostPrice,
-      mrp: product.mrp,
-      selling_price: product.sellingPrice,
-      stock_quantity: product.stockQuantity,
-      is_live: product.isLive,
-      image_url: product.imageUrl,
-      indications: product.indications,
-      dosage: product.dosage,
-      composition: product.composition,
-      updated_at: new Date().toISOString(),
+    const res = await fetch('/api/admin/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(product),
     });
-  } catch (err) {
-    console.error('Supabase product sync error:', err);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function deleteProductOnServer(productId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/admin/products?id=${encodeURIComponent(productId)}`, {
+      method: 'DELETE',
+    });
+    return res.ok;
+  } catch {
+    return false;
   }
 }
 
