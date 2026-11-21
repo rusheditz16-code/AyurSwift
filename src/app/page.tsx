@@ -27,6 +27,7 @@ import {
   getStoredProducts,
   getStoredSettings,
   placeOrderOnServer,
+  fetchLiveCatalogFromServer,
 } from '@/lib/store';
 import { INITIAL_PRODUCTS, DEFAULT_SETTINGS } from '@/lib/initialData';
 import {
@@ -158,6 +159,13 @@ export default function StorefrontPage() {
   useEffect(() => {
     setProducts(getStoredProducts());
     setSettings(getStoredSettings());
+    fetchLiveCatalogFromServer(false)
+      .then((liveProds) => {
+        if (liveProds && liveProds.length > 0) {
+          setProducts(liveProds);
+        }
+      })
+      .catch(() => {});
     try {
       const savedCart = sessionStorage.getItem('ayurswift_cart');
       if (savedCart) setCart(JSON.parse(savedCart));

@@ -397,6 +397,25 @@ _Please confirm dispatch time!_`;
   return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
 }
 
+// Fetch live product catalog from Supabase via server endpoint
+export async function fetchLiveCatalogFromServer(isAdmin = false): Promise<Product[] | null> {
+  try {
+    const url = isAdmin ? '/api/admin/products' : '/api/admin/products?public=1';
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data?.success && Array.isArray(data.products) && data.products.length > 0) {
+      if (typeof window !== 'undefined' && isAdmin) {
+        saveStoredProducts(data.products);
+      }
+      return data.products as Product[];
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // Sync product changes through authenticated server API (never direct browser anon write)
 export async function syncProductToServer(product: Product): Promise<boolean> {
   try {

@@ -117,8 +117,79 @@ GRANT SELECT (
 ) ON TABLE products TO anon, authenticated;
 
 -- Allow public read-only access ONLY to live, in-stock products
--- Note: All order reads/writes, admin inventory writes, and rate limiting run
--- exclusively on the Next.js server using SUPABASE_SERVICE_ROLE_KEY.
 CREATE POLICY "Public can view live in-stock products" ON products
   FOR SELECT TO anon, authenticated
   USING (is_live = true AND stock_quantity > 0);
+
+-- 6. Server-Only HMAC Verification Bridge (in non-exposed `private` schema)
+CREATE SCHEMA IF NOT EXISTS private;
+GRANT USAGE ON SCHEMA private TO anon, authenticated;
+
+CREATE TABLE IF NOT EXISTS private.server_secrets (
+  id TEXT PRIMARY KEY DEFAULT 'primary',
+  key_hash TEXT NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE OR REPLACE FUNCTION private.is_ayurswift_server()
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = private, public
+AS $$
+DECLARE
+  hdr_token TEXT;
+  computed_hash TEXT;
+  expected_hash TEXT;
+BEGIN
+  BEGIN
+    hdr_token := coalesce(current_setting('request.headers', true)::json->>'x-ayurswift-server-key', '');
+  EXCEPTION WHEN OTHERS THEN
+    RETURN false;
+  END;
+
+  IF hdr_token = '' OR length(hdr_token) < 32 THEN
+    RETURN false;
+  END IF;
+
+  computed_hash := encode(sha256(convert_to(hdr_token, 'UTF8')), 'hex');
+
+  SELECT key_hash INTO expected_hash
+  FROM private.server_secrets
+  WHERE id = 'primary'
+  LIMIT 1;
+
+  IF expected_hash IS NULL THEN
+    RETURN false;
+  END IF;
+
+  RETURN computed_hash = expected_hash;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION private.is_ayurswift_server() TO anon, authenticated;
+
+CREATE POLICY "Server full access products" ON products
+  FOR ALL TO anon, authenticated
+  USING (private.is_ayurswift_server())
+  WITH CHECK (private.is_ayurswift_server());
+
+CREATE POLICY "Server full access orders" ON orders
+  FOR ALL TO anon, authenticated
+  USING (private.is_ayurswift_server())
+  WITH CHECK (private.is_ayurswift_server());
+
+CREATE POLICY "Server full access rate_limits" ON rate_limits
+  FOR ALL TO anon, authenticated
+  USING (private.is_ayurswift_server())
+  WITH CHECK (private.is_ayurswift_server());
+
+CREATE POLICY "Server full access admin_credentials" ON admin_credentials
+  FOR ALL TO anon, authenticated
+  USING (private.is_ayurswift_server())
+  WITH CHECK (private.is_ayurswift_server());
+
+CREATE POLICY "Server full access admin_otps" ON admin_otps
+  FOR ALL TO anon, authenticated
+  USING (private.is_ayurswift_server())
+  WITH CHECK (private.is_ayurswift_server());

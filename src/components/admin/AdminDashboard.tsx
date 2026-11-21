@@ -25,6 +25,7 @@ import {
   generateSmartAdminWhatsAppUrl,
   syncProductToServer,
   deleteProductOnServer,
+  fetchLiveCatalogFromServer,
   exportOrdersToCsv,
   getIstDateKey,
 } from '@/lib/store';
@@ -247,10 +248,17 @@ export function AdminDashboard() {
     }
   }, []);
 
-  // Load orders when authenticated + visibility-aware 10s polling (pauses in hidden tabs)
+  // Load orders & products when authenticated + visibility-aware 10s polling (pauses in hidden tabs)
   useEffect(() => {
     if (!isAuthenticated) return;
     refreshOrders();
+    fetchLiveCatalogFromServer(true)
+      .then((liveProds) => {
+        if (liveProds && liveProds.length > 0) {
+          setProducts(liveProds);
+        }
+      })
+      .catch(() => {});
     if (!isLiveSync) return;
 
     const timer = setInterval(() => {

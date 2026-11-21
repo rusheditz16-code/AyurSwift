@@ -33,28 +33,46 @@ const revokedJtis = new Map<string, number>();
 let cachedSupabaseAdmin: SupabaseClient | null | undefined;
 
 /**
- * Server-only Supabase client using SUPABASE_SERVICE_ROLE_KEY.
- * Never falls back to NEXT_PUBLIC_SUPABASE_ANON_KEY for privileged writes.
+ * Server-only Supabase client.
+ * Uses SUPABASE_SERVICE_ROLE_KEY when set, or authenticates server requests via
+ * a 256-bit HMAC token derived from the server-only ADMIN_SESSION_SECRET verified
+ * by public.is_ayurswift_server() in Postgres RLS.
  */
 export function getSupabaseAdminClient(): SupabaseClient | null {
   if (cachedSupabaseAdmin !== undefined) return cachedSupabaseAdmin;
 
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
   const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  const anonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim();
+  const sessionSecret = (process.env.ADMIN_SESSION_SECRET || '').trim();
 
-  if (
-    url &&
-    serviceKey &&
-    url.startsWith('https://') &&
-    url !== 'https://your-project.supabase.co'
-  ) {
-    cachedSupabaseAdmin = createClient(url, serviceKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-  } else {
-    cachedSupabaseAdmin = null;
+  if (url && url.startsWith('https://') && url !== 'https://your-project.supabase.co') {
+    if (serviceKey) {
+      cachedSupabaseAdmin = createClient(url, serviceKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      return cachedSupabaseAdmin;
+    }
+
+    if (anonKey && sessionSecret.length >= 32) {
+      const serverHmacToken = crypto
+        .createHmac('sha256', sessionSecret)
+        .update('ayurswift-supabase-server-v1')
+        .digest('hex');
+
+      cachedSupabaseAdmin = createClient(url, anonKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+        global: {
+          headers: {
+            'x-ayurswift-server-key': serverHmacToken,
+          },
+        },
+      });
+      return cachedSupabaseAdmin;
+    }
   }
 
+  cachedSupabaseAdmin = null;
   return cachedSupabaseAdmin;
 }
 

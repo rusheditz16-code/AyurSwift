@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { INITIAL_PRODUCTS } from '@/lib/initialData';
+import { Product } from '@/types';
 import {
   checkRateLimit,
   getSupabaseAdminClient,
@@ -10,6 +12,101 @@ import {
   verifyAdminSession,
   verifySameOrigin,
 } from '@/lib/serverSecurity';
+
+/**
+ * GET /api/admin/products
+ * - Public mode (?public=1): Returns live, in-stock products with wholesale cost & raw stock stripped.
+ * - Admin mode: Requires valid admin session cookie and returns full inventory with stock & agencyCostPrice.
+ */
+export async function GET(request: NextRequest) {
+  const isPublicMode = new URL(request.url).searchParams.get('public') === '1';
+  const admin = verifyAdminSession(request);
+
+  if (!isPublicMode && !admin) {
+    return NextResponse.json({ success: false, error: 'Unauthorized.' }, { status: 401 });
+  }
+
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) {
+    return NextResponse.json({
+      success: true,
+      products: isPublicMode
+        ? INITIAL_PRODUCTS.filter((p) => p.isLive && p.stockQuantity > 0).map((p) => ({
+            ...p,
+            agencyCostPrice: 0,
+            stockQuantity: 1,
+          }))
+        : INITIAL_PRODUCTS,
+    });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .order('id', { ascending: true });
+
+    if (error || !data || data.length === 0) {
+      return NextResponse.json({
+        success: true,
+        products: isPublicMode
+          ? INITIAL_PRODUCTS.filter((p) => p.isLive && p.stockQuantity > 0).map((p) => ({
+              ...p,
+              agencyCostPrice: 0,
+              stockQuantity: 1,
+            }))
+          : INITIAL_PRODUCTS,
+      });
+    }
+
+    const baseMap = new Map<string, Product>();
+    INITIAL_PRODUCTS.forEach((p) => baseMap.set(p.id, p));
+
+    const mapped: Product[] = data.map((row: Record<string, unknown>) => {
+      const id = String(row.id || '');
+      const base = baseMap.get(id);
+      const rawStock = Math.max(0, Number(row.stock_quantity ?? base?.stockQuantity ?? 0));
+      const isLive = Boolean(row.is_live ?? base?.isLive ?? true) && rawStock > 0;
+
+      return {
+        id,
+        name: String(row.name || base?.name || ''),
+        brand: (String(row.brand || base?.brand || 'Other') as Product['brand']),
+        category: (String(row.category || base?.category || 'Daily Wellness') as Product['category']),
+        manufacturer: String(row.manufacturer || base?.manufacturer || ''),
+        form: (String(row.form || base?.form || 'Tablets') as Product['form']),
+        packSize: String(row.pack_size || base?.packSize || ''),
+        agencyCostPrice: isPublicMode ? 0 : Number(row.agency_cost_price ?? base?.agencyCostPrice ?? 0),
+        mrp: Number(row.mrp ?? base?.mrp ?? 0),
+        sellingPrice: Number(row.selling_price ?? base?.sellingPrice ?? 0),
+        stockQuantity: isPublicMode ? (rawStock > 0 ? 1 : 0) : rawStock,
+        isLive,
+        rating: base?.rating ?? 4.8,
+        reviewCount: base?.reviewCount ?? 120,
+        badgeText: base?.badgeText,
+        indications: String(row.indications ?? base?.indications ?? ''),
+        dosage: String(row.dosage ?? base?.dosage ?? ''),
+        composition: String(row.composition ?? base?.composition ?? ''),
+        safetyAdvice: base?.safetyAdvice,
+        imageUrl: String(row.image_url ?? base?.imageUrl ?? ''),
+        images: Array.isArray(row.images) && row.images.length > 0
+          ? (row.images as string[])
+          : base?.images || [],
+      };
+    });
+
+    const filtered = isPublicMode
+      ? mapped.filter((p) => p.isLive && p.stockQuantity > 0)
+      : mapped;
+
+    return NextResponse.json({ success: true, products: filtered });
+  } catch {
+    return NextResponse.json(
+      { success: false, error: 'Failed to load catalog.' },
+      { status: 500 }
+    );
+  }
+}
 
 /**
  * POST /api/admin/products
