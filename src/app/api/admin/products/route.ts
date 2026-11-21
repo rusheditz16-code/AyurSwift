@@ -13,9 +13,12 @@ import {
   verifySameOrigin,
 } from '@/lib/serverSecurity';
 
+const MAX_CUSTOMER_ORDER_QTY = 10;
+
 /**
  * GET /api/admin/products
- * - Public mode (?public=1): Returns live, in-stock products with wholesale cost & raw stock stripped.
+ * - Public mode (?public=1): Returns live, in-stock products with wholesale cost stripped
+ *   and stock capped to a safe per-order customer limit (never revealing raw warehouse stock).
  * - Admin mode: Requires valid admin session cookie and returns full inventory with stock & agencyCostPrice.
  */
 export async function GET(request: NextRequest) {
@@ -34,7 +37,7 @@ export async function GET(request: NextRequest) {
         ? INITIAL_PRODUCTS.filter((p) => p.isLive && p.stockQuantity > 0).map((p) => ({
             ...p,
             agencyCostPrice: 0,
-            stockQuantity: 1,
+            stockQuantity: Math.min(p.stockQuantity, MAX_CUSTOMER_ORDER_QTY),
           }))
         : INITIAL_PRODUCTS,
     });
@@ -53,7 +56,7 @@ export async function GET(request: NextRequest) {
           ? INITIAL_PRODUCTS.filter((p) => p.isLive && p.stockQuantity > 0).map((p) => ({
               ...p,
               agencyCostPrice: 0,
-              stockQuantity: 1,
+              stockQuantity: Math.min(p.stockQuantity, MAX_CUSTOMER_ORDER_QTY),
             }))
           : INITIAL_PRODUCTS,
       });
@@ -79,7 +82,11 @@ export async function GET(request: NextRequest) {
         agencyCostPrice: isPublicMode ? 0 : Number(row.agency_cost_price ?? base?.agencyCostPrice ?? 0),
         mrp: Number(row.mrp ?? base?.mrp ?? 0),
         sellingPrice: Number(row.selling_price ?? base?.sellingPrice ?? 0),
-        stockQuantity: isPublicMode ? (rawStock > 0 ? 1 : 0) : rawStock,
+        stockQuantity: isPublicMode
+          ? rawStock > 0
+            ? Math.min(rawStock, MAX_CUSTOMER_ORDER_QTY)
+            : 0
+          : rawStock,
         isLive,
         rating: base?.rating ?? 4.8,
         reviewCount: base?.reviewCount ?? 120,

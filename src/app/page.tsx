@@ -163,6 +163,25 @@ export default function StorefrontPage() {
       .then((liveProds) => {
         if (liveProds && liveProds.length > 0) {
           setProducts(liveProds);
+          // Refresh product snapshots inside any existing session cart so prices & max qty stay live
+          const liveMap = new Map(liveProds.map((p) => [p.id, p]));
+          setCart((prev) => {
+            if (prev.length === 0) return prev;
+            const refreshed = prev
+              .map((item) => {
+                const fresh = liveMap.get(item.product.id);
+                if (!fresh || !fresh.isLive || fresh.stockQuantity <= 0) return null;
+                return {
+                  product: fresh,
+                  quantity: Math.min(item.quantity, fresh.stockQuantity),
+                };
+              })
+              .filter((x): x is CartItem => x !== null);
+            try {
+              sessionStorage.setItem('ayurswift_cart', JSON.stringify(refreshed));
+            } catch {}
+            return refreshed;
+          });
         }
       })
       .catch(() => {});
@@ -329,9 +348,14 @@ export default function StorefrontPage() {
     const existing = cart.find((item) => item.product.id === product.id);
     let updated: CartItem[];
     if (existing) {
-      if (existing.quantity >= product.stockQuantity) return;
+      if (existing.quantity >= product.stockQuantity) {
+        showToast('Maximum order quantity reached for this item');
+        return;
+      }
       updated = cart.map((item) =>
-        item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+        item.product.id === product.id
+          ? { product, quantity: item.quantity + 1 }
+          : item
       );
     } else {
       updated = [...cart, { product, quantity: 1 }];
@@ -349,7 +373,7 @@ export default function StorefrontPage() {
       const finalQty = Math.min(quantity, product.stockQuantity);
       saveCart(
         cart.map((item) =>
-          item.product.id === productId ? { ...item, quantity: finalQty } : item
+          item.product.id === productId ? { product, quantity: finalQty } : item
         )
       );
     }

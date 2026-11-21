@@ -102,24 +102,12 @@ DROP POLICY IF EXISTS "Full access with anon for demo orders" ON orders;
 DROP POLICY IF EXISTS "Public can place orders" ON orders;
 DROP POLICY IF EXISTS "Public can view live in-stock products" ON products;
 
--- Revoke excessive default grants from anon/authenticated roles
-REVOKE ALL ON TABLE orders FROM anon, authenticated;
-REVOKE ALL ON TABLE rate_limits FROM anon, authenticated;
-REVOKE ALL ON TABLE admin_credentials FROM anon, authenticated;
-REVOKE ALL ON TABLE admin_otps FROM anon, authenticated;
-REVOKE ALL ON TABLE products FROM anon, authenticated;
-
--- Column-level SELECT grant only: hides wholesale agency_cost_price and raw stock_quantity from public anon queries
-GRANT SELECT (
-  id, name, brand, category, manufacturer, form, pack_size,
-  mrp, selling_price, is_live, image_url, images,
-  indications, dosage, composition
-) ON TABLE products TO anon, authenticated;
-
--- Allow public read-only access ONLY to live, in-stock products
-CREATE POLICY "Public can view live in-stock products" ON products
-  FOR SELECT TO anon, authenticated
-  USING (is_live = true AND stock_quantity > 0);
+-- All storefront and admin requests flow exclusively through Next.js API routes authenticated via private.is_ayurswift_server()
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE products TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE orders TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE rate_limits TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE admin_credentials TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE admin_otps TO anon, authenticated;
 
 -- 6. Server-Only HMAC Verification Bridge (in non-exposed `private` schema)
 CREATE SCHEMA IF NOT EXISTS private;
