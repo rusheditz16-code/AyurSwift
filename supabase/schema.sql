@@ -51,9 +51,17 @@ CREATE TABLE IF NOT EXISTS orders (
   payment_status TEXT NOT NULL DEFAULT 'PENDING', -- 'PENDING' or 'VERIFIED'
   order_status TEXT NOT NULL DEFAULT 'NEW', -- 'NEW', 'PACKED', 'DISPATCHED', 'DELIVERED', 'CANCELLED'
   rapido_copied BOOLEAN DEFAULT false,
+  utr_number TEXT,
+  courier_tracking TEXT,
+  admin_note TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- Idempotent column migrations for existing databases
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS utr_number TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS courier_tracking TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS admin_note TEXT;
 
 -- 3. Shared Rate Limits Table (Server-only via service_role)
 CREATE TABLE IF NOT EXISTS rate_limits (

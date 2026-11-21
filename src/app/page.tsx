@@ -958,6 +958,11 @@ export default function StorefrontPage() {
         order={activeOrder}
         onClose={() => setActiveOrder(null)}
         settings={settings}
+        onTrackOrder={() => {
+          setActiveOrder(null);
+          setIsOrderTrackingOpen(true);
+        }}
+        onOrderUpdated={(updated) => setActiveOrder(updated)}
       />
 
       <MedicineDetailModal

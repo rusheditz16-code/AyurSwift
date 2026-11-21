@@ -11,6 +11,7 @@ import { AdminOverviewTab } from '@/components/admin/AdminOverviewTab';
 import { AdminDispatchTab } from '@/components/admin/AdminDispatchTab';
 import { AdminInventoryTab } from '@/components/admin/AdminInventoryTab';
 import { AdminProductDrawer } from '@/components/admin/AdminProductDrawer';
+import { AdminCreateOrderModal } from '@/components/admin/AdminCreateOrderModal';
 import { AdminSettingsTab } from '@/components/admin/AdminSettingsTab';
 import {
   getStoredProducts,
@@ -21,9 +22,11 @@ import {
   saveStoredSettings,
   resetToInitialProducts,
   formatRapidoDropText,
+  generateSmartAdminWhatsAppUrl,
   syncProductToServer,
   deleteProductOnServer,
   exportOrdersToCsv,
+  getIstDateKey,
 } from '@/lib/store';
 
 /**
@@ -121,14 +124,26 @@ export function AdminDashboard() {
   const [orderStatusFilter, setOrderStatusFilter] = useState<'ALL' | Order['orderStatus']>('ALL');
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
 
-  // Settings & Billing
+  // Settings & Billing & Modals
   const [settingsSavedToast, setSettingsSavedToast] = useState(false);
   const [selectedBillOrder, setSelectedBillOrder] = useState<Order | null>(null);
   const [billFormat, setBillFormat] = useState<'A4' | 'THERMAL'>('A4');
+  const [showCreateOrderModal, setShowCreateOrderModal] = useState(false);
+  const [actionToast, setActionToast] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
 
   const prevOrderCountRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const showToast = useCallback((type: 'success' | 'error', text: string) => {
+    setActionToast({ type, text });
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setActionToast(null), 2800);
+  }, []);
 
   // Initial load + theme + server-verified session check
   useEffect(() => {
@@ -212,20 +227,17 @@ export function AdminDashboard() {
       if (res.ok) {
         const data = await res.json();
         if (data.success && Array.isArray(data.orders)) {
-          const map = new Map<string, Order>();
-          getStoredOrders().forEach((o) => map.set(o.id, o));
-          data.orders.forEach((o: Order) => map.set(o.id, o));
-          const merged = Array.from(map.values()).sort(
+          const serverOrders = [...(data.orders as Order[])].sort(
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           );
 
-          if (prevOrderCountRef.current > 0 && merged.length > prevOrderCountRef.current) {
-            setNewOrderBanner(merged[0]);
+          if (prevOrderCountRef.current > 0 && serverOrders.length > prevOrderCountRef.current) {
+            setNewOrderBanner(serverOrders[0]);
             playNewOrderSound();
           }
-          prevOrderCountRef.current = merged.length;
-          setOrders(merged);
-          saveStoredOrders(merged);
+          prevOrderCountRef.current = serverOrders.length;
+          setOrders(serverOrders);
+          saveStoredOrders(serverOrders);
         }
       }
     } catch {
@@ -520,69 +532,157 @@ export function AdminDashboard() {
     }
   };
 
+  // Shared authenticated order mutation helper with rollback + user feedback
+  const commitOrderUpdate = async (
+    orderId: string,
+    patch: Partial<Order>,
+    apiPayload: Record<string, unknown>,
+    successMsg: string
+  ): Promise<boolean> => {
+    const previousOrders = orders;
+    const optimistic = orders.map((o) => (o.id === orderId ? { ...o, ...patch } : o));
+    setOrders(optimistic);
+    saveStoredOrders(optimistic);
+
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, ...apiPayload }),
+      });
+
+      if (res.status === 401 || res.status === 403) {
+        setOrders(previousOrders);
+        saveStoredOrders(previousOrders);
+        setIsAuthenticated(false);
+        setAuthError('Your admin session expired. Please sign in again.');
+        return false;
+      }
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        setOrders(previousOrders);
+        saveStoredOrders(previousOrders);
+        showToast('error', data.error || 'Server rejected order update.');
+        return false;
+      }
+
+      if (data.order) {
+        const synced = optimistic.map((o) => (o.id === orderId ? (data.order as Order) : o));
+        setOrders(synced);
+        saveStoredOrders(synced);
+      }
+
+      showToast('success', successMsg);
+      return true;
+    } catch {
+      setOrders(previousOrders);
+      saveStoredOrders(previousOrders);
+      showToast('error', 'Network error updating order. Changes reverted.');
+      return false;
+    }
+  };
+
   // Dispatch actions (authenticated automatically via HttpOnly session cookie)
-  const handleCopyForRapido = (order: Order) => {
+  const handleCopyForRapido = async (order: Order) => {
     navigator.clipboard.writeText(formatRapidoDropText(order));
     setCopiedOrderId(order.id);
-    const updated = orders.map((o) =>
-      o.id === order.id ? { ...o, rapidoCopied: true, orderStatus: 'DISPATCHED' as const } : o
-    );
-    setOrders(updated);
-    saveStoredOrders(updated);
-    fetch('/api/orders', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderId: order.id, orderStatus: 'DISPATCHED' }),
-    }).catch(() => {});
     setTimeout(() => setCopiedOrderId(null), 2500);
+    await commitOrderUpdate(
+      order.id,
+      { rapidoCopied: true, orderStatus: 'DISPATCHED' },
+      { rapidoCopied: true, orderStatus: 'DISPATCHED' },
+      `Rapido address copied & ${order.id} marked Dispatched`
+    );
   };
 
-  const handleUpdateOrderStatus = (orderId: string, status: Order['orderStatus']) => {
-    const updated = orders.map((o) => (o.id === orderId ? { ...o, orderStatus: status } : o));
-    setOrders(updated);
-    saveStoredOrders(updated);
-    fetch('/api/orders', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderId, orderStatus: status }),
-    }).catch(() => {});
+  const handleUpdateOrderStatus = async (orderId: string, status: Order['orderStatus']) => {
+    await commitOrderUpdate(
+      orderId,
+      { orderStatus: status },
+      { orderStatus: status },
+      `${orderId} updated to ${status}`
+    );
   };
 
-  const handleTogglePaymentVerified = (orderId: string) => {
-    let nextStatus: Order['paymentStatus'] = 'VERIFIED';
-    const updated = orders.map((o) => {
-      if (o.id === orderId) {
-        nextStatus = o.paymentStatus === 'VERIFIED' ? 'PENDING' : 'VERIFIED';
-        return { ...o, paymentStatus: nextStatus };
-      }
-      return o;
-    });
-    setOrders(updated);
-    saveStoredOrders(updated);
-    fetch('/api/orders', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderId, paymentStatus: nextStatus }),
-    }).catch(() => {});
+  const handleTogglePaymentVerified = async (orderId: string) => {
+    const existing = orders.find((o) => o.id === orderId);
+    if (!existing) return;
+    const nextStatus: Order['paymentStatus'] =
+      existing.paymentStatus === 'VERIFIED' ? 'PENDING' : 'VERIFIED';
+    await commitOrderUpdate(
+      orderId,
+      { paymentStatus: nextStatus },
+      { paymentStatus: nextStatus },
+      nextStatus === 'VERIFIED'
+        ? `${orderId} payment marked Verified`
+        : `${orderId} payment set back to Pending`
+    );
+  };
+
+  const handleVerifyAndPack = async (orderId: string) => {
+    await commitOrderUpdate(
+      orderId,
+      { paymentStatus: 'VERIFIED', orderStatus: 'PACKED' },
+      { paymentStatus: 'VERIFIED', orderStatus: 'PACKED' },
+      `${orderId} payment verified & marked Packed`
+    );
+  };
+
+  const handleSaveOrderLogistics = async (
+    orderId: string,
+    courierTracking: string,
+    adminNote: string
+  ): Promise<boolean> => {
+    return commitOrderUpdate(
+      orderId,
+      {
+        courierTracking: courierTracking.trim() || undefined,
+        adminNote: adminNote.trim() || undefined,
+      },
+      {
+        courierTracking: courierTracking.trim(),
+        adminNote: adminNote.trim(),
+      },
+      `Saved tracking & note for ${orderId}`
+    );
   };
 
   const handleWhatsAppCustomer = (order: Order) => {
-    const phone = order.customerPhone.replace(/\D/g, '');
-    const cleanPhone = phone.length === 10 ? `91${phone}` : phone;
-    const msg = `Hi ${order.customerName}! 🌿 Your AyurSwift order *${order.id}* has been verified & packed by our Bhavnagar dark store. Dispatch status: *${order.orderStatus}*! Track anytime at https://ayurswift.vercel.app`;
-    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+    window.open(generateSmartAdminWhatsAppUrl(order), '_blank');
   };
 
   const handleDeleteOrder = async (orderId: string) => {
     if (!confirm(`Delete order ${orderId}? This cannot be undone.`)) return;
+    const previousOrders = orders;
     const updated = orders.filter((o) => o.id !== orderId);
     setOrders(updated);
     saveStoredOrders(updated);
+    prevOrderCountRef.current = updated.length;
+
     try {
-      await fetch(`/api/orders?id=${encodeURIComponent(orderId)}`, {
+      const res = await fetch(`/api/orders?id=${encodeURIComponent(orderId)}`, {
         method: 'DELETE',
       });
-    } catch {}
+      if (res.status === 401 || res.status === 403) {
+        setOrders(previousOrders);
+        saveStoredOrders(previousOrders);
+        setIsAuthenticated(false);
+        setAuthError('Your admin session expired. Please sign in again.');
+        return;
+      }
+      if (!res.ok) {
+        setOrders(previousOrders);
+        saveStoredOrders(previousOrders);
+        showToast('error', 'Failed to delete order from server.');
+        return;
+      }
+      showToast('success', `Order ${orderId} deleted`);
+    } catch {
+      setOrders(previousOrders);
+      saveStoredOrders(previousOrders);
+      showToast('error', 'Network error deleting order.');
+    }
   };
 
   const handleExportCsv = (ordersToExport: Order[]) => {
@@ -600,7 +700,7 @@ export function AdminDashboard() {
         : orderDateFilter === 'CUSTOM'
         ? orderCustomDate
         : 'all';
-    link.setAttribute('download', `ayurswift_orders_${tag}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `ayurswift_orders_${tag}_${getIstDateKey()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -708,6 +808,9 @@ export function AdminDashboard() {
               onCopyForRapido={handleCopyForRapido}
               onUpdateOrderStatus={handleUpdateOrderStatus}
               onTogglePaymentVerified={handleTogglePaymentVerified}
+              onVerifyAndPack={handleVerifyAndPack}
+              onSaveOrderLogistics={handleSaveOrderLogistics}
+              onOpenCreateOrder={() => setShowCreateOrderModal(true)}
               onWhatsAppCustomer={handleWhatsAppCustomer}
               onOpenBill={handleOpenBill}
               onDeleteOrder={handleDeleteOrder}
@@ -774,6 +877,39 @@ export function AdminDashboard() {
         initialFormat={billFormat}
         settings={settings}
       />
+
+      <AdminCreateOrderModal
+        isOpen={showCreateOrderModal}
+        onClose={() => setShowCreateOrderModal(false)}
+        products={products}
+        settings={settings}
+        onOrderCreated={(newOrder) => {
+          const updated = [newOrder, ...orders.filter((o) => o.id !== newOrder.id)];
+          setOrders(updated);
+          saveStoredOrders(updated);
+          prevOrderCountRef.current = updated.length;
+          showToast('success', `Phone order ${newOrder.id} added to queue`);
+        }}
+        onPrintBill={(ord) => handleOpenBill(ord, 'A4')}
+        dark={dark}
+      />
+
+      {actionToast && (
+        <div
+          className={`fixed bottom-5 right-5 z-80 px-4 py-2.5 rounded-2xl shadow-xl text-xs font-extrabold flex items-center gap-2 border animate-fade-in ${
+            actionToast.type === 'error'
+              ? 'bg-rose-600 text-white border-rose-500'
+              : 'bg-slate-950 text-white border-slate-800'
+          }`}
+        >
+          <span
+            className={`w-2 h-2 rounded-full ${
+              actionToast.type === 'error' ? 'bg-amber-300' : 'bg-emerald-400'
+            }`}
+          />
+          <span>{actionToast.text}</span>
+        </div>
+      )}
     </div>
   );
 }

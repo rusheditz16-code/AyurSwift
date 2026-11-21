@@ -203,7 +203,7 @@ export async function lookupOrdersCrossDevice(query: string): Promise<Order[]> {
   return localMatches;
 }
 
-// Check server for real-time status updates (orderStatus + paymentStatus)
+// Check server for real-time status updates (orderStatus, paymentStatus, utrNumber, courierTracking)
 export async function syncOrderStatuses(): Promise<Order[]> {
   const local = getStoredOrders();
   if (typeof window === 'undefined' || local.length === 0) return local;
@@ -224,13 +224,17 @@ export async function syncOrderStatuses(): Promise<Order[]> {
           if (
             srv &&
             (srv.orderStatus !== locOrder.orderStatus ||
-              srv.paymentStatus !== locOrder.paymentStatus)
+              srv.paymentStatus !== locOrder.paymentStatus ||
+              srv.courierTracking !== locOrder.courierTracking ||
+              (srv.utrNumber && !locOrder.utrNumber))
           ) {
             changed = true;
             return {
               ...locOrder,
               orderStatus: srv.orderStatus,
               paymentStatus: srv.paymentStatus,
+              courierTracking: srv.courierTracking ?? locOrder.courierTracking,
+              utrNumber: locOrder.utrNumber || srv.utrNumber,
             };
           }
           return locOrder;
@@ -245,6 +249,83 @@ export async function syncOrderStatuses(): Promise<Order[]> {
   } catch {}
 
   return local;
+}
+
+// Customer submits UPI UTR / transaction reference verified by matching 10-digit phone
+export async function submitOrderUtr(
+  orderId: string,
+  customerPhone: string,
+  utrNumber: string
+): Promise<Order | null> {
+  const cleanUtr = utrNumber.replace(/[^a-zA-Z0-9]/g, '').slice(0, 32);
+  if (cleanUtr.length < 6) {
+    throw new Error('Please enter a valid 6+ character UPI Ref / UTR number.');
+  }
+
+  const res = await fetch('/api/orders', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      orderId,
+      customerPhone,
+      utrNumber: cleanUtr,
+    }),
+  });
+
+  const data = (await res.json().catch(() => ({}))) as {
+    success?: boolean;
+    order?: Order;
+    error?: string;
+  };
+
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || 'Could not save UTR number. Please verify your mobile number.');
+  }
+
+  if (typeof window !== 'undefined') {
+    const current = getStoredOrders();
+    const updated = current.map((o) =>
+      o.id === orderId ? { ...o, utrNumber: cleanUtr } : o
+    );
+    localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
+    return updated.find((o) => o.id === orderId) || data.order || null;
+  }
+
+  return data.order || null;
+}
+
+// Stage-aware smart WhatsApp notification link for Admin -> Customer
+export function generateSmartAdminWhatsAppUrl(order: Order): string {
+  const phoneDigits = order.customerPhone.replace(/\D/g, '');
+  const cleanPhone = phoneDigits.length === 10 ? `91${phoneDigits}` : phoneDigits;
+
+  let msg = '';
+  if (order.orderStatus === 'DISPATCHED') {
+    msg =
+      `Hi ${order.customerName}! 🌿 Your AyurSwift order *${order.id}* is *Out for Delivery* via ${
+        order.deliveryType === 'RAPIDO_CITY' ? 'Rapido Bike Parcel ⚡' : 'Express Courier 📦'
+      }!` +
+      (order.courierTracking ? `\n\n*Rider / Tracking:* ${order.courierTracking}` : '') +
+      `\nTrack live anytime at https://ayurswift.vercel.app`;
+  } else if (order.orderStatus === 'DELIVERED') {
+    msg = `Hi ${order.customerName}! 🌿 Your AyurSwift order *${order.id}* (₹${order.totalAmount}) has been *Delivered*. Thank you for choosing genuine Ayurveda! Order again anytime at https://ayurswift.vercel.app`;
+  } else if (order.orderStatus === 'CANCELLED') {
+    msg = `Hi ${order.customerName}, your AyurSwift order *${order.id}* has been *Cancelled* as requested. Any prepaid UPI amount will be refunded promptly. Helpline: +91 96247 66242.`;
+  } else if (order.orderStatus === 'PACKED') {
+    msg =
+      `Hi ${order.customerName}! 🌿 Your AyurSwift order *${order.id}*` +
+      (order.paymentStatus === 'VERIFIED' ? ' (UPI Payment Verified ✓)' : '') +
+      ` is *Packed & Ready* at our Bhavnagar dark store! We are assigning dispatch shortly.\nTrack live: https://ayurswift.vercel.app`;
+  } else {
+    msg =
+      `Hi ${order.customerName}! 🌿 We have received your AyurSwift order *${order.id}* (₹${order.totalAmount}).` +
+      (order.paymentStatus === 'VERIFIED'
+        ? ' Your UPI payment is verified ✓ and packing is starting now.'
+        : ' Our dark store is verifying stock & payment.') +
+      `\nTrack live: https://ayurswift.vercel.app`;
+  }
+
+  return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
 }
 
 // Format Rapido drop info in 1 tap for rider dispatch
@@ -356,16 +437,23 @@ export interface DayGroupedOrders {
   upiAmount: number;
 }
 
+export function getIstDateKey(input: string | Date = new Date()): string {
+  const d = typeof input === 'string' ? new Date(input) : input;
+  if (Number.isNaN(d.getTime())) {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+  }
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(d);
+}
+
 export function groupOrdersByDate(orders: Order[]): DayGroupedOrders[] {
   const groupsMap = new Map<string, Order[]>();
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split('T')[0];
+  const now = new Date();
+  const todayStr = getIstDateKey(now);
+  const yesterdayStr = getIstDateKey(new Date(now.getTime() - 24 * 60 * 60 * 1000));
 
   orders.forEach((o) => {
-    const dateKey = (o.createdAt || new Date().toISOString()).split('T')[0];
+    const dateKey = getIstDateKey(o.createdAt || new Date());
     if (!groupsMap.has(dateKey)) {
       groupsMap.set(dateKey, []);
     }
@@ -382,12 +470,13 @@ export function groupOrdersByDate(orders: Order[]): DayGroupedOrders[] {
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
-    const dateObj = new Date(`${dateKey}T12:00:00Z`);
+    const dateObj = new Date(`${dateKey}T12:00:00+05:30`);
     const displayDate = dateObj.toLocaleDateString('en-IN', {
       weekday: 'long',
       day: 'numeric',
       month: 'short',
       year: 'numeric',
+      timeZone: 'Asia/Kolkata',
     });
 
     const isToday = dateKey === todayStr;
@@ -416,7 +505,7 @@ export function groupOrdersByDate(orders: Order[]): DayGroupedOrders[] {
 
 export function getDailyOrderStats(orders: Order[], filterDateKey?: string) {
   const targetOrders = filterDateKey
-    ? orders.filter((o) => (o.createdAt || '').startsWith(filterDateKey))
+    ? orders.filter((o) => getIstDateKey(o.createdAt || '') === filterDateKey)
     : orders;
 
   const validOrders = targetOrders.filter((o) => o.orderStatus !== 'CANCELLED');
@@ -471,12 +560,18 @@ export function exportOrdersToCsv(orders: Order[]): string {
     'Payment Status',
     'Order Status',
     'Rapido Copied',
+    'UTR / Ref',
+    'Tracking / Rider',
   ];
 
   const rows = orders.map((o) => {
     const d = new Date(o.createdAt);
-    const dateStr = d.toLocaleDateString('en-IN');
-    const timeStr = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = d.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
+    const timeStr = d.toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Asia/Kolkata',
+    });
     const itemsSummary = o.items
       .map((i) => `${i.quantity}x ${i.name} (${i.packSize})`)
       .join('; ');
@@ -500,6 +595,8 @@ export function exportOrdersToCsv(orders: Order[]): string {
       `"${o.paymentStatus}"`,
       `"${o.orderStatus}"`,
       o.rapidoCopied ? 'YES' : 'NO',
+      `"${(o.utrNumber || '').replace(/"/g, '""')}"`,
+      `"${(o.courierTracking || '').replace(/"/g, '""')}"`,
     ].join(',');
   });
 

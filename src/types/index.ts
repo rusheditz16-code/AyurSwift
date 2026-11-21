@@ -81,6 +81,9 @@ export interface Order {
   paymentStatus: 'PENDING' | 'PAID' | 'VERIFIED';
   orderStatus: OrderStatus;
   rapidoCopied: boolean;
+  utrNumber?: string;
+  courierTracking?: string;
+  adminNote?: string;
   createdAt: string;
 }
 

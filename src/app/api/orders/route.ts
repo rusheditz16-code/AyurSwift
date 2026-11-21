@@ -31,13 +31,14 @@ const ALLOWED_PAYMENT_STATUSES = new Set<Order['paymentStatus']>(['PENDING', 'VE
 const ALLOWED_DELIVERY_TYPES = new Set<DeliveryType>(['RAPIDO_CITY', 'COURIER_OUTSIDE']);
 const ALLOWED_PAYMENT_METHODS = new Set<PaymentMethod>(['UPI', 'COD']);
 
-interface PublicOrderView extends Omit<Order, 'rapidoCopied'> {
+interface PublicOrderView extends Omit<Order, 'rapidoCopied' | 'adminNote'> {
   rapidoCopied: false;
+  adminNote?: undefined;
 }
 
 /**
  * Customer Privacy Masking (India DPDP Act Compliance)
- * Masks phone, street address, landmark, and strips internal dispatch flags.
+ * Masks phone, street address, landmark, full UTR, and strips internal dispatch/admin fields.
  */
 function maskOrderForPublic(order: Order): PublicOrderView {
   const cleanPhone = order.customerPhone.replace(/\D/g, '');
@@ -56,11 +57,20 @@ function maskOrderForPublic(order: Order): PublicOrderView {
     }
   }
 
+  let maskedUtr: string | undefined = order.utrNumber;
+  if (order.utrNumber) {
+    const cleanUtr = order.utrNumber.replace(/[^a-zA-Z0-9]/g, '');
+    maskedUtr = cleanUtr.length >= 6 ? `••••${cleanUtr.slice(-4)}` : '••••';
+  }
+
   return {
     ...order,
     customerPhone: maskedPhone,
     deliveryAddress: maskedAddress,
     landmark: order.landmark ? '••••' : undefined,
+    utrNumber: maskedUtr,
+    courierTracking: order.courierTracking,
+    adminNote: undefined,
     rapidoCopied: false,
   };
 }
@@ -117,6 +127,9 @@ function mapDbRowToOrder(row: Record<string, unknown>): Order {
     paymentStatus: (row.payment_status as Order['paymentStatus']) || 'PENDING',
     orderStatus: (row.order_status as Order['orderStatus']) || 'NEW',
     rapidoCopied: Boolean(row.rapido_copied),
+    utrNumber: row.utr_number ? String(row.utr_number) : undefined,
+    courierTracking: row.courier_tracking ? String(row.courier_tracking) : undefined,
+    adminNote: row.admin_note ? String(row.admin_note) : undefined,
     createdAt: String(row.created_at || new Date().toISOString()),
   };
 }
@@ -139,6 +152,9 @@ function mapOrderToDbRow(order: Order) {
     payment_status: order.paymentStatus,
     order_status: order.orderStatus,
     rapido_copied: order.rapidoCopied,
+    utr_number: order.utrNumber || null,
+    courier_tracking: order.courierTracking || null,
+    admin_note: order.adminNote || null,
     created_at: order.createdAt,
     updated_at: new Date().toISOString(),
   };
@@ -359,6 +375,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const adminSession = verifyAdminSession(request);
+    const isAdmin = Boolean(adminSession && verifySameOrigin(request));
+
     // Bot protection: hidden honeypot field must remain blank
     const honeypot = sanitizeText(body.website ?? body._hp, 100);
     if (honeypot) {
@@ -369,14 +388,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Optional Cloudflare Turnstile verification (active if TURNSTILE_SECRET_KEY is configured)
-    const turnstileOk = await verifyTurnstileIfConfigured(body.turnstileToken, ip);
-    if (!turnstileOk) {
-      logSecurityEvent('order_bot_turnstile_failed', { ip: maskIpForLog(ip) });
-      return NextResponse.json(
-        { success: false, error: 'Bot verification failed. Please retry.' },
-        { status: 400 }
-      );
+    // Optional Cloudflare Turnstile verification (active if TURNSTILE_SECRET_KEY is configured, skipped for verified admin manual orders)
+    if (!isAdmin) {
+      const turnstileOk = await verifyTurnstileIfConfigured(body.turnstileToken, ip);
+      if (!turnstileOk) {
+        logSecurityEvent('order_bot_turnstile_failed', { ip: maskIpForLog(ip) });
+        return NextResponse.json(
+          { success: false, error: 'Bot verification failed. Please retry.' },
+          { status: 400 }
+        );
+      }
     }
 
     // Strict input validation (allowlisted fields only)
@@ -512,6 +533,8 @@ export async function POST(request: NextRequest) {
 
     const totalAmount = Number((subtotal + deliveryFee).toFixed(2));
 
+    const adminNote = isAdmin && body.adminNote ? sanitizeText(body.adminNote, 250) : undefined;
+
     // Server always generates random unpredictable ID and forces initial statuses
     const newOrder: Order = {
       id: generateSecureOrderId(),
@@ -530,10 +553,11 @@ export async function POST(request: NextRequest) {
       paymentStatus: 'PENDING',
       orderStatus: 'NEW',
       rapidoCopied: false,
+      ...(adminNote ? { adminNote } : {}),
       createdAt: new Date().toISOString(),
     };
 
-    // Persist to Supabase via server-only service_role key
+    // Persist to Supabase via server-only service_role key & decrement live stock
     const supabase = getSupabaseAdminClient();
     if (supabase) {
       const { error: dbErr } = await supabase
@@ -541,6 +565,21 @@ export async function POST(request: NextRequest) {
         .insert(mapOrderToDbRow(newOrder));
       if (dbErr) {
         console.warn('Supabase insert error in POST /api/orders');
+      } else {
+        for (const item of verifiedItems) {
+          const prod = catalog.get(item.productId);
+          if (prod) {
+            const nextStock = Math.max(0, prod.stockQuantity - item.quantity);
+            await supabase
+              .from('products')
+              .update({
+                stock_quantity: nextStock,
+                is_live: nextStock > 0 ? prod.isLive : false,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', prod.id);
+          }
+        }
       }
     }
 
@@ -550,7 +589,7 @@ export async function POST(request: NextRequest) {
     memoryOrders = updated;
     saveOrdersToFile(updated);
 
-    logSecurityEvent('order_created', {
+    logSecurityEvent(isAdmin ? 'admin_manual_order_created' : 'order_created', {
       orderId: newOrder.id,
       totalAmount: newOrder.totalAmount,
       paymentMethod: newOrder.paymentMethod,
@@ -575,8 +614,10 @@ export async function POST(request: NextRequest) {
 
 /**
  * PUT /api/orders
- * - Admin (verified HttpOnly cookie + Same-Origin): transitions orderStatus or paymentStatus.
- * - Customer (unauthenticated): ONLY allows cancelling a NEW order with matching 10-digit phone.
+ * - Admin (verified HttpOnly cookie + Same-Origin): updates orderStatus, paymentStatus,
+ *   courierTracking, adminNote, utrNumber, and rapidoCopied atomically.
+ * - Customer (unauthenticated, verified by matching 10-digit phone):
+ *   ONLY allows cancelling a NEW order OR submitting a UPI UTR reference on a UPI order.
  */
 export async function PUT(request: NextRequest) {
   const ip = getTrustedClientIp(request);
@@ -594,6 +635,10 @@ export async function PUT(request: NextRequest) {
       orderStatus?: unknown;
       paymentStatus?: unknown;
       customerPhone?: unknown;
+      utrNumber?: unknown;
+      courierTracking?: unknown;
+      adminNote?: unknown;
+      rapidoCopied?: unknown;
     };
 
     const orderId = sanitizeText(body?.orderId, 32);
@@ -606,9 +651,33 @@ export async function PUT(request: NextRequest) {
         ? (body.paymentStatus as Order['paymentStatus'])
         : undefined;
 
-    if (!orderId || (!orderStatus && !paymentStatus)) {
+    const hasUtr = typeof body?.utrNumber === 'string';
+    const cleanUtr = hasUtr
+      ? String(body.utrNumber).replace(/[^a-zA-Z0-9]/g, '').slice(0, 32)
+      : undefined;
+
+    const hasCourierTracking = typeof body?.courierTracking === 'string';
+    const cleanCourierTracking = hasCourierTracking
+      ? sanitizeText(body.courierTracking, 120)
+      : undefined;
+
+    const hasAdminNote = typeof body?.adminNote === 'string';
+    const cleanAdminNote = hasAdminNote ? sanitizeText(body.adminNote, 250) : undefined;
+
+    const hasRapidoCopied = typeof body?.rapidoCopied === 'boolean';
+    const rapidoCopiedVal = hasRapidoCopied ? Boolean(body.rapidoCopied) : undefined;
+
+    if (
+      !orderId ||
+      (!orderStatus &&
+        !paymentStatus &&
+        !hasUtr &&
+        !hasCourierTracking &&
+        !hasAdminNote &&
+        !hasRapidoCopied)
+    ) {
       return NextResponse.json(
-        { success: false, error: 'Valid orderId and status update are required.' },
+        { success: false, error: 'Valid orderId and at least one update field are required.' },
         { status: 400 }
       );
     }
@@ -647,9 +716,23 @@ export async function PUT(request: NextRequest) {
     }
 
     if (!isAdmin) {
-      if (paymentStatus || orderStatus !== 'CANCELLED') {
+      if (paymentStatus || hasCourierTracking || hasAdminNote || hasRapidoCopied) {
         return NextResponse.json(
-          { success: false, error: 'Only administrators can update fulfillment or payment status.' },
+          { success: false, error: 'Only administrators can update fulfillment, tracking, or payment verification.' },
+          { status: 403 }
+        );
+      }
+
+      if (orderStatus && orderStatus !== 'CANCELLED') {
+        return NextResponse.json(
+          { success: false, error: 'Only administrators can update order dispatch stages.' },
+          { status: 403 }
+        );
+      }
+
+      if (orderStatus !== 'CANCELLED' && !hasUtr) {
+        return NextResponse.json(
+          { success: false, error: 'Only administrators can perform that update.' },
           { status: 403 }
         );
       }
@@ -658,43 +741,64 @@ export async function PUT(request: NextRequest) {
       const suppliedPhone = normalizeIndianPhone(body?.customerPhone);
       const storedPhone = normalizeIndianPhone(existing.customerPhone);
       if (!suppliedPhone || !storedPhone || suppliedPhone !== storedPhone) {
-        logSecurityEvent('order_cancel_ownership_denied', {
+        logSecurityEvent('order_customer_ownership_denied', {
           orderId,
           ip: maskIpForLog(ip),
         });
         return NextResponse.json(
-          { success: false, error: 'Registered phone verification required to cancel this order.' },
+          { success: false, error: 'Registered phone verification required to update this order.' },
           { status: 403 }
         );
       }
 
-      if (existing.orderStatus !== 'NEW') {
+      if (orderStatus === 'CANCELLED' && existing.orderStatus !== 'NEW') {
         return NextResponse.json(
           { success: false, error: 'Order is already packed or dispatched and cannot be cancelled.' },
           { status: 400 }
         );
       }
+
+      if (hasUtr) {
+        if (existing.paymentMethod !== 'UPI' || existing.orderStatus === 'CANCELLED') {
+          return NextResponse.json(
+            { success: false, error: 'UTR can only be submitted for active UPI orders.' },
+            { status: 400 }
+          );
+        }
+        if (!cleanUtr || cleanUtr.length < 6 || cleanUtr.length > 32) {
+          return NextResponse.json(
+            { success: false, error: 'Please enter a valid 6 to 32 character alphanumeric UPI Ref / UTR.' },
+            { status: 400 }
+          );
+        }
+      }
     }
 
-    const updatedOrders = allOrders.map((o) =>
-      o.id === orderId
-        ? {
-            ...o,
-            ...(orderStatus ? { orderStatus } : {}),
-            ...(paymentStatus ? { paymentStatus } : {}),
-          }
-        : o
-    );
+    const updatedOrder: Order = {
+      ...existing,
+      ...(orderStatus ? { orderStatus } : {}),
+      ...(paymentStatus ? { paymentStatus } : {}),
+      ...(hasUtr ? { utrNumber: cleanUtr || undefined } : {}),
+      ...(hasCourierTracking ? { courierTracking: cleanCourierTracking || undefined } : {}),
+      ...(hasAdminNote ? { adminNote: cleanAdminNote || undefined } : {}),
+      ...(hasRapidoCopied ? { rapidoCopied: rapidoCopiedVal } : {}),
+    };
+
+    const updatedOrders = allOrders.map((o) => (o.id === orderId ? updatedOrder : o));
     memoryOrders = updatedOrders;
     saveOrdersToFile(updatedOrders);
 
     const supabase = getSupabaseAdminClient();
     if (supabase) {
-      const dbPatch: Record<string, string> = {
+      const dbPatch: Record<string, string | boolean | null> = {
         updated_at: new Date().toISOString(),
       };
       if (orderStatus) dbPatch.order_status = orderStatus;
       if (paymentStatus) dbPatch.payment_status = paymentStatus;
+      if (hasUtr) dbPatch.utr_number = cleanUtr || null;
+      if (hasCourierTracking) dbPatch.courier_tracking = cleanCourierTracking || null;
+      if (hasAdminNote) dbPatch.admin_note = cleanAdminNote || null;
+      if (hasRapidoCopied) dbPatch.rapido_copied = Boolean(rapidoCopiedVal);
 
       const { error: dbErr } = await supabase
         .from('orders')
@@ -703,20 +807,46 @@ export async function PUT(request: NextRequest) {
       if (dbErr) {
         console.warn('Supabase update error in PUT /api/orders');
       }
+
+      // Restore stock in Supabase when transitioning to CANCELLED from a non-cancelled state
+      if (existing.orderStatus !== 'CANCELLED' && orderStatus === 'CANCELLED') {
+        const catalog = await loadServerCatalog();
+        for (const item of existing.items) {
+          const prod = catalog.get(item.productId);
+          if (prod) {
+            const restoredStock = prod.stockQuantity + item.quantity;
+            await supabase
+              .from('products')
+              .update({
+                stock_quantity: restoredStock,
+                is_live: restoredStock > 0,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', prod.id);
+          }
+        }
+      }
     }
 
-    logSecurityEvent(isAdmin ? 'admin_order_updated' : 'customer_order_cancelled', {
+    const eventType = isAdmin
+      ? 'admin_order_updated'
+      : orderStatus === 'CANCELLED'
+      ? 'customer_order_cancelled'
+      : 'customer_utr_submitted';
+
+    logSecurityEvent(eventType, {
       orderId,
-      orderStatus: orderStatus || existing.orderStatus,
-      paymentStatus: paymentStatus || existing.paymentStatus,
+      orderStatus: updatedOrder.orderStatus,
+      paymentStatus: updatedOrder.paymentStatus,
       ip: maskIpForLog(ip),
     });
 
     return NextResponse.json({
       success: true,
       orderId,
-      ...(orderStatus ? { orderStatus } : {}),
-      ...(paymentStatus ? { paymentStatus } : {}),
+      orderStatus: updatedOrder.orderStatus,
+      paymentStatus: updatedOrder.paymentStatus,
+      order: isAdmin ? updatedOrder : maskOrderForPublic(updatedOrder),
     });
   } catch {
     return NextResponse.json(

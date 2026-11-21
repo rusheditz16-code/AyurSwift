@@ -12,21 +12,41 @@ import {
   Receipt,
   Banknote,
   ShieldCheck,
+  Loader2,
+  Package,
 } from 'lucide-react';
 import { Order, MerchantSettings } from '@/types';
-import { generateUpiUri, generateWhatsAppOrderUrl } from '@/lib/store';
+import { generateUpiUri, generateWhatsAppOrderUrl, submitOrderUtr } from '@/lib/store';
 import { InvoiceModal } from '@/components/InvoiceModal';
 
 interface PaymentModalProps {
   order: Order | null;
   onClose: () => void;
   settings: MerchantSettings;
+  onTrackOrder?: () => void;
+  onOrderUpdated?: (order: Order) => void;
 }
 
-export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
+export function PaymentModal({
+  order,
+  onClose,
+  settings,
+  onTrackOrder,
+  onOrderUpdated,
+}: PaymentModalProps) {
   const [copiedUpi, setCopiedUpi] = useState(false);
+  const [copiedOrderId, setCopiedOrderId] = useState(false);
   const [utrNumber, setUtrNumber] = useState('');
+  const [savedUtr, setSavedUtr] = useState<string | null>(null);
+  const [isSavingUtr, setIsSavingUtr] = useState(false);
+  const [utrError, setUtrError] = useState<string | null>(null);
   const [showInvoice, setShowInvoice] = useState(false);
+
+  useEffect(() => {
+    setUtrNumber(order?.utrNumber || '');
+    setSavedUtr(order?.utrNumber || null);
+    setUtrError(null);
+  }, [order?.id, order?.utrNumber]);
 
   useEffect(() => {
     if (!order) return;
@@ -50,15 +70,52 @@ export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
     upiUri
   )}`;
 
+  const effectiveUtr = (utrNumber || savedUtr || '').trim();
   const baseWhatsAppUrl = generateWhatsAppOrderUrl(order, settings.merchantWhatsApp);
-  const whatsAppUrl = utrNumber.trim()
-    ? `${baseWhatsAppUrl}${encodeURIComponent(`\n\n✅ UPI Paid — UTR / Ref: ${utrNumber.trim()}`)}`
+  const whatsAppUrl = effectiveUtr
+    ? `${baseWhatsAppUrl}${encodeURIComponent(`\n\n✅ UPI Paid — UTR / Ref: ${effectiveUtr}`)}`
     : baseWhatsAppUrl;
 
   const handleCopyUpi = () => {
     navigator.clipboard.writeText(settings.merchantUpiId);
     setCopiedUpi(true);
     setTimeout(() => setCopiedUpi(false), 2000);
+  };
+
+  const handleCopyOrderId = () => {
+    navigator.clipboard.writeText(order.id);
+    setCopiedOrderId(true);
+    setTimeout(() => setCopiedOrderId(false), 2000);
+  };
+
+  const handleSaveUtr = async (): Promise<boolean> => {
+    const clean = utrNumber.replace(/[^a-zA-Z0-9]/g, '').trim();
+    if (clean.length < 6) {
+      setUtrError('Enter at least 6 characters from your UPI Transaction / UTR ID.');
+      return false;
+    }
+    setIsSavingUtr(true);
+    setUtrError(null);
+    try {
+      const updated = await submitOrderUtr(order.id, order.customerPhone, clean);
+      setSavedUtr(clean);
+      setUtrNumber(clean);
+      if (updated && onOrderUpdated) onOrderUpdated(updated);
+      return true;
+    } catch (err) {
+      setUtrError(err instanceof Error ? err.message : 'Unable to save UTR right now.');
+      return false;
+    } finally {
+      setIsSavingUtr(false);
+    }
+  };
+
+  const handleWhatsAppConfirmClick = async () => {
+    const clean = utrNumber.replace(/[^a-zA-Z0-9]/g, '').trim();
+    if (order.paymentMethod === 'UPI' && clean.length >= 6 && clean !== savedUtr) {
+      await handleSaveUtr();
+    }
+    window.open(whatsAppUrl, '_blank');
   };
 
   return (
@@ -79,9 +136,19 @@ export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
             <CheckCircle2 className="w-7 h-7 stroke-[2.5]" />
           </div>
 
-          <span className="inline-block bg-white/15 text-emerald-50 font-mono font-bold text-xs px-3 py-0.5 rounded-full border border-white/20 mb-1.5">
-            Order {order.id}
-          </span>
+          <button
+            type="button"
+            onClick={handleCopyOrderId}
+            title="Copy Order ID"
+            className="inline-flex items-center gap-1.5 bg-white/15 hover:bg-white/25 text-emerald-50 font-mono font-bold text-xs px-3 py-0.5 rounded-full border border-white/20 mb-1.5 cursor-pointer transition-colors"
+          >
+            <span>Order {order.id}</span>
+            {copiedOrderId ? (
+              <Check className="w-3 h-3 text-amber-300" />
+            ) : (
+              <Copy className="w-3 h-3" />
+            )}
+          </button>
           <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight">Order Received!</h2>
           <p className="text-xs text-emerald-100 mt-1 max-w-xs mx-auto leading-relaxed">
             Our dark store is verifying stock &amp; preparing your pack for rapid dispatch.
@@ -164,18 +231,52 @@ export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
                 <span>Tap to Pay ₹{order.totalAmount} in UPI App</span>
               </button>
 
-              {/* Optional UTR / Transaction Ref for fast dark-store verification */}
-              <div className="pt-1 text-left space-y-1">
+              {/* Submit UTR / Transaction Ref straight to Admin Queue */}
+              <div className="pt-1 text-left space-y-1.5">
                 <label className="text-[10.5px] font-bold text-gray-600 block">
-                  Paid? Enter UPI Ref / UTR (optional for instant dispatch)
+                  Paid? Save your UPI Ref / UTR for instant store verification
                 </label>
-                <input
-                  type="text"
-                  value={utrNumber}
-                  onChange={(e) => setUtrNumber(e.target.value)}
-                  placeholder="e.g. 432512345678 or last 6 digits"
-                  className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl font-mono text-gray-900 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15"
-                />
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    value={utrNumber}
+                    onChange={(e) => {
+                      setUtrNumber(e.target.value);
+                      setUtrError(null);
+                    }}
+                    placeholder="e.g. 432512345678"
+                    className="flex-1 px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl font-mono text-gray-900 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveUtr}
+                    disabled={isSavingUtr}
+                    className={`px-3 py-2 rounded-xl text-[11px] font-extrabold shrink-0 transition-all cursor-pointer flex items-center gap-1 ${
+                      savedUtr && savedUtr === utrNumber.replace(/[^a-zA-Z0-9]/g, '').trim()
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-[#0C831F] hover:bg-[#096B19] text-white'
+                    }`}
+                  >
+                    {isSavingUtr ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : savedUtr && savedUtr === utrNumber.replace(/[^a-zA-Z0-9]/g, '').trim() ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>UTR Saved</span>
+                      </>
+                    ) : (
+                      <span>Save UTR</span>
+                    )}
+                  </button>
+                </div>
+                {utrError && (
+                  <p className="text-[10.5px] font-semibold text-rose-600">{utrError}</p>
+                )}
+                {savedUtr && !utrError && (
+                  <p className="text-[10.5px] font-semibold text-[#0C831F]">
+                    ✓ Sent to dark store! Merchant can verify payment immediately.
+                  </p>
+                )}
               </div>
             </div>
           ) : (
@@ -196,7 +297,7 @@ export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
           <div className="space-y-2">
             <button
               type="button"
-              onClick={() => window.open(whatsAppUrl, '_blank')}
+              onClick={handleWhatsAppConfirmClick}
               className="w-full bg-[#0C831F] hover:bg-[#096B19] text-white font-extrabold py-3 px-4 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-[#0C831F]/25 transition-all active:scale-98 cursor-pointer"
             >
               <MessageCircle className="w-4 h-4" />
@@ -207,14 +308,29 @@ export function PaymentModal({ order, onClose, settings }: PaymentModalProps) {
               </span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => setShowInvoice(true)}
-              className="w-full bg-white hover:bg-gray-50 text-gray-800 font-bold py-2.5 px-4 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 border border-gray-200 transition-colors cursor-pointer"
-            >
-              <Receipt className="w-4 h-4 text-[#0C831F]" />
-              <span>View &amp; Print Official Bill</span>
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              {onTrackOrder && (
+                <button
+                  type="button"
+                  onClick={onTrackOrder}
+                  className="bg-[#ECFDF3] hover:bg-[#DCFCE7] text-[#0C831F] font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 border border-[#BBF7D0] transition-colors cursor-pointer"
+                >
+                  <Package className="w-4 h-4" />
+                  <span>Track Live Status</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setShowInvoice(true)}
+                className={`bg-white hover:bg-gray-50 text-gray-800 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 border border-gray-200 transition-colors cursor-pointer ${
+                  onTrackOrder ? '' : 'col-span-2'
+                }`}
+              >
+                <Receipt className="w-4 h-4 text-[#0C831F]" />
+                <span>Print Official Bill</span>
+              </button>
+            </div>
           </div>
 
           <div className="flex items-start gap-2 p-2.5 bg-white rounded-xl border border-gray-200/80 text-[10.5px] text-gray-500 leading-relaxed">
