@@ -146,8 +146,8 @@ export function MedicineDetailModal({
               </span>
 
               {!showVerifiedPhoto && (
-                <span className="absolute bottom-3 right-3 bg-gray-100/95 border border-gray-200 text-gray-600 text-[10px] font-semibold px-2 py-0.5 rounded-md">
-                  Pack illustration
+                <span className="absolute bottom-3 right-3 bg-gray-100/95 border border-gray-200 text-gray-700 text-[10px] font-semibold px-2 py-0.5 rounded-md">
+                  Illustrative pack — actual pack may vary
                 </span>
               )}
 

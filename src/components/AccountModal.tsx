@@ -256,18 +256,27 @@ export function AccountModal({
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="account-modal-title"
         onClick={(e) => e.stopPropagation()}
         className="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-gray-200 animate-sheet-up sm:animate-modal-pop flex flex-col max-h-[92vh]"
       >
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <img src="/ayurswift-logo.png" alt="AyurSwift" className="h-8 w-auto object-contain" />
+            <img
+              src="/ayurswift-logo.png"
+              alt="AyurSwift"
+              width={128}
+              height={32}
+              className="h-8 w-auto object-contain"
+            />
             <div className="border-l border-gray-200 pl-3">
               <span className="text-[10px] font-extrabold tracking-widest text-[#0C831F] uppercase block">
                 My Account &amp; Orders
               </span>
-              <h3 className="text-base font-extrabold text-gray-950 leading-tight">
+              <h3 id="account-modal-title" className="text-base font-extrabold text-gray-950 leading-tight">
                 Live Dispatch Tracker
               </h3>
             </div>
@@ -334,14 +343,18 @@ export function AccountModal({
 
               {/* Lookup Form */}
               <form onSubmit={handleSearchSubmit} className="space-y-1.5">
+                <label htmlFor="account-order-lookup" className="sr-only">
+                  Search orders by Order ID or 10-digit mobile number
+                </label>
                 <div className="relative flex items-center">
-                  <Search className="w-4 h-4 text-gray-400 absolute left-3.5 pointer-events-none" />
+                  <Search className="w-4 h-4 text-gray-400 absolute left-3.5 pointer-events-none" aria-hidden="true" />
                   <input
-                    type="text"
+                    id="account-order-lookup"
+                    type="search"
                     value={searchQuery}
                     onChange={(e) => handleSearchChange(e.target.value)}
                     placeholder="Order ID (#AS-7K4M9X2P) or 10-digit mobile..."
-                    className="w-full pl-10 pr-24 py-2.5 text-xs bg-white border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15 font-medium"
+                    className="w-full pl-10 pr-24 py-2.5 text-xs bg-white border border-gray-200 rounded-xl text-gray-900 focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15 font-medium"
                   />
                   {searchQuery && (
                     <button
@@ -434,7 +447,7 @@ export function AccountModal({
 
               {/* Direct Support */}
               <div className="bg-white rounded-2xl border border-gray-200/90 p-4 space-y-2.5">
-                <div className="font-extrabold text-gray-950">Bhavnagar Dark Store Desk</div>
+                <div className="font-extrabold text-gray-950">Bhavnagar Store Support Desk</div>
                 <div className="space-y-1.5 text-xs text-gray-600">
                   <div className="flex items-center gap-2">
                     <PhoneCall className="w-3.5 h-3.5 text-[#0C831F]" />
@@ -446,7 +459,7 @@ export function AccountModal({
                   </div>
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="w-3.5 h-3.5 text-[#0C831F]" />
-                    <span>Direct Zero-Fee UPI: {settings.merchantUpiId}</span>
+                    <span>Direct UPI (₹0 gateway fee): {settings.merchantUpiId}</span>
                   </div>
                 </div>
               </div>

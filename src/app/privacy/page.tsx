@@ -12,10 +12,12 @@ export default function PrivacyPolicyPage() {
     <main className="min-h-screen bg-[#f8f8f3] text-[#1c2e24] py-10 px-4">
       <div className="max-w-3xl mx-auto bg-white rounded-3xl border border-gray-200 shadow-xs p-6 sm:p-10 space-y-6">
         <div className="flex items-center justify-between border-b border-gray-100 pb-4">
-          <Link href="/" className="inline-flex items-center gap-2">
+          <Link href="/" className="inline-flex items-center gap-2 rounded-lg">
             <img
               src="/ayurswift-logo.png"
               alt="AyurSwift"
+              width={128}
+              height={32}
               className="h-8 w-auto object-contain"
             />
           </Link>

@@ -507,10 +507,10 @@ export function CartDrawer({
                   >
                     <div className="flex items-center gap-1.5 text-xs font-extrabold text-gray-950">
                       <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                      <span>In-City 30–45m</span>
+                      <span>Bhavnagar ({DELIVERY_PROMISE.localTimeShort})</span>
                     </div>
                     <div className="text-[10.5px] text-gray-600 mt-0.5">
-                      Rapido • {subtotal >= settings.cityFreeDeliveryAbove ? 'FREE' : `₹${settings.cityDeliveryFee}`} • Prepaid UPI
+                      Local dispatch • {subtotal >= settings.cityFreeDeliveryAbove ? 'FREE' : `₹${settings.cityDeliveryFee}`} • Prepaid UPI
                     </div>
                   </button>
 
@@ -642,12 +642,12 @@ export function CartDrawer({
                 </div>
               </div>
 
-              {/* Payment Method Card — 100% Prepaid UPI Only */}
+              {/* Payment Method Card — Direct UPI Instructions (Where Customers Need Them) */}
               <div className="bg-white rounded-2xl border border-gray-200/90 p-3.5 space-y-2.5 shadow-2xs">
                 <div className="flex items-center justify-between">
                   <div className="text-xs font-extrabold text-gray-900">Payment method</div>
-                  <span className="text-[10px] font-extrabold text-[#0C831F] bg-[#ECFDF3] border border-[#BBF7D0] px-2 py-0.5 rounded-full">
-                    100% Prepaid UPI
+                  <span className="text-[10px] font-extrabold text-[#0A5C16] bg-[#ECFDF3] border border-[#BBF7D0] px-2 py-0.5 rounded-full">
+                    Prepaid UPI • ₹0 Gateway Fee
                   </span>
                 </div>
 
@@ -657,10 +657,10 @@ export function CartDrawer({
                   </div>
                   <div className="min-w-0">
                     <div className="text-xs font-extrabold text-gray-950">
-                      Instant Zero-Fee UPI (GPay / PhonePe / Paytm)
+                      Direct UPI (GPay, PhonePe, Paytm &amp; BHIM)
                     </div>
-                    <p className="text-[10.5px] text-gray-600 mt-0.5 leading-snug">
-                      Scan Bharat QR or pay in 1 tap on the next step. Paying for family? You can share the QR directly.
+                    <p className="text-[11px] text-gray-700 mt-0.5 leading-snug">
+                      Scan the UPI QR code or tap to open your UPI app on the next step. Stock is checked before order confirmation, and you can share the QR if paying for family.
                     </p>
                   </div>
                 </div>

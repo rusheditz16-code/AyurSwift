@@ -71,10 +71,15 @@ export function ProductCard({
             className="w-full h-full object-contain transition-transform duration-300 ease-out group-hover:scale-105"
           />
         ) : (
-          <MedicinePackVisual
-            product={product}
-            className="w-full h-full transition-transform duration-300 ease-out group-hover:scale-[1.03]"
-          />
+          <>
+            <MedicinePackVisual
+              product={product}
+              className="w-full h-full transition-transform duration-300 ease-out group-hover:scale-[1.03]"
+            />
+            <span className="absolute bottom-2 left-2.5 bg-white/90 border border-gray-200/80 text-gray-600 text-[9.5px] font-semibold px-1.5 py-0.5 rounded-md pointer-events-none">
+              Illustrative
+            </span>
+          </>
         )}
 
         <span

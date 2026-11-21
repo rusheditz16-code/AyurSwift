@@ -50,11 +50,11 @@ import {
   HeartPulse,
   Droplets,
   ShieldPlus,
+  ShieldCheck,
   CheckCircle2,
   MessageCircle,
   Search,
   Truck,
-  QrCode,
   ChevronRight,
   AlertCircle,
   RefreshCw,
@@ -263,26 +263,24 @@ export default function StorefrontPage() {
     [categoryCounts]
   );
 
-  // Two focused, mutually disjoint featured product rows (zero overlap between sections)
-  const painReliefPicks = useMemo(
-    () =>
-      inStockProducts
-        .filter((p) => p.category === 'Joint & Muscle Pain')
-        .slice(0, 4),
-    [inStockProducts]
-  );
-
-  const topSavingsPicks = useMemo(() => {
-    const painIds = new Set(painReliefPicks.map((p) => p.id));
-    return [...inStockProducts]
-      .filter((p) => !painIds.has(p.id))
-      .sort((a, b) => {
-        const discA = a.mrp > 0 ? (a.mrp - a.sellingPrice) / a.mrp : 0;
-        const discB = b.mrp > 0 ? (b.mrp - b.sellingPrice) / b.mrp : 0;
-        return discB - discA;
-      })
-      .slice(0, 4);
-  }, [inStockProducts, painReliefPicks]);
+  // Single focused 4-card Featured Savings row (1 highest-discount item per distinct category, zero repetition)
+  const featuredSavingsPicks = useMemo(() => {
+    const sorted = [...inStockProducts].sort((a, b) => {
+      const discA = a.mrp > 0 ? (a.mrp - a.sellingPrice) / a.mrp : 0;
+      const discB = b.mrp > 0 ? (b.mrp - b.sellingPrice) / b.mrp : 0;
+      return discB - discA;
+    });
+    const seenCat = new Set<string>();
+    const diverse: Product[] = [];
+    for (const p of sorted) {
+      if (!seenCat.has(p.category)) {
+        seenCat.add(p.category);
+        diverse.push(p);
+      }
+      if (diverse.length >= 4) break;
+    }
+    return diverse;
+  }, [inStockProducts]);
 
   const isFilterActive =
     selectedCategory !== 'ALL' ||
@@ -613,7 +611,7 @@ export default function StorefrontPage() {
                 </div>
               </div>
 
-              {/* Right Column: Brand Filter + Value Deal Spotlight + Quick OTC Picks */}
+              {/* Right Column: Brand Filter + Featured Value Spotlight */}
               <div className="lg:col-span-7 relative z-10 min-w-0">
                 <HeroAnimatedShowcase
                   products={products}
@@ -623,69 +621,69 @@ export default function StorefrontPage() {
                     setSelectedBrand(brand);
                     scrollToCatalog();
                   }}
+                  onOpenQuickBuy={() => setIsQuickBuyModalOpen(true)}
                 />
               </div>
             </div>
           </section>
         )}
 
-        {/* 3. Delivery & Ordering Information Strip (Grounded Strictly in Store Settings) */}
+        {/* 3. Compact Horizontal Trust & Delivery Strip (No Oversized Cards, Zero Unsupported Claims) */}
         {!isFilterActive && (
-          <section aria-label="Delivery and payment information">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+          <section aria-label="Delivery and order verification summary">
+            <div className="bg-white rounded-2xl border border-gray-200/90 shadow-2xs grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-100 overflow-hidden">
               <button
                 type="button"
                 onClick={() => setIsLocationModalOpen(true)}
-                className="bg-white rounded-2xl border border-gray-200/90 hover:border-[#0C831F]/45 p-4 flex items-start gap-3.5 text-left transition-all shadow-2xs cursor-pointer"
+                className="px-4 py-3 flex items-center gap-3 text-left hover:bg-emerald-50/50 transition-colors cursor-pointer"
               >
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200/80 text-[#0C831F] flex items-center justify-center shrink-0">
-                  <Zap className="w-5 h-5" />
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200/80 text-[#0C831F] flex items-center justify-center shrink-0">
+                  <Zap className="w-4 h-4" aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="text-xs sm:text-[13.5px] font-extrabold text-gray-950">
-                    Bhavnagar Express ({DELIVERY_PROMISE.localTimeShort})
-                  </h2>
-                  <p className="text-[11.5px] text-gray-600 mt-0.5 leading-snug">
-                    Flat ₹{settings.cityDeliveryFee} local Rapido dispatch. Free on orders above ₹{settings.cityFreeDeliveryAbove}.
+                  <div className="text-xs font-extrabold text-gray-950 leading-tight">
+                    Bhavnagar Local ({DELIVERY_PROMISE.localTimeShort})
+                  </div>
+                  <p className="text-[11px] text-gray-600 mt-0.5 truncate">
+                    ₹{settings.cityDeliveryFee} delivery • Free above ₹{settings.cityFreeDeliveryAbove}
                   </p>
                 </div>
               </button>
 
               <button
                 type="button"
-                onClick={() => handleSelectDispatchFilter('COURIER_OUTSIDE')}
-                className="bg-white rounded-2xl border border-gray-200/90 hover:border-teal-600/45 p-4 flex items-start gap-3.5 text-left transition-all shadow-2xs cursor-pointer"
+                onClick={() => {
+                  handleSelectDispatchFilter('COURIER_OUTSIDE');
+                  scrollToCatalog();
+                }}
+                className="px-4 py-3 flex items-center gap-3 text-left hover:bg-teal-50/50 transition-colors cursor-pointer"
               >
-                <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-200/80 text-teal-700 flex items-center justify-center shrink-0">
-                  <Truck className="w-5 h-5" />
+                <div className="w-8 h-8 rounded-lg bg-teal-50 border border-teal-200/80 text-teal-700 flex items-center justify-center shrink-0">
+                  <Truck className="w-4 h-4" aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="text-xs sm:text-[13.5px] font-extrabold text-gray-950">
+                  <div className="text-xs font-extrabold text-gray-950 leading-tight">
                     All-India Courier ({DELIVERY_PROMISE.courierTimeShort})
-                  </h2>
-                  <p className="text-[11.5px] text-gray-600 mt-0.5 leading-snug">
-                    Flat ₹{settings.courierDeliveryFee} tracked parcel across India via DTDC or Speed Post.
+                  </div>
+                  <p className="text-[11px] text-gray-600 mt-0.5 truncate">
+                    Flat ₹{settings.courierDeliveryFee} tracked parcel across India
                   </p>
                 </div>
               </button>
 
-              <button
-                type="button"
-                onClick={() => setIsQuickBuyModalOpen(true)}
-                className="bg-white rounded-2xl border border-gray-200/90 hover:border-[#0C831F]/45 p-4 flex items-start gap-3.5 text-left transition-all shadow-2xs cursor-pointer"
-              >
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200/80 text-[#0C831F] flex items-center justify-center shrink-0">
-                  <QrCode className="w-5 h-5" />
+              <div className="px-4 py-3 flex items-center gap-3 text-left">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200/80 text-[#0C831F] flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-4 h-4" aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="text-xs sm:text-[13.5px] font-extrabold text-gray-950">
-                    Zero-Fee UPI &amp; WhatsApp Desk
-                  </h2>
-                  <p className="text-[11.5px] text-gray-600 mt-0.5 leading-snug">
-                    Prepaid GPay, PhonePe &amp; Paytm QR. Need help? Call or WhatsApp +91 96247 66242.
+                  <div className="text-xs font-extrabold text-gray-950 leading-tight">
+                    Stock Checked Before Confirmation
+                  </div>
+                  <p className="text-[11px] text-gray-600 mt-0.5 truncate">
+                    Direct UPI at checkout (₹0 gateway fee)
                   </p>
                 </div>
-              </button>
+              </div>
             </div>
           </section>
         )}
@@ -757,103 +755,51 @@ export default function StorefrontPage() {
           </section>
         )}
 
-        {/* 5. Two Focused, Non-Overlapping Product Sections (Default Home Mode) */}
-        {!isFilterActive && (
-          <div className="space-y-8">
-            {/* Section A: Pain & Fast Relief Picks */}
-            {painReliefPicks.length > 0 && (
-              <section aria-labelledby="pain-relief-heading" className="space-y-3.5">
-                <div className="flex items-end justify-between gap-3">
-                  <div>
-                    <h2
-                      id="pain-relief-heading"
-                      className="font-extrabold text-lg sm:text-xl text-gray-950 tracking-tight"
-                    >
-                      Joint &amp; Muscle Pain Essentials
-                    </h2>
-                    <p className="text-xs text-gray-600 mt-0.5">
-                      Balms, classical oils &amp; sprays stocked for quick relief
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedCategory('Joint & Muscle Pain');
-                      scrollToCatalog();
-                    }}
-                    className="text-xs sm:text-sm font-bold text-[#0C831F] hover:text-[#096B19] inline-flex items-center gap-1 cursor-pointer shrink-0"
-                  >
-                    <span>See all</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+        {/* 5. Single Focused Featured Savings Row (1 Top Deal per Distinct Category) */}
+        {!isFilterActive && featuredSavingsPicks.length > 0 && (
+          <section aria-labelledby="featured-savings-heading" className="space-y-3.5">
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <h2
+                  id="featured-savings-heading"
+                  className="font-extrabold text-lg sm:text-xl text-gray-950 tracking-tight"
+                >
+                  Top Savings Across Categories
+                </h2>
+                <p className="text-xs text-gray-600 mt-0.5">
+                  Highest verified MRP discounts across pain relief, digestion, immunity &amp; wellness
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSortBy('DISCOUNT_DESC');
+                  scrollToCatalog();
+                }}
+                className="text-xs sm:text-sm font-bold text-[#0C831F] hover:text-[#096B19] inline-flex items-center gap-1 cursor-pointer shrink-0"
+              >
+                <span>Sort all by discount</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-5">
-                  {painReliefPicks.map((product) => {
-                    const qty = cart.find((i) => i.product.id === product.id)?.quantity ?? 0;
-                    return (
-                      <ProductCard
-                        key={product.id}
-                        product={product}
-                        quantityInCart={qty}
-                        onAddToCart={handleAddToCart}
-                        onUpdateQuantity={handleUpdateQuantity}
-                        onViewDetails={(p) => setSelectedMedicineDetails(p)}
-                        dispatchType={activeDispatchType}
-                      />
-                    );
-                  })}
-                </div>
-              </section>
-            )}
-
-            {/* Section B: Best Value Everyday Ayurveda (Distinct from Section A) */}
-            {topSavingsPicks.length > 0 && (
-              <section aria-labelledby="top-savings-heading" className="space-y-3.5">
-                <div className="flex items-end justify-between gap-3">
-                  <div>
-                    <h2
-                      id="top-savings-heading"
-                      className="font-extrabold text-lg sm:text-xl text-gray-950 tracking-tight"
-                    >
-                      Top Savings on Everyday Ayurveda
-                    </h2>
-                    <p className="text-xs text-gray-600 mt-0.5">
-                      Verified MRP discounts on digestion, immunity, liver &amp; daily wellness packs
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSortBy('DISCOUNT_DESC');
-                      scrollToCatalog();
-                    }}
-                    className="text-xs sm:text-sm font-bold text-[#0C831F] hover:text-[#096B19] inline-flex items-center gap-1 cursor-pointer shrink-0"
-                  >
-                    <span>All deals</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-5">
-                  {topSavingsPicks.map((product) => {
-                    const qty = cart.find((i) => i.product.id === product.id)?.quantity ?? 0;
-                    return (
-                      <ProductCard
-                        key={product.id}
-                        product={product}
-                        quantityInCart={qty}
-                        onAddToCart={handleAddToCart}
-                        onUpdateQuantity={handleUpdateQuantity}
-                        onViewDetails={(p) => setSelectedMedicineDetails(p)}
-                        dispatchType={activeDispatchType}
-                      />
-                    );
-                  })}
-                </div>
-              </section>
-            )}
-          </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-5">
+              {featuredSavingsPicks.map((product) => {
+                const qty = cart.find((i) => i.product.id === product.id)?.quantity ?? 0;
+                return (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    quantityInCart={qty}
+                    onAddToCart={handleAddToCart}
+                    onUpdateQuantity={handleUpdateQuantity}
+                    onViewDetails={(p) => setSelectedMedicineDetails(p)}
+                    dispatchType={activeDispatchType}
+                  />
+                );
+              })}
+            </div>
+          </section>
         )}
 
         {/* 6. Filtered Medicine Catalog with Breadcrumb, Heading, Count, Filters & 4-Col Grid */}

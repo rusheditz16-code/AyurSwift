@@ -120,7 +120,12 @@ export function PaymentModal({
 
   return (
     <div className="fixed inset-0 z-70 overflow-y-auto bg-slate-950/55 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fade-in">
-      <div className="w-full max-w-md bg-white text-gray-900 rounded-3xl shadow-2xl border border-gray-200 overflow-hidden animate-modal-pop my-auto">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="payment-modal-title"
+        className="w-full max-w-md bg-white text-gray-900 rounded-3xl shadow-2xl border border-gray-200 overflow-hidden animate-modal-pop my-auto"
+      >
         {/* Success Header */}
         <div className="bg-gradient-to-br from-[#0A6B19] to-[#0C831F] text-white p-6 text-center relative">
           <button
@@ -149,9 +154,11 @@ export function PaymentModal({
               <Copy className="w-3 h-3" />
             )}
           </button>
-          <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight">Order Received!</h2>
+          <h2 id="payment-modal-title" className="text-xl sm:text-2xl font-extrabold tracking-tight">
+            Order Received!
+          </h2>
           <p className="text-xs text-emerald-100 mt-1 max-w-xs mx-auto leading-relaxed">
-            Our dark store is verifying stock &amp; preparing your pack for rapid dispatch.
+            Stock is checked before store confirmation and packing begins.
           </p>
         </div>
 
@@ -193,7 +200,9 @@ export function PaymentModal({
               <div className="inline-block p-2.5 bg-white rounded-2xl border-2 border-[#0C831F]/20 shadow-xs">
                 <img
                   src={qrImageUrl}
-                  alt={`UPI QR for ${settings.merchantUpiId}`}
+                  alt={`UPI QR code for ${settings.merchantUpiId}`}
+                  width={176}
+                  height={176}
                   className="w-44 h-44 mx-auto rounded-lg object-contain"
                 />
                 <div className="mt-1.5 text-[10px] text-gray-500 font-bold">
@@ -233,11 +242,12 @@ export function PaymentModal({
 
               {/* Submit UTR / Transaction Ref straight to Admin Queue */}
               <div className="pt-1 text-left space-y-1.5">
-                <label className="text-[10.5px] font-bold text-gray-600 block">
-                  Paid? Save your UPI Ref / UTR for instant store verification
+                <label htmlFor="payment-utr-input" className="text-[10.5px] font-bold text-gray-700 block">
+                  Paid? Save your UPI Ref / UTR for faster store verification
                 </label>
                 <div className="flex items-center gap-1.5">
                   <input
+                    id="payment-utr-input"
                     type="text"
                     value={utrNumber}
                     onChange={(e) => {
@@ -245,7 +255,7 @@ export function PaymentModal({
                       setUtrError(null);
                     }}
                     placeholder="e.g. 432512345678"
-                    className="flex-1 px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl font-mono text-gray-900 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15"
+                    className="flex-1 px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl font-mono text-gray-900 placeholder:text-gray-500 focus:bg-white focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15"
                   />
                   <button
                     type="button"

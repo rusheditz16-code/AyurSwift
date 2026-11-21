@@ -184,6 +184,8 @@ export function AdminAuthPortal({
             <img
               src="/ayurswift-logo.png"
               alt="AyurSwift"
+              width={160}
+              height={40}
               className="h-10 w-auto object-contain"
             />
           </div>
@@ -224,6 +226,7 @@ export function AdminAuthPortal({
 
             <div className="space-y-1.5">
               <label
+                htmlFor="admin-login-email"
                 className={`block text-xs font-bold ${
                   dark ? 'text-slate-200' : 'text-slate-800'
                 }`}
@@ -231,8 +234,9 @@ export function AdminAuthPortal({
                 Authorized Gmail Address
               </label>
               <div className="relative">
-                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" aria-hidden="true" />
                 <input
+                  id="admin-login-email"
                   type="email"
                   value={emailInput}
                   onChange={(e) => onEmailChange(e.target.value)}
@@ -247,6 +251,7 @@ export function AdminAuthPortal({
 
             <div className="space-y-1.5">
               <label
+                htmlFor="admin-login-pin"
                 className={`block text-xs font-bold ${
                   dark ? 'text-slate-200' : 'text-slate-800'
                 }`}
@@ -254,8 +259,9 @@ export function AdminAuthPortal({
                 Security PIN / Password
               </label>
               <div className="relative">
-                <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
+                <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" aria-hidden="true" />
                 <input
+                  id="admin-login-pin"
                   type={showPassword ? 'text' : 'password'}
                   maxLength={64}
                   value={pinInput}
@@ -263,7 +269,7 @@ export function AdminAuthPortal({
                   placeholder="••••"
                   required
                   disabled={lockoutSeconds > 0}
-                  className={`w-full pl-10 pr-10 py-2.5 rounded-xl text-sm font-mono font-bold tracking-[0.2em] border transition-all focus:outline-none focus:ring-2 focus:ring-[#0C831F]/25 focus:border-[#0C831F] ${
+                  className={`w-full pl-10 pr-10 py-2.5 rounded-xl text-sm font-mono font-bold tracking-[0.2em] border transition-all focus:ring-2 focus:ring-[#0C831F]/25 focus:border-[#0C831F] ${
                     dark
                       ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500'
                       : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white placeholder:text-slate-400'

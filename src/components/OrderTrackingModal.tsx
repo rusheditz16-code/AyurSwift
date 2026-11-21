@@ -181,6 +181,9 @@ export function OrderTrackingModal({
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="order-tracking-title"
         onClick={(e) => e.stopPropagation()}
         className="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-gray-200 animate-sheet-up sm:animate-modal-pop flex flex-col max-h-[90vh]"
       >
@@ -191,7 +194,9 @@ export function OrderTrackingModal({
               <Package className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-extrabold text-gray-950 text-base">Live Order Tracking</h3>
+              <h3 id="order-tracking-title" className="font-extrabold text-gray-950 text-base">
+                Live Order Tracking
+              </h3>
               <p className="text-[11px] text-gray-500 font-medium flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 <span>Live • Updated {lastSyncedLabel}</span>
@@ -229,14 +234,18 @@ export function OrderTrackingModal({
             }}
             className="space-y-1.5"
           >
+            <label htmlFor="order-tracking-lookup" className="sr-only">
+              Search by Order ID or 10-digit mobile number
+            </label>
             <div className="relative flex items-center">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3.5 pointer-events-none" />
+              <Search className="w-4 h-4 text-gray-400 absolute left-3.5 pointer-events-none" aria-hidden="true" />
               <input
-                type="text"
+                id="order-tracking-lookup"
+                type="search"
                 value={searchId}
                 onChange={(e) => handleSearchChange(e.target.value)}
                 placeholder="Order ID (#AS-7K4M9X2P) or 10-digit mobile..."
-                className="w-full pl-10 pr-24 py-2.5 text-xs bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15 font-medium"
+                className="w-full pl-10 pr-24 py-2.5 text-xs bg-white border border-gray-200 rounded-xl focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15 font-medium"
               />
               <button
                 type="submit"
