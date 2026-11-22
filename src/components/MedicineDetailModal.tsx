@@ -39,6 +39,7 @@ export function MedicineDetailModal({
 }: MedicineDetailModalProps) {
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [failedImages, setFailedImages] = useState<Record<number, boolean>>({});
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
   useEffect(() => {
     setActiveImageIdx(0);
@@ -120,19 +121,40 @@ export function MedicineDetailModal({
           {/* Image Stage */}
           <div className="space-y-2.5">
             <div
-              className={`relative bg-white rounded-2xl border border-gray-200/80 flex items-center justify-center h-72 sm:h-80 overflow-hidden ${
+              onTouchStart={(e) => {
+                if (verifiedImages.length > 1 && e.touches.length === 1) {
+                  setTouchStartX(e.touches[0].clientX);
+                }
+              }}
+              onTouchEnd={(e) => {
+                if (touchStartX === null || verifiedImages.length <= 1) return;
+                const deltaX = e.changedTouches[0].clientX - touchStartX;
+                setTouchStartX(null);
+                if (Math.abs(deltaX) < 35) return;
+                if (deltaX < 0) {
+                  setActiveImageIdx((prev) =>
+                    prev < verifiedImages.length - 1 ? prev + 1 : 0
+                  );
+                } else {
+                  setActiveImageIdx((prev) =>
+                    prev > 0 ? prev - 1 : verifiedImages.length - 1
+                  );
+                }
+              }}
+              className={`relative bg-white rounded-2xl border border-gray-200/80 flex items-center justify-center h-72 sm:h-80 overflow-hidden select-none ${
                 showVerifiedPhoto ? 'p-0' : 'p-5'
               }`}
             >
               {showVerifiedPhoto ? (
                 <>
-                  {/* Ambient edge-fill backdrop eliminates white side bars while keeping full label visible */}
+                  {/* Layer 0: Ambient edge-fill backdrop eliminates white side bars while keeping full label visible */}
                   <img
                     src={currentImage}
                     alt=""
                     aria-hidden="true"
-                    className="absolute inset-0 w-full h-full object-cover object-center scale-110 blur-xl opacity-60 pointer-events-none select-none"
+                    className="absolute inset-0 z-0 w-full h-full object-cover object-center scale-110 blur-xl opacity-60 pointer-events-none select-none"
                   />
+                  {/* Layer 1: Full-height product image (pointer-events-none so overlay arrows never get blocked) */}
                   <img
                     src={currentImage}
                     alt={`${product.name} (${product.packSize}) by ${product.brand} — View ${activeImageIdx + 1}`}
@@ -141,25 +163,26 @@ export function MedicineDetailModal({
                     onError={() =>
                       setFailedImages((prev) => ({ ...prev, [activeImageIdx]: true }))
                     }
-                    className="relative z-1 h-full w-full object-contain transition-transform duration-300"
+                    className="relative z-10 h-full w-full object-contain pointer-events-none select-none transition-transform duration-300"
                   />
                 </>
               ) : (
                 <MedicinePackVisual product={product} className="w-full h-full" />
               )}
 
+              {/* Layer 2 (z-20): Always above product image */}
               {discountPercent > 0 && (
-                <span className="absolute top-3 left-3 bg-[#0C831F] text-white text-[11px] font-extrabold px-2.5 py-0.5 rounded-lg shadow-xs tabular-nums">
+                <span className="absolute top-3 left-3 z-20 bg-[#0C831F] text-white text-[11px] font-extrabold px-2.5 py-1 rounded-lg shadow-md tabular-nums">
                   {discountPercent}% OFF
                 </span>
               )}
 
-              <span className="absolute bottom-3 left-3 bg-white/95 border border-gray-200 text-gray-800 text-[11px] font-bold px-2.5 py-1 rounded-lg shadow-2xs">
+              <span className="absolute bottom-3 left-3 z-20 bg-white/95 backdrop-blur-xs border border-gray-200 text-gray-900 text-[11px] font-extrabold px-2.5 py-1 rounded-lg shadow-md">
                 {product.packSize} • {product.form}
               </span>
 
               {!showVerifiedPhoto && (
-                <span className="absolute bottom-3 right-3 bg-gray-100/95 border border-gray-200 text-gray-700 text-[10px] font-semibold px-2 py-0.5 rounded-md">
+                <span className="absolute bottom-3 right-3 z-20 bg-gray-100/95 border border-gray-200 text-gray-700 text-[10px] font-semibold px-2 py-0.5 rounded-md">
                   Illustrative pack — actual pack may vary
                 </span>
               )}
@@ -168,29 +191,31 @@ export function MedicineDetailModal({
                 <>
                   <button
                     type="button"
-                    onClick={() =>
+                    onClick={(e) => {
+                      e.stopPropagation();
                       setActiveImageIdx((prev) =>
                         prev > 0 ? prev - 1 : verifiedImages.length - 1
-                      )
-                    }
-                    className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/95 hover:bg-white text-gray-900 shadow-md border border-gray-200 flex items-center justify-center cursor-pointer"
+                      );
+                    }}
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/95 hover:bg-white active:scale-90 text-gray-900 shadow-lg border border-gray-200/90 flex items-center justify-center transition-transform cursor-pointer"
                     aria-label="Previous image"
                   >
-                    <ChevronLeft className="w-4 h-4" />
+                    <ChevronLeft className="w-5 h-5" />
                   </button>
                   <button
                     type="button"
-                    onClick={() =>
+                    onClick={(e) => {
+                      e.stopPropagation();
                       setActiveImageIdx((prev) =>
                         prev < verifiedImages.length - 1 ? prev + 1 : 0
-                      )
-                    }
-                    className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/95 hover:bg-white text-gray-900 shadow-md border border-gray-200 flex items-center justify-center cursor-pointer"
+                      );
+                    }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/95 hover:bg-white active:scale-90 text-gray-900 shadow-lg border border-gray-200/90 flex items-center justify-center transition-transform cursor-pointer"
                     aria-label="Next image"
                   >
-                    <ChevronRight className="w-4 h-4" />
+                    <ChevronRight className="w-5 h-5" />
                   </button>
-                  <div className="absolute top-3 right-3 bg-gray-900/75 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <div className="absolute top-3 right-3 z-20 bg-gray-900/80 text-white text-[10.5px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-md">
                     <Images className="w-3 h-3" />
                     <span>
                       {activeImageIdx + 1}/{verifiedImages.length}
