@@ -56,7 +56,7 @@ export function ConsentBanner() {
     <aside
       role="region"
       aria-label="Privacy policy and essential cookie notice"
-      className="fixed bottom-16 md:bottom-4 left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:max-w-2xl z-60 animate-fade-in"
+      className="fixed bottom-16 md:bottom-4 inset-x-3 mx-auto max-w-2xl z-60 animate-fade-in"
     >
       <div className="bg-slate-950/95 backdrop-blur-md text-white rounded-2xl border border-emerald-500/30 shadow-2xl shadow-slate-950/35 px-4 py-3 sm:px-5 sm:py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-start gap-2.5 min-w-0">
