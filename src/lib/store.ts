@@ -203,6 +203,8 @@ export interface PlaceOrderPayload {
   paymentMethod: PaymentMethod;
   items: { productId: string; quantity: number }[];
   idempotencyKey?: string;
+  guardToken?: string;
+  guardSolution?: string;
   website?: string; // honeypot field
 }
 

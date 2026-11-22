@@ -16,11 +16,14 @@ import {
   generateSecureOrderId,
   getSupabaseAdminClient,
   getTrustedClientIp,
+  isRequestBodyTooLarge,
   logSecurityEvent,
   maskIpForLog,
   normalizeIndianPhone,
   sanitizeText,
   verifyAdminSession,
+  verifyAndConsumeCheckoutGuard,
+  verifyConsentCookie,
   verifySameOrigin,
   verifyTurnstileIfConfigured,
 } from '@/lib/serverSecurity';
@@ -544,6 +547,18 @@ export async function GET(request: NextRequest) {
   }
 
   // 4. Strict Exact Indexed Lookup (NO partial/substring matching, NO 500-row scan!)
+  // Require signed Privacy & Cookie Consent cookie for public order search to stop unconsented scraping bots
+  if (!isAdmin && !verifyConsentCookie(request)) {
+    return NextResponse.json(
+      {
+        success: false,
+        code: 'CONSENT_REQUIRED',
+        error: 'Please accept our Privacy Policy & Essential Cookies to track orders.',
+      },
+      { status: 403, headers: NO_STORE_HEADERS }
+    );
+  }
+
   const cleanIdQuery = normalizeOrderIdForCompare(q);
   const phoneQuery = normalizeIndianPhone(q);
 
@@ -604,12 +619,30 @@ export async function GET(request: NextRequest) {
  * - 100% server-verified pricing, strict validation, bot check, and random Order ID
  */
 export async function POST(request: NextRequest) {
+  if (isRequestBodyTooLarge(request, 65_536)) {
+    return NextResponse.json(
+      { success: false, error: 'Order request payload is too large.' },
+      { status: 413, headers: NO_STORE_HEADERS }
+    );
+  }
+
   const ip = getTrustedClientIp(request);
-  const rl = checkMemoryRateLimit(`orders_post:${ip}`, 25, 60_000);
+  const adminSessionPre = verifyAdminSession(request);
+  const rl = adminSessionPre
+    ? checkMemoryRateLimit(`orders_post_admin:${ip}`, 60, 60_000)
+    : checkMemoryRateLimit(`orders_post:${ip}`, 8, 10 * 60_000);
   if (!rl.allowed) {
     return NextResponse.json(
-      { success: false, error: 'Order submission limit reached. Please wait a minute.' },
+      { success: false, error: 'Order submission limit reached. Please wait a few minutes.' },
       { status: 429, headers: NO_STORE_HEADERS }
+    );
+  }
+
+  if (!verifySameOrigin(request)) {
+    logSecurityEvent('order_origin_rejected', { ip: maskIpForLog(ip) });
+    return NextResponse.json(
+      { success: false, error: 'Invalid request origin.' },
+      { status: 403, headers: NO_STORE_HEADERS }
     );
   }
 
@@ -623,8 +656,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const adminSession = verifyAdminSession(request);
-    const isAdmin = Boolean(adminSession && verifySameOrigin(request));
+    const isAdmin = Boolean(adminSessionPre);
 
     // Bot protection: hidden honeypot field must remain blank
     const honeypot = sanitizeText(body.website ?? body._hp, 100);
@@ -633,6 +665,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'Order validation failed.' },
         { status: 400, headers: NO_STORE_HEADERS }
+      );
+    }
+
+    // Require HMAC-signed Privacy & Essential Cookie Consent on customer orders
+    if (!isAdmin && !verifyConsentCookie(request)) {
+      logSecurityEvent('order_consent_missing', { ip: maskIpForLog(ip) });
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'CONSENT_REQUIRED',
+          error: 'Please accept our Privacy Policy & Essential Cookies before placing your order.',
+        },
+        { status: 403, headers: NO_STORE_HEADERS }
       );
     }
 
@@ -725,6 +770,25 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Invisible cryptographic anti-bot handshake (signed nonce + 12-bit SHA-256 micro-PoW + >=1.2s human timing)
+    if (!isAdmin) {
+      const guardCheck = verifyAndConsumeCheckoutGuard(body.guardToken, body.guardSolution);
+      if (!guardCheck.ok) {
+        logSecurityEvent('order_checkout_guard_failed', {
+          ip: maskIpForLog(ip),
+          reason: guardCheck.reason,
+        });
+        return NextResponse.json(
+          {
+            success: false,
+            code: 'GUARD_RETRY',
+            error: guardCheck.reason || 'Security verification failed. Please tap Place Order again.',
+          },
+          { status: 403, headers: NO_STORE_HEADERS }
+        );
+      }
+    }
+
     // Validate scheduled delivery slot for Bhavnagar local orders
     let resolvedDeliverySlot: string | undefined;
     if (deliveryType === 'RAPIDO_CITY') {
@@ -794,6 +858,30 @@ export async function POST(request: NextRequest) {
     const verifiedItems: OrderItem[] = [];
     let subtotal = 0;
     let stockReservedInDb = false;
+
+    // Anti-hoarding shield: cap active unpaid orders (without UTR) at 2 per phone number
+    // Prevents bots/attackers from locking up live inventory without paying
+    if (supabase && !isAdmin) {
+      const { count: unpaidCount } = await supabase
+        .from('orders')
+        .select('id', { head: true, count: 'exact' })
+        .eq('customer_phone', customerPhone)
+        .eq('order_status', 'NEW')
+        .eq('payment_status', 'PENDING')
+        .is('utr_number', null);
+
+      if (typeof unpaidCount === 'number' && unpaidCount >= 2) {
+        logSecurityEvent('order_unpaid_hoarding_cap_hit', { ip: maskIpForLog(ip) });
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              'You already have 2 pending unpaid orders. Please submit your UPI UTR or cancel a pending order before placing a new one.',
+          },
+          { status: 429, headers: NO_STORE_HEADERS }
+        );
+      }
+    }
 
     if (supabase) {
       // Single atomic Postgres transaction: locks rows in deterministic ID order, validates stock,
@@ -979,11 +1067,36 @@ export async function PUT(request: NextRequest) {
   const adminQuick = verifyAdminSession(request);
   const rl = adminQuick
     ? checkMemoryRateLimit(`orders_put_admin:${ip}`, 180, 60_000)
-    : checkMemoryRateLimit(`orders_put:${ip}`, 40, 60_000);
+    : checkMemoryRateLimit(`orders_put:${ip}`, 30, 60_000);
   if (!rl.allowed) {
     return NextResponse.json(
       { success: false, error: 'Too many requests. Please try again shortly.' },
       { status: 429, headers: NO_STORE_HEADERS }
+    );
+  }
+
+  if (!verifySameOrigin(request)) {
+    return NextResponse.json(
+      { success: false, error: 'Invalid request origin.' },
+      { status: 403, headers: NO_STORE_HEADERS }
+    );
+  }
+
+  if (isRequestBodyTooLarge(request, 16_384)) {
+    return NextResponse.json(
+      { success: false, error: 'Request payload is too large.' },
+      { status: 413, headers: NO_STORE_HEADERS }
+    );
+  }
+
+  if (!adminQuick && !verifyConsentCookie(request)) {
+    return NextResponse.json(
+      {
+        success: false,
+        code: 'CONSENT_REQUIRED',
+        error: 'Please accept our Privacy Policy & Essential Cookies to update your order.',
+      },
+      { status: 403, headers: NO_STORE_HEADERS }
     );
   }
 

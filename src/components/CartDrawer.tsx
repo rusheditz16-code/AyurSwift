@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import {
   X,
@@ -38,6 +38,13 @@ import {
   hasAnyAvailableSlotToday,
 } from '@/lib/deliverySlots';
 import { MedicinePackVisual } from '@/components/MedicinePackVisual';
+import {
+  acceptPrivacyConsent,
+  checkPrivacyConsentStatus,
+  CONSENT_EVENT_NAME,
+  fetchAndSolveCheckoutGuard,
+  SolvedCheckoutGuard,
+} from '@/lib/checkoutGuardClient';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -59,6 +66,8 @@ interface CartDrawerProps {
     landmark?: string;
     paymentMethod: PaymentMethod;
     idempotencyKey?: string;
+    guardToken?: string;
+    guardSolution?: string;
     website?: string;
   }) => Promise<void>;
   settings: MerchantSettings;
@@ -90,6 +99,46 @@ export function CartDrawer({
   const [formError, setFormError] = useState('');
   const [hasSavedProfile, setHasSavedProfile] = useState(false);
   const [checkoutIdempotencyKey, setCheckoutIdempotencyKey] = useState('');
+  const [hasServerConsent, setHasServerConsent] = useState(false);
+  const [consentChecked, setConsentChecked] = useState(false);
+  const solvedGuardRef = useRef<SolvedCheckoutGuard | null>(null);
+  const guardSolvingPromiseRef = useRef<Promise<SolvedCheckoutGuard | null> | null>(null);
+
+  const primeCheckoutGuard = () => {
+    const p = fetchAndSolveCheckoutGuard().then((solved) => {
+      if (solved) solvedGuardRef.current = solved;
+      return solved;
+    });
+    guardSolvingPromiseRef.current = p;
+    return p;
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let active = true;
+    checkPrivacyConsentStatus().then((ok) => {
+      if (active) {
+        setHasServerConsent(ok);
+        if (ok) setConsentChecked(true);
+      }
+    });
+
+    const onConsentAccepted = () => {
+      setHasServerConsent(true);
+      setConsentChecked(true);
+    };
+    window.addEventListener(CONSENT_EVENT_NAME, onConsentAccepted);
+
+    // Pre-solve invisible anti-bot handshake (~25ms in background while customer reviews cart)
+    if (!solvedGuardRef.current || solvedGuardRef.current.expiresAt < Date.now() + 60_000) {
+      primeCheckoutGuard();
+    }
+
+    return () => {
+      active = false;
+      window.removeEventListener(CONSENT_EVENT_NAME, onConsentAccepted);
+    };
+  }, [isOpen]);
 
   // Regenerate per-checkout idempotency key whenever cart signature changes so retries never double-order
   const cartSignature = useMemo(
@@ -302,8 +351,43 @@ export function CartDrawer({
       }
     }
 
+    if (!hasServerConsent && !consentChecked) {
+      setFormError('Please tick the Privacy Policy & Essential Security Cookies checkbox to continue.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
+      // Ensure signed HttpOnly consent cookie is issued before order submission
+      if (!hasServerConsent) {
+        const accepted = await acceptPrivacyConsent();
+        if (!accepted) {
+          setFormError('Could not save your privacy & cookie consent. Please retry.');
+          return;
+        }
+        setHasServerConsent(true);
+      }
+
+      // Ensure invisible anti-bot cryptographic handshake is ready (and respects 1.2s min timing)
+      let guard = solvedGuardRef.current;
+      if (!guard || guard.expiresAt < Date.now() + 15_000) {
+        guard = guardSolvingPromiseRef.current
+          ? await guardSolvingPromiseRef.current
+          : await primeCheckoutGuard();
+        if (!guard || guard.expiresAt < Date.now() + 15_000) {
+          guard = await primeCheckoutGuard();
+        }
+      }
+      if (!guard) {
+        setFormError('Security verification could not initialize. Please tap Place Order again.');
+        return;
+      }
+
+      const elapsedMs = Date.now() - guard.issuedAt;
+      if (elapsedMs < 1300) {
+        await new Promise((r) => setTimeout(r, 1300 - elapsedMs));
+      }
+
       await onPlaceOrder({
         customerName: customerName.trim(),
         customerPhone: cleanPhone,
@@ -320,9 +404,16 @@ export function CartDrawer({
         landmark: landmark.trim() || undefined,
         paymentMethod,
         idempotencyKey: checkoutIdempotencyKey || undefined,
+        guardToken: guard.guardToken,
+        guardSolution: guard.guardSolution,
         website: honeypot,
       });
+
+      // Consume and prime a fresh token for future orders
+      solvedGuardRef.current = null;
     } catch (err) {
+      solvedGuardRef.current = null;
+      primeCheckoutGuard();
       setFormError(
         err instanceof Error
           ? err.message
@@ -944,19 +1035,45 @@ export function CartDrawer({
                   className="hidden"
                 />
 
-                <div className="flex items-center gap-1.5 text-[10.5px] text-gray-500 pt-0.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#0C831F] shrink-0" />
-                  <span>
-                    18+ India orders • By ordering you agree to our{' '}
-                    <Link href="/privacy" className="text-[#0C831F] font-semibold underline">
-                      Privacy Policy
-                    </Link>{' '}
-                    &amp;{' '}
-                    <Link href="/terms" className="text-[#0C831F] font-semibold underline">
-                      Terms
-                    </Link>
-                  </span>
-                </div>
+                {hasServerConsent ? (
+                  <div className="flex items-center gap-1.5 text-[10.5px] text-gray-600 pt-0.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#0C831F] shrink-0" />
+                    <span>
+                      Protected checkout • Privacy Policy &amp; essential security cookie active (
+                      <Link href="/privacy" className="text-[#0C831F] font-semibold underline">
+                        Privacy
+                      </Link>
+                      {' / '}
+                      <Link href="/terms" className="text-[#0C831F] font-semibold underline">
+                        Terms
+                      </Link>
+                      )
+                    </span>
+                  </div>
+                ) : (
+                  <label className="flex items-start gap-2 p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80 text-[11px] text-gray-800 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={consentChecked}
+                      onChange={(e) => {
+                        setConsentChecked(e.target.checked);
+                        if (e.target.checked) setFormError('');
+                      }}
+                      className="mt-0.5 w-4 h-4 rounded border-emerald-400 text-[#0C831F] focus:ring-[#0C831F] shrink-0 cursor-pointer"
+                    />
+                    <span className="leading-snug">
+                      I am 18+ (India) and accept AyurSwift&apos;s{' '}
+                      <Link href="/privacy" className="text-[#0C831F] font-bold underline">
+                        Privacy Policy
+                      </Link>
+                      ,{' '}
+                      <Link href="/terms" className="text-[#0C831F] font-bold underline">
+                        Terms
+                      </Link>{' '}
+                      &amp; essential anti-bot security cookies.
+                    </span>
+                  </label>
+                )}
               </div>
             </form>
           )}

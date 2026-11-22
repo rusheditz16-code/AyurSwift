@@ -15,6 +15,7 @@ import { AccountModal } from '@/components/AccountModal';
 import { OrderTrackingModal } from '@/components/OrderTrackingModal';
 import { HeroAnimatedShowcase } from '@/components/HeroAnimatedShowcase';
 import { MedicinePackVisual } from '@/components/MedicinePackVisual';
+import { ConsentBanner } from '@/components/ConsentBanner';
 import {
   Product,
   CartItem,
@@ -526,6 +527,8 @@ export default function StorefrontPage() {
     landmark?: string;
     paymentMethod: PaymentMethod;
     idempotencyKey?: string;
+    guardToken?: string;
+    guardSolution?: string;
     website?: string;
   }) => {
     const order = await placeOrderOnServer({
@@ -544,6 +547,8 @@ export default function StorefrontPage() {
         quantity: item.quantity,
       })),
       idempotencyKey: orderData.idempotencyKey,
+      guardToken: orderData.guardToken,
+      guardSolution: orderData.guardSolution,
       website: orderData.website,
     });
 
@@ -1381,6 +1386,9 @@ export default function StorefrontPage() {
         settings={settings}
         onReorder={handleReorder}
       />
+
+      {/* Non-blocking Smart DPDP Privacy Policy & Essential Security Cookie Banner */}
+      <ConsentBanner />
 
       {/* Ephemeral Accessible Status Toast */}
       {toastText && (

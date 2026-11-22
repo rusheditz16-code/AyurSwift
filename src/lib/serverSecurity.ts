@@ -830,3 +830,241 @@ export function logSecurityEvent(
   };
   console.info(JSON.stringify(entry));
 }
+
+// ---------------------------------------------------------------------------
+// Signed Privacy Policy & Essential Cookie Consent (India DPDP Act + Bot Gate)
+// ---------------------------------------------------------------------------
+
+export const CONSENT_COOKIE_NAME = 'ayurswift_consent';
+export const CONSENT_VERSION = '2026-11-v1';
+export const CONSENT_TTL_SECONDS = 180 * 24 * 60 * 60; // 180 days
+
+function deriveScopedSecret(scope: string): string | null {
+  const base = getSessionSecret();
+  if (base) {
+    return crypto.createHmac('sha256', base).update(scope).digest('hex');
+  }
+  if (process.env.NODE_ENV !== 'production') {
+    return crypto.createHash('sha256').update(`dev-only:${scope}`).digest('hex');
+  }
+  return null;
+}
+
+export function createSignedConsentToken(): string | null {
+  const secret = deriveScopedSecret('ayurswift-consent-v1');
+  if (!secret) return null;
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const payload = {
+    v: CONSENT_VERSION,
+    iat: nowSec,
+    exp: nowSec + CONSENT_TTL_SECONDS,
+    jti: crypto.randomBytes(12).toString('hex'),
+  };
+
+  const payloadB64 = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  const sigB64 = crypto
+    .createHmac('sha256', secret)
+    .update(payloadB64)
+    .digest('base64url');
+
+  return `${payloadB64}.${sigB64}`;
+}
+
+export function verifyConsentCookie(request: NextRequest): boolean {
+  const token = request.cookies.get(CONSENT_COOKIE_NAME)?.value;
+  if (!token) return false;
+  const secret = deriveScopedSecret('ayurswift-consent-v1');
+  if (!secret) return false;
+
+  const parts = token.split('.');
+  if (parts.length !== 2) return false;
+  const [payloadB64, sigB64] = parts;
+  if (!payloadB64 || !sigB64) return false;
+
+  const expectedSigB64 = crypto
+    .createHmac('sha256', secret)
+    .update(payloadB64)
+    .digest('base64url');
+
+  const sigBuf = Buffer.from(sigB64, 'utf8');
+  const expBuf = Buffer.from(expectedSigB64, 'utf8');
+  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+    return false;
+  }
+
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(payloadB64, 'base64url').toString('utf8')
+    ) as { v?: string; exp?: number };
+    const nowSec = Math.floor(Date.now() / 1000);
+    return parsed?.v === CONSENT_VERSION && typeof parsed.exp === 'number' && parsed.exp > nowSec;
+  } catch {
+    return false;
+  }
+}
+
+export function setConsentCookie(response: NextResponse, token: string): void {
+  response.cookies.set({
+    name: CONSENT_COOKIE_NAME,
+    value: token,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: CONSENT_TTL_SECONDS,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Invisible Anti-Bot Checkout Handshake (Signed Nonce + Micro-PoW + Min Timing)
+// ---------------------------------------------------------------------------
+
+export const CHECKOUT_GUARD_DIFFICULTY_HEX_ZEROS = 3; // 12 bits (~4,096 hashes = ~25ms on phone, kills script floods)
+const CHECKOUT_GUARD_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const CHECKOUT_GUARD_MIN_AGE_MS = 1200; // 1.2s minimum human interaction time
+
+const spentGuardJtis = new Map<string, number>();
+const MAX_SPENT_GUARD_JTIS = 10_000;
+
+export interface CheckoutGuardChallenge {
+  guardToken: string;
+  nonce: string;
+  difficultyHexZeros: number;
+  expiresAt: number;
+}
+
+export function createCheckoutGuardChallenge(): CheckoutGuardChallenge | null {
+  const secret = deriveScopedSecret('ayurswift-checkout-guard-v1');
+  if (!secret) return null;
+
+  const nowMs = Date.now();
+  const nonce = crypto.randomBytes(16).toString('hex');
+  const jti = crypto.randomBytes(12).toString('hex');
+  const exp = nowMs + CHECKOUT_GUARD_TTL_MS;
+
+  const payload = {
+    n: nonce,
+    j: jti,
+    iat: nowMs,
+    exp,
+    d: CHECKOUT_GUARD_DIFFICULTY_HEX_ZEROS,
+  };
+
+  const payloadB64 = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  const sigB64 = crypto
+    .createHmac('sha256', secret)
+    .update(payloadB64)
+    .digest('base64url');
+
+  return {
+    guardToken: `${payloadB64}.${sigB64}`,
+    nonce,
+    difficultyHexZeros: CHECKOUT_GUARD_DIFFICULTY_HEX_ZEROS,
+    expiresAt: exp,
+  };
+}
+
+export function verifyAndConsumeCheckoutGuard(
+  guardToken: unknown,
+  solution: unknown
+): { ok: boolean; reason?: string } {
+  if (typeof guardToken !== 'string' || typeof solution !== 'string') {
+    return { ok: false, reason: 'Security verification missing. Please refresh your cart and try again.' };
+  }
+
+  const cleanSol = solution.trim();
+  if (!cleanSol || cleanSol.length > 64) {
+    return { ok: false, reason: 'Invalid checkout security proof.' };
+  }
+
+  const secret = deriveScopedSecret('ayurswift-checkout-guard-v1');
+  if (!secret) {
+    return { ok: false, reason: 'Security verification temporarily unavailable.' };
+  }
+
+  const parts = guardToken.trim().split('.');
+  if (parts.length !== 2) {
+    return { ok: false, reason: 'Invalid checkout verification token.' };
+  }
+  const [payloadB64, sigB64] = parts;
+  if (!payloadB64 || !sigB64) {
+    return { ok: false, reason: 'Invalid checkout verification token.' };
+  }
+
+  const expectedSigB64 = crypto
+    .createHmac('sha256', secret)
+    .update(payloadB64)
+    .digest('base64url');
+
+  const sigBuf = Buffer.from(sigB64, 'utf8');
+  const expBuf = Buffer.from(expectedSigB64, 'utf8');
+  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+    return { ok: false, reason: 'Checkout verification signature mismatch.' };
+  }
+
+  let parsed: { n?: string; j?: string; iat?: number; exp?: number; d?: number };
+  try {
+    parsed = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+  } catch {
+    return { ok: false, reason: 'Malformed checkout verification token.' };
+  }
+
+  const nowMs = Date.now();
+  if (
+    !parsed ||
+    typeof parsed.n !== 'string' ||
+    typeof parsed.j !== 'string' ||
+    typeof parsed.iat !== 'number' ||
+    typeof parsed.exp !== 'number' ||
+    typeof parsed.d !== 'number'
+  ) {
+    return { ok: false, reason: 'Invalid checkout verification payload.' };
+  }
+
+  if (parsed.exp <= nowMs) {
+    return { ok: false, reason: 'Checkout session timed out. Please tap Place Order again.' };
+  }
+
+  if (nowMs - parsed.iat < CHECKOUT_GUARD_MIN_AGE_MS) {
+    return { ok: false, reason: 'Please wait a moment and tap Place Order again.' };
+  }
+
+  // Single-use replay protection
+  if (spentGuardJtis.has(parsed.j)) {
+    return { ok: false, reason: 'This checkout verification was already used. Please retry.' };
+  }
+
+  const requiredPrefix = '0'.repeat(Math.max(1, Math.min(6, parsed.d)));
+  const digestHex = crypto
+    .createHash('sha256')
+    .update(`${parsed.n}:${cleanSol}`)
+    .digest('hex');
+
+  if (!digestHex.startsWith(requiredPrefix)) {
+    return { ok: false, reason: 'Automated checkout verification failed. Please retry.' };
+  }
+
+  // Prune & mark single-use JTI as spent
+  if (spentGuardJtis.size >= MAX_SPENT_GUARD_JTIS) {
+    for (const [k, exp] of spentGuardJtis.entries()) {
+      if (exp <= nowMs) spentGuardJtis.delete(k);
+    }
+    if (spentGuardJtis.size >= MAX_SPENT_GUARD_JTIS) {
+      spentGuardJtis.clear();
+    }
+  }
+  spentGuardJtis.set(parsed.j, parsed.exp);
+
+  return { ok: true };
+}
+
+/**
+ * Rejects oversized JSON payloads before parsing to shield against body-flood DoS attacks.
+ */
+export function isRequestBodyTooLarge(request: NextRequest, maxBytes: number): boolean {
+  const lenHeader = request.headers.get('content-length');
+  if (!lenHeader) return false;
+  const parsed = Number(lenHeader);
+  return Number.isFinite(parsed) && parsed > maxBytes;
+}

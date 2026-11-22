@@ -81,13 +81,17 @@ export default function PrivacyPolicyPage() {
 
           <div>
             <h2 className="font-bold text-gray-950 text-base mb-1">
-              4. Data Protection &amp; Retention
+              4. Data Protection, Essential Security Cookies &amp; Retention
             </h2>
             <p>
-              All traffic uses HTTPS encryption. Public order lookups mask your
-              phone number and street address. Order details are retained only as
-              long as needed for delivery support and applicable Indian
-              bookkeeping/tax compliance.
+              All traffic uses HTTPS encryption with strict Content-Security-Policy
+              and HSTS headers. When you accept our Privacy Policy, we store a
+              strictly essential, cryptographically signed HttpOnly security cookie
+              (<code>ayurswift_consent</code>) to verify genuine shoppers and block
+              automated bot/DDoS attacks — we never set advertising or tracking
+              cookies. Public order lookups mask your phone number and street
+              address. Order details are retained only as long as needed for
+              delivery support and applicable Indian bookkeeping/tax compliance.
             </p>
           </div>
 

@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Package, Search, Loader2, RefreshCw } from 'lucide-react';
+import Link from 'next/link';
+import { X, Package, Search, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
 import { Order, MerchantSettings } from '@/types';
 import { InvoiceModal } from '@/components/InvoiceModal';
 import { CustomerOrderCard } from '@/components/CustomerOrderCard';
@@ -11,6 +12,11 @@ import {
   lookupOrdersCrossDevice,
   syncOrderStatuses,
 } from '@/lib/store';
+import {
+  acceptPrivacyConsent,
+  checkPrivacyConsentStatus,
+  CONSENT_EVENT_NAME,
+} from '@/lib/checkoutGuardClient';
 
 interface OrderTrackingModalProps {
   isOpen: boolean;
@@ -32,6 +38,8 @@ export function OrderTrackingModal({
   const [lastSyncedLabel, setLastSyncedLabel] = useState('just now');
   const [searchStatus, setSearchStatus] = useState<string | null>(null);
   const [viewingBillOrder, setViewingBillOrder] = useState<Order | null>(null);
+  const [hasConsent, setHasConsent] = useState<boolean>(true);
+  const [isAcceptingConsent, setIsAcceptingConsent] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleManualRefresh = useCallback(async () => {
@@ -56,6 +64,10 @@ export function OrderTrackingModal({
     if (!isOpen) return;
     setOrders(getStoredOrders());
     handleManualRefresh();
+    checkPrivacyConsentStatus().then((ok) => setHasConsent(ok));
+
+    const onConsentAccepted = () => setHasConsent(true);
+    window.addEventListener(CONSENT_EVENT_NAME, onConsentAccepted);
 
     // Visibility-aware 15s live auto-refresh while open
     const interval = setInterval(() => {
@@ -71,6 +83,7 @@ export function OrderTrackingModal({
     return () => {
       clearInterval(interval);
       window.removeEventListener('keydown', onKey);
+      window.removeEventListener(CONSENT_EVENT_NAME, onConsentAccepted);
     };
   }, [isOpen, viewingBillOrder, onClose, handleManualRefresh]);
 
@@ -79,6 +92,11 @@ export function OrderTrackingModal({
     if (!clean) {
       setSearchStatus(null);
       setOrders(getStoredOrders());
+      return;
+    }
+
+    if (!hasConsent) {
+      setSearchStatus('Please accept our Privacy Policy & Essential Security Cookies below to search live orders.');
       return;
     }
 
@@ -227,6 +245,37 @@ export function OrderTrackingModal({
 
         {/* Body */}
         <div className="p-4 sm:p-5 space-y-4 overflow-y-auto thin-scrollbar flex-1 bg-[#F8FAFC]">
+          {!hasConsent && (
+            <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+              <div className="flex items-start gap-2 min-w-0">
+                <ShieldCheck className="w-4 h-4 text-[#0C831F] shrink-0 mt-0.5" />
+                <span className="text-gray-800 leading-snug">
+                  Accept our{' '}
+                  <Link href="/privacy" className="text-[#0C831F] font-bold underline">
+                    Privacy Policy
+                  </Link>{' '}
+                  &amp; essential security cookies to search or update orders.
+                </span>
+              </div>
+              <button
+                type="button"
+                disabled={isAcceptingConsent}
+                onClick={async () => {
+                  setIsAcceptingConsent(true);
+                  const ok = await acceptPrivacyConsent();
+                  if (ok) {
+                    setHasConsent(true);
+                    setSearchStatus(null);
+                  }
+                  setIsAcceptingConsent(false);
+                }}
+                className="px-3 py-1.5 rounded-xl bg-[#0C831F] hover:bg-[#096B19] text-white font-extrabold text-[11px] shrink-0 cursor-pointer disabled:opacity-60"
+              >
+                {isAcceptingConsent ? 'Securing...' : 'Accept & Unlock'}
+              </button>
+            </div>
+          )}
+
           <form
             onSubmit={(e) => {
               e.preventDefault();

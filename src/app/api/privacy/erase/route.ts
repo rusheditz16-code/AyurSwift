@@ -7,10 +7,12 @@ import {
   checkRateLimit,
   getSupabaseAdminClient,
   getTrustedClientIp,
+  isRequestBodyTooLarge,
   logSecurityEvent,
   maskIpForLog,
   normalizeIndianPhone,
   sanitizeText,
+  verifySameOrigin,
 } from '@/lib/serverSecurity';
 
 function getStorageFilePath(): string {
@@ -34,6 +36,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { success: false, error: 'Too many requests. Please try again later.' },
       { status: 429 }
+    );
+  }
+
+  if (!verifySameOrigin(request)) {
+    return NextResponse.json(
+      { success: false, error: 'Invalid request origin.' },
+      { status: 403 }
+    );
+  }
+
+  if (isRequestBodyTooLarge(request, 4_096)) {
+    return NextResponse.json(
+      { success: false, error: 'Request payload too large.' },
+      { status: 413 }
     );
   }
 
