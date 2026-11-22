@@ -9,6 +9,7 @@ import {
   Minus,
   Edit2,
   Trash2,
+  Loader2,
 } from 'lucide-react';
 import { Product } from '@/types';
 import { isVerifiedProductImageUrl } from '@/lib/initialData';
@@ -22,6 +23,7 @@ interface AdminInventoryTabProps {
   onCategoryFilterChange: (c: string) => void;
   onStockChange: (productId: string, delta: number) => void;
   onToggleLive: (productId: string) => void;
+  pendingProductIds?: Record<string, boolean>;
   onOpenAdd?: () => void;
   onOpenEdit: (product: Product) => void;
   onDeleteProduct: (productId: string) => void;
@@ -40,6 +42,7 @@ export function AdminInventoryTab({
   onCategoryFilterChange,
   onStockChange,
   onToggleLive,
+  pendingProductIds = {},
   onOpenAdd,
   onOpenEdit,
   onDeleteProduct,
@@ -225,8 +228,186 @@ export function AdminInventoryTab({
         </div>
       )}
 
-      {/* Inventory Table */}
-      <div className={`rounded-2xl border overflow-hidden ${cardBg}`}>
+      {/* Mobile / Mid-Screen Card View (Instant 1-Tap Live/Hide, Stock, Edit, Delete — Zero Horizontal Scroll) */}
+      <div className="md:hidden space-y-2.5">
+        {filteredProducts.length === 0 ? (
+          <div className={`rounded-2xl border p-8 text-center space-y-2.5 ${cardBg}`}>
+            <div className="font-extrabold text-sm">
+              {products.length === 0
+                ? 'Your store catalog is currently empty'
+                : 'No products match your filter'}
+            </div>
+            <p className={`text-xs ${muted}`}>
+              {products.length === 0
+                ? 'Add your own Ayurvedic products or restore the 20 starter SKUs directly to Supabase.'
+                : 'Try clearing your search or category filter.'}
+            </p>
+            {products.length === 0 && (
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                {onOpenAdd && (
+                  <button
+                    type="button"
+                    onClick={onOpenAdd}
+                    className="bg-[#0C831F] hover:bg-[#096B19] text-white text-xs font-extrabold px-4 py-2 rounded-xl inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add First Product</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={onResetCatalog}
+                  className={`text-xs font-bold px-4 py-2 rounded-xl border inline-flex items-center gap-1.5 cursor-pointer ${
+                    dark
+                      ? 'border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Restore 20 Starter Products</span>
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          filteredProducts.map((product) => {
+            const isZero = product.stockQuantity === 0;
+            const isLow = product.stockQuantity > 0 && product.stockQuantity <= 5;
+            const isPending = Boolean(pendingProductIds[product.id]);
+            const showPhoto = isVerifiedProductImageUrl(product.imageUrl);
+
+            return (
+              <div
+                key={product.id}
+                className={`rounded-2xl border p-3.5 space-y-3 ${cardBg} ${isZero ? 'opacity-70' : ''}`}
+              >
+                <div className="flex items-start gap-3">
+                  <div
+                    className={`w-12 h-14 rounded-xl border flex items-center justify-center overflow-hidden shrink-0 ${
+                      showPhoto ? 'p-0' : 'p-0.5'
+                    } ${dark ? 'bg-slate-900 border-slate-700' : 'bg-[#F7FAF8] border-slate-200'}`}
+                  >
+                    {showPhoto ? (
+                      <img
+                        src={product.imageUrl}
+                        alt={product.name}
+                        className="w-full h-full object-cover object-center"
+                      />
+                    ) : (
+                      <MedicinePackVisual product={product} compact className="w-full h-full" />
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="font-extrabold text-xs line-clamp-1">{product.name}</div>
+                    <div className={`text-[10.5px] font-semibold mt-0.5 ${muted}`}>
+                      <span className="text-emerald-500">{product.brand}</span> • {product.packSize} • {product.category}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1.5 text-xs tabular-nums">
+                      <span className="font-extrabold">₹{product.sellingPrice}</span>
+                      {product.mrp > product.sellingPrice && (
+                        <span className="text-[10.5px] text-slate-400 line-through">₹{product.mrp}</span>
+                      )}
+                      <span className={`text-[10.5px] ${muted}`}>Cost ₹{product.agencyCostPrice}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-500/10">
+                  <div
+                    className={`inline-flex items-center rounded-xl border overflow-hidden ${
+                      dark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      disabled={isPending || product.stockQuantity <= 0}
+                      onClick={() => onStockChange(product.id, -1)}
+                      className="p-2 hover:bg-emerald-500/15 disabled:opacity-40 transition-colors cursor-pointer"
+                      aria-label={`Decrease stock for ${product.name}`}
+                    >
+                      <Minus className="w-3.5 h-3.5" />
+                    </button>
+                    <span
+                      className={`px-2.5 font-extrabold text-xs min-w-[32px] text-center tabular-nums ${
+                        isZero ? 'text-rose-500' : isLow ? 'text-amber-500' : ''
+                      }`}
+                    >
+                      {product.stockQuantity}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => onStockChange(product.id, 1)}
+                      className="p-2 hover:bg-emerald-500/15 disabled:opacity-40 transition-colors cursor-pointer"
+                      aria-label={`Increase stock for ${product.name}`}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    {isZero ? (
+                      <span className="text-[10.5px] font-extrabold px-2.5 py-1.5 rounded-full bg-rose-500/15 text-rose-500">
+                        Auto-Hidden
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => onToggleLive(product.id)}
+                        aria-label={`Toggle visibility for ${product.name}`}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-extrabold transition-all cursor-pointer disabled:opacity-60 active:scale-95 ${
+                          product.isLive
+                            ? 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/30'
+                            : dark
+                            ? 'bg-slate-800 text-slate-300 border border-slate-700'
+                            : 'bg-slate-100 text-slate-600 border border-slate-200'
+                        }`}
+                      >
+                        {isPending ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <span
+                            className={`w-2 h-2 rounded-full ${
+                              product.isLive ? 'bg-emerald-500' : 'bg-slate-400'
+                            }`}
+                          />
+                        )}
+                        <span>{product.isLive ? 'Live' : 'Hidden'}</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => onOpenEdit(product)}
+                      className={`p-2 rounded-xl border cursor-pointer ${
+                        dark
+                          ? 'border-slate-700 text-slate-300 hover:text-emerald-400'
+                          : 'border-slate-200 text-slate-600 hover:text-[#0C831F]'
+                      }`}
+                      aria-label={`Edit ${product.name}`}
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteProduct(product.id)}
+                      className="p-2 rounded-xl border border-rose-500/25 text-rose-500 hover:bg-rose-500/10 cursor-pointer"
+                      aria-label={`Delete ${product.name}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Desktop Inventory Table */}
+      <div className={`hidden md:block rounded-2xl border overflow-hidden ${cardBg}`}>
         <div className="overflow-x-auto thin-scrollbar">
           <table className="w-full text-left text-xs">
             <thead
@@ -301,6 +482,7 @@ export function AdminInventoryTab({
                       : 0;
                   const isZero = product.stockQuantity === 0;
                   const isLow = product.stockQuantity > 0 && product.stockQuantity <= 5;
+                  const isPending = Boolean(pendingProductIds[product.id]);
                   const showPhoto = isVerifiedProductImageUrl(product.imageUrl);
 
                   return (
@@ -374,8 +556,9 @@ export function AdminInventoryTab({
                       >
                         <button
                           type="button"
+                          disabled={isPending || product.stockQuantity <= 0}
                           onClick={() => onStockChange(product.id, -1)}
-                          className="p-1.5 hover:bg-emerald-500/15 transition-colors cursor-pointer"
+                          className="p-1.5 hover:bg-emerald-500/15 disabled:opacity-40 transition-colors cursor-pointer"
                           title="Decrease stock"
                         >
                           <Minus className="w-3 h-3" />
@@ -395,8 +578,9 @@ export function AdminInventoryTab({
                         </span>
                         <button
                           type="button"
+                          disabled={isPending}
                           onClick={() => onStockChange(product.id, 1)}
-                          className="p-1.5 hover:bg-emerald-500/15 transition-colors cursor-pointer"
+                          className="p-1.5 hover:bg-emerald-500/15 disabled:opacity-40 transition-colors cursor-pointer"
                           title="Increase stock"
                         >
                           <Plus className="w-3 h-3" />
@@ -412,21 +596,26 @@ export function AdminInventoryTab({
                       ) : (
                         <button
                           type="button"
+                          disabled={isPending}
                           onClick={() => onToggleLive(product.id)}
                           aria-label={`Toggle visibility for ${product.name}`}
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold transition-all cursor-pointer ${
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold transition-all cursor-pointer disabled:opacity-60 active:scale-95 ${
                             product.isLive
-                              ? 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/30'
+                              ? 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 hover:bg-emerald-500/25'
                               : dark
-                              ? 'bg-slate-800 text-slate-400 border border-slate-700'
-                              : 'bg-slate-100 text-slate-500 border border-slate-200'
+                              ? 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
+                              : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200/80'
                           }`}
                         >
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              product.isLive ? 'bg-emerald-500' : 'bg-slate-400'
-                            }`}
-                          />
+                          {isPending ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <span
+                              className={`w-2 h-2 rounded-full ${
+                                product.isLive ? 'bg-emerald-500' : 'bg-slate-400'
+                              }`}
+                            />
+                          )}
                           <span>{product.isLive ? 'Live' : 'Hidden'}</span>
                         </button>
                       )}

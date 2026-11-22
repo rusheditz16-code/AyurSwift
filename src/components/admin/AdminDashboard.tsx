@@ -22,6 +22,7 @@ import {
   saveStoredSettings,
   formatRapidoDropText,
   generateSmartAdminWhatsAppUrl,
+  patchProductOnServer,
   syncProductToServer,
   deleteProductOnServer,
   fetchLiveCatalogFromServer,
@@ -161,6 +162,7 @@ export function AdminDashboard() {
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
   const [imageUrlInput, setImageUrlInput] = useState('');
   const [isSavingProduct, setIsSavingProduct] = useState(false);
+  const [pendingProductIds, setPendingProductIds] = useState<Record<string, boolean>>({});
   const [resetToast, setResetToast] = useState(false);
 
   // Dispatch state & live sync
@@ -303,7 +305,7 @@ export function AdminDashboard() {
     }
   }, []);
 
-  // Load orders & authoritative products when authenticated + visibility-aware 10s polling
+  // Load orders & authoritative products when authenticated + visibility-aware 5s polling
   useEffect(() => {
     if (!isAuthenticated) return;
     refreshOrders();
@@ -314,7 +316,7 @@ export function AdminDashboard() {
       if (typeof document !== 'undefined' && !document.hidden) {
         refreshOrders();
       }
-    }, 10000);
+    }, 5000);
 
     const onVisibilityChange = () => {
       if (!document.hidden) {
@@ -329,6 +331,10 @@ export function AdminDashboard() {
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [isAuthenticated, isLiveSync, refreshOrders, refreshCatalog]);
+
+  const handleRefreshAll = useCallback(async () => {
+    await Promise.all([refreshOrders(), refreshCatalog()]);
+  }, [refreshOrders, refreshCatalog]);
 
   // Lockout countdown
   useEffect(() => {
@@ -396,76 +402,126 @@ export function AdminDashboard() {
     }
   };
 
-  // Inventory actions (all awaited against Supabase with rollback & clear toast feedback)
+  // Inventory actions: ultra-fast 48-byte PATCH with per-SKU lock & functional state updates (1-click instant!)
   const handleStockChange = async (productId: string, delta: number) => {
-    const previous = products;
-    let targetItem: Product | null = null;
-    const updated = products.map((p) => {
-      if (p.id === productId) {
-        const newStock = Math.max(0, p.stockQuantity + delta);
-        const isLive =
-          newStock === 0
-            ? false
-            : p.stockQuantity === 0 && newStock > 0
-            ? true
-            : p.isLive;
-        const item = { ...p, stockQuantity: newStock, isLive };
-        targetItem = item;
-        return item;
-      }
-      return p;
+    if (pendingProductIds[productId]) return;
+    const currentItem = products.find((p) => p.id === productId);
+    if (!currentItem) return;
+
+    const prevStock = currentItem.stockQuantity;
+    const prevLive = currentItem.isLive;
+    const newStock = Math.max(0, prevStock + delta);
+    const nextLive =
+      newStock === 0
+        ? false
+        : prevStock === 0 && newStock > 0
+        ? true
+        : prevLive;
+
+    setPendingProductIds((prev) => ({ ...prev, [productId]: true }));
+    setProducts((prev) => {
+      const next = prev.map((p) =>
+        p.id === productId ? { ...p, stockQuantity: newStock, isLive: nextLive } : p
+      );
+      saveStoredProducts(next);
+      return next;
     });
-    if (!targetItem) return;
 
-    setProducts(updated);
-    saveStoredProducts(updated);
+    const res = await patchProductOnServer(productId, {
+      stockQuantity: newStock,
+      isLive: nextLive,
+    });
 
-    const res = await syncProductToServer(targetItem);
+    setPendingProductIds((prev) => {
+      const copy = { ...prev };
+      delete copy[productId];
+      return copy;
+    });
+
     if (!res.ok) {
-      setProducts(previous);
-      saveStoredProducts(previous);
+      setProducts((prev) => {
+        const reverted = prev.map((p) =>
+          p.id === productId ? { ...p, stockQuantity: prevStock, isLive: prevLive } : p
+        );
+        saveStoredProducts(reverted);
+        return reverted;
+      });
       if (res.status === 401 || res.status === 403) {
         setIsAuthenticated(false);
         setAuthError('Your admin session expired. Please sign in again.');
       } else {
         showToast('error', res.error || 'Could not update stock in database.');
       }
+      return;
+    }
+
+    if (res.stockQuantity !== undefined || res.isLive !== undefined) {
+      setProducts((prev) => {
+        const confirmed = prev.map((p) =>
+          p.id === productId
+            ? {
+                ...p,
+                stockQuantity: res.stockQuantity ?? p.stockQuantity,
+                isLive: res.isLive ?? p.isLive,
+              }
+            : p
+        );
+        saveStoredProducts(confirmed);
+        return confirmed;
+      });
     }
   };
 
   const handleToggleLive = async (productId: string) => {
-    const previous = products;
-    let targetItem: Product | null = null;
-    const updated = products.map((p) => {
-      if (p.id === productId && p.stockQuantity > 0) {
-        const item = { ...p, isLive: !p.isLive };
-        targetItem = item;
-        return item;
-      }
-      return p;
+    if (pendingProductIds[productId]) return;
+    const currentItem = products.find((p) => p.id === productId);
+    if (!currentItem || currentItem.stockQuantity <= 0) return;
+
+    const prevLive = currentItem.isLive;
+    const nextLive = !prevLive;
+
+    setPendingProductIds((prev) => ({ ...prev, [productId]: true }));
+    setProducts((prev) => {
+      const next = prev.map((p) => (p.id === productId ? { ...p, isLive: nextLive } : p));
+      saveStoredProducts(next);
+      return next;
     });
-    if (!targetItem) return;
 
-    setProducts(updated);
-    saveStoredProducts(updated);
+    const res = await patchProductOnServer(productId, { isLive: nextLive });
 
-    const res = await syncProductToServer(targetItem);
+    setPendingProductIds((prev) => {
+      const copy = { ...prev };
+      delete copy[productId];
+      return copy;
+    });
+
     if (!res.ok) {
-      setProducts(previous);
-      saveStoredProducts(previous);
+      setProducts((prev) => {
+        const reverted = prev.map((p) => (p.id === productId ? { ...p, isLive: prevLive } : p));
+        saveStoredProducts(reverted);
+        return reverted;
+      });
       if (res.status === 401 || res.status === 403) {
         setIsAuthenticated(false);
         setAuthError('Your admin session expired. Please sign in again.');
       } else {
         showToast('error', res.error || 'Could not update storefront visibility.');
       }
-    } else {
-      const toggled = targetItem as Product;
-      showToast(
-        'success',
-        toggled.isLive ? `${toggled.name} is now live on storefront` : `${toggled.name} hidden from storefront`
-      );
+      return;
     }
+
+    const confirmedLive = res.isLive ?? nextLive;
+    setProducts((prev) => {
+      const synced = prev.map((p) => (p.id === productId ? { ...p, isLive: confirmedLive } : p));
+      saveStoredProducts(synced);
+      return synced;
+    });
+    showToast(
+      'success',
+      confirmedLive
+        ? `"${currentItem.name}" is now Live on storefront`
+        : `"${currentItem.name}" Hidden from storefront`
+    );
   };
 
   const handleOpenAddDrawer = () => {
@@ -935,7 +991,7 @@ export function AdminDashboard() {
           isLiveSync={isLiveSync}
           onToggleLiveSync={() => setIsLiveSync((s) => !s)}
           isRefreshing={isRefreshingOrders}
-          onRefresh={refreshOrders}
+          onRefresh={handleRefreshAll}
           onOpenAddSku={handleOpenAddDrawer}
           onOpenMobileMenu={() => setMobileMenuOpen(true)}
           dark={dark}
@@ -995,6 +1051,7 @@ export function AdminDashboard() {
               onCategoryFilterChange={setCategoryFilter}
               onStockChange={handleStockChange}
               onToggleLive={handleToggleLive}
+              pendingProductIds={pendingProductIds}
               onOpenAdd={handleOpenAddDrawer}
               onOpenEdit={handleOpenEditDrawer}
               onDeleteProduct={handleDeleteProduct}

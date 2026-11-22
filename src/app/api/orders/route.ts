@@ -10,6 +10,7 @@ import {
   validateDeliverySlotSelection,
 } from '@/lib/deliverySlots';
 import {
+  checkMemoryRateLimit,
   checkRateLimit,
   generateSecureOrderId,
   getSupabaseAdminClient,
@@ -34,6 +35,12 @@ const ALLOWED_ORDER_STATUSES = new Set<Order['orderStatus']>([
 const ALLOWED_PAYMENT_STATUSES = new Set<Order['paymentStatus']>(['PENDING', 'VERIFIED']);
 const ALLOWED_DELIVERY_TYPES = new Set<DeliveryType>(['RAPIDO_CITY', 'COURIER_OUTSIDE']);
 const ALLOWED_PAYMENT_METHODS = new Set<PaymentMethod>(['UPI', 'COD']);
+
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+  Pragma: 'no-cache',
+  Expires: '0',
+};
 
 interface PublicOrderView extends Omit<Order, 'rapidoCopied' | 'adminNote'> {
   rapidoCopied: false;
@@ -213,7 +220,10 @@ async function loadServerCatalog(): Promise<Map<string, Product>> {
 
   if (supabase) {
     try {
-      const { data, error } = await supabase.from('products').select('*');
+      // Select ONLY pricing & stock columns (never download multi-MB base64 product images during checkout!)
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, name, brand, category, pack_size, mrp, selling_price, stock_quantity, is_live');
       if (!error && Array.isArray(data)) {
         data.forEach((row: Record<string, unknown>) => {
           const id = String(row.id || '');
@@ -223,21 +233,19 @@ async function loadServerCatalog(): Promise<Map<string, Product>> {
             name: String(row.name || ''),
             brand: String(row.brand || ''),
             category: String(row.category || ''),
-            manufacturer: String(row.manufacturer || ''),
-            form: ((row.form as Product['form']) || 'Tablets'),
+            manufacturer: '',
+            form: 'Tablets',
             packSize: String(row.pack_size || ''),
-            agencyCostPrice: Number(row.agency_cost_price ?? 0),
+            agencyCostPrice: 0,
             mrp: Number(row.mrp ?? 0),
             sellingPrice: Number(row.selling_price ?? 0),
             stockQuantity: Number(row.stock_quantity ?? 0),
             isLive: Boolean(row.is_live),
-            indications: String(row.indications || ''),
-            dosage: String(row.dosage || ''),
-            composition: String(row.composition || ''),
-            safetyAdvice: row.safety_advice ? String(row.safety_advice) : undefined,
-            badgeText: row.badge_text ? String(row.badge_text) : undefined,
-            imageUrl: row.image_url ? String(row.image_url) : '',
-            images: Array.isArray(row.images) ? (row.images as string[]) : [],
+            indications: '',
+            dosage: '',
+            composition: '',
+            imageUrl: '',
+            images: [],
           });
         });
         return catalog;
@@ -263,11 +271,15 @@ function normalizeOrderIdForCompare(id: string): string {
  */
 export async function GET(request: NextRequest) {
   const ip = getTrustedClientIp(request);
-  const rl = await checkRateLimit(`orders_get:${ip}`, 40, 60_000);
+  const adminSession = verifyAdminSession(request);
+  const isAdmin = Boolean(adminSession);
+  const rl = isAdmin
+    ? checkMemoryRateLimit(`orders_get_admin:${ip}`, 120, 60_000)
+    : await checkRateLimit(`orders_get:${ip}`, 40, 60_000);
   if (!rl.allowed) {
     return NextResponse.json(
       { success: false, error: 'Too many requests. Please try again in 1 minute.' },
-      { status: 429 }
+      { status: 429, headers: NO_STORE_HEADERS }
     );
   }
 
@@ -276,8 +288,6 @@ export async function GET(request: NextRequest) {
   const idsParam = sanitizeText(searchParams.get('ids'), 600);
   const limitParam = Number(searchParams.get('limit') || 50);
   const offsetParam = Number(searchParams.get('offset') || 0);
-  const adminSession = verifyAdminSession(request);
-  const isAdmin = Boolean(adminSession);
 
   const allOrders = await loadAllOrders();
 
@@ -286,14 +296,17 @@ export async function GET(request: NextRequest) {
     const safeLimit = Math.min(Math.max(1, Math.floor(limitParam || 50)), 100);
     const safeOffset = Math.max(0, Math.floor(offsetParam || 0));
     const page = allOrders.slice(safeOffset, safeOffset + safeLimit);
-    return NextResponse.json({
-      success: true,
-      count: page.length,
-      total: allOrders.length,
-      limit: safeLimit,
-      offset: safeOffset,
-      orders: page,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        count: page.length,
+        total: allOrders.length,
+        limit: safeLimit,
+        offset: safeOffset,
+        orders: page,
+      },
+      { headers: NO_STORE_HEADERS }
+    );
   }
 
   // 2. Client Status Sync by exact Order IDs (?ids=#AS-XXXX,#AS-YYYY)
@@ -308,11 +321,14 @@ export async function GET(request: NextRequest) {
     const matched = allOrders.filter((o) => idSet.has(normalizeOrderIdForCompare(o.id)));
     const safeOrders = isAdmin ? matched : matched.map(maskOrderForPublic);
 
-    return NextResponse.json({
-      success: true,
-      count: safeOrders.length,
-      orders: safeOrders,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        count: safeOrders.length,
+        orders: safeOrders,
+      },
+      { headers: NO_STORE_HEADERS }
+    );
   }
 
   // 3. Unauthenticated unscoped ledger query: BLOCKED
@@ -591,30 +607,36 @@ export async function POST(request: NextRequest) {
       createdAt: new Date().toISOString(),
     };
 
-    // Persist to Supabase via server-only service_role key & decrement live stock
+    // Persist to Supabase & decrement live stock in parallel for ultra-fast checkout
     const supabase = getSupabaseAdminClient();
     if (supabase) {
       const { error: dbErr } = await supabase
         .from('orders')
         .insert(mapOrderToDbRow(newOrder));
       if (dbErr) {
-        console.warn('Supabase insert error in POST /api/orders');
-      } else {
-        for (const item of verifiedItems) {
-          const prod = catalog.get(item.productId);
-          if (prod) {
-            const nextStock = Math.max(0, prod.stockQuantity - item.quantity);
-            await supabase
-              .from('products')
-              .update({
-                stock_quantity: nextStock,
-                is_live: nextStock > 0 ? prod.isLive : false,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', prod.id);
-          }
-        }
+        console.warn('Supabase insert error in POST /api/orders:', dbErr.message);
+        return NextResponse.json(
+          { success: false, error: 'Unable to save your order right now. Please tap Place Order again.' },
+          { status: 500, headers: NO_STORE_HEADERS }
+        );
       }
+
+      const nowIso = new Date().toISOString();
+      await Promise.all(
+        verifiedItems.map((item) => {
+          const prod = catalog.get(item.productId);
+          if (!prod) return Promise.resolve();
+          const nextStock = Math.max(0, prod.stockQuantity - item.quantity);
+          return supabase
+            .from('products')
+            .update({
+              stock_quantity: nextStock,
+              is_live: nextStock > 0 ? prod.isLive : false,
+              updated_at: nowIso,
+            })
+            .eq('id', prod.id);
+        })
+      );
     }
 
     // Update memory + local file store
@@ -655,11 +677,14 @@ export async function POST(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   const ip = getTrustedClientIp(request);
-  const rl = await checkRateLimit(`orders_put:${ip}`, 25, 60_000);
+  const adminQuick = verifyAdminSession(request);
+  const rl = adminQuick
+    ? checkMemoryRateLimit(`orders_put_admin:${ip}`, 120, 60_000)
+    : await checkRateLimit(`orders_put:${ip}`, 25, 60_000);
   if (!rl.allowed) {
     return NextResponse.json(
       { success: false, error: 'Too many requests. Please try again shortly.' },
-      { status: 429 }
+      { status: 429, headers: NO_STORE_HEADERS }
     );
   }
 

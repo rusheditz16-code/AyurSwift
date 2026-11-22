@@ -24,6 +24,8 @@ import {
   MerchantSettings,
 } from '@/types';
 import {
+  CATALOG_SYNC_CHANNEL,
+  fetchCatalogVersion,
   getStoredProducts,
   getStoredSettings,
   placeOrderOnServer,
@@ -167,6 +169,7 @@ export default function StorefrontPage() {
 
   const catalogRef = useRef<HTMLElement>(null);
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastCatalogVersionRef = useRef<string | null>(null);
 
   const showToast = useCallback((msg: string) => {
     setToastText(msg);
@@ -224,21 +227,50 @@ export default function StorefrontPage() {
       if (savedLoc) setCurrentLocation(JSON.parse(savedLoc));
     } catch {}
     syncLiveCatalog(false);
+    fetchCatalogVersion().then((v) => {
+      if (v) lastCatalogVersionRef.current = v;
+    });
 
-    // Keep storefront immediately in sync when admin adds/edits/deletes products in another tab
+    // Near-0-second storefront sync:
+    // 1. Same-browser instant BroadcastChannel + 13-byte localStorage ping (~0ms trigger)
+    // 2. Cross-device lightweight 35-byte version fingerprint check every 3s while tab is visible
+    let bc: BroadcastChannel | null = null;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        bc = new BroadcastChannel(CATALOG_SYNC_CHANNEL);
+        bc.onmessage = () => {
+          syncLiveCatalog(true);
+        };
+      }
+    } catch {}
+
     const onFocus = () => syncLiveCatalog(true);
     const onVisibility = () => {
       if (!document.hidden) syncLiveCatalog(true);
     };
     const onStorage = (e: StorageEvent) => {
-      if (e.key === 'ayurswift_products_v3') {
+      if (e.key === 'ayurswift_catalog_ping' || e.key === 'ayurswift_products_v3') {
         syncLiveCatalog(true);
       }
     };
+
+    const versionPoll = setInterval(async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      const latestVersion = await fetchCatalogVersion();
+      if (latestVersion && latestVersion !== lastCatalogVersionRef.current) {
+        lastCatalogVersionRef.current = latestVersion;
+        syncLiveCatalog(true);
+      }
+    }, 3000);
+
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('storage', onStorage);
     return () => {
+      clearInterval(versionPoll);
+      try {
+        bc?.close();
+      } catch {}
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('storage', onStorage);
@@ -525,6 +557,7 @@ export default function StorefrontPage() {
     setIsCartOpen(false);
     setActiveOrder(order);
     handleClearCart();
+    syncLiveCatalog(true);
   };
 
   const handleCallbackSubmit = (e: React.FormEvent) => {

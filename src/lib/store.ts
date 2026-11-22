@@ -8,7 +8,29 @@ const STORAGE_KEYS = {
   ORDERS: 'ayurswift_orders_v1',
   SETTINGS: 'ayurswift_settings_v2',
   CART: 'ayurswift_cart_v1',
+  CATALOG_PING: 'ayurswift_catalog_ping',
 };
+
+export const CATALOG_SYNC_CHANNEL = 'ayurswift_catalog_sync';
+
+/**
+ * Instant (~0ms) cross-tab storefront notification via BroadcastChannel + 13-byte storage ping.
+ * Never throws even if browser storage is full or restricted.
+ */
+export function broadcastCatalogChange(): void {
+  if (typeof window === 'undefined') return;
+  const ts = String(Date.now());
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const ch = new BroadcastChannel(CATALOG_SYNC_CHANNEL);
+      ch.postMessage({ type: 'CATALOG_UPDATED', ts });
+      ch.close();
+    }
+  } catch {}
+  try {
+    localStorage.setItem(STORAGE_KEYS.CATALOG_PING, ts);
+  } catch {}
+}
 
 // Retrieve settings (automatically strips any legacy plain-text adminPin)
 export function getStoredSettings(): MerchantSettings {
@@ -73,8 +95,12 @@ export function getStoredSettings(): MerchantSettings {
 
 export function saveStoredSettings(settings: MerchantSettings) {
   if (typeof window === 'undefined') return;
-  const { ...safeSettings } = settings;
-  localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(safeSettings));
+  try {
+    const { ...safeSettings } = settings;
+    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(safeSettings));
+  } catch {
+    // Ignore storage quota / privacy mode errors
+  }
 }
 
 // Retrieve cached products (respects explicit empty array [] after server sync)
@@ -118,12 +144,28 @@ export function getStoredProducts(): Product[] {
 
 export function saveStoredProducts(products: Product[]) {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
+  // Deduplicate imageUrl vs images[0] and catch QuotaExceededError so localStorage NEVER blocks server writes!
+  try {
+    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
+  } catch {
+    try {
+      // Fallback: cache slimmed catalog (cover image only, no extra base64 gallery duplicates)
+      const slim = products.map((p) => ({
+        ...p,
+        images: p.imageUrl ? [p.imageUrl] : [],
+      }));
+      localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(slim));
+    } catch {
+      try {
+        localStorage.removeItem(STORAGE_KEYS.PRODUCTS);
+      } catch {}
+    }
+  }
 }
 
 export function resetToInitialProducts(): Product[] {
   if (typeof window !== 'undefined') {
-    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
+    saveStoredProducts(INITIAL_PRODUCTS);
   }
   return INITIAL_PRODUCTS;
 }
@@ -141,7 +183,11 @@ export function getStoredOrders(): Order[] {
 
 export function saveStoredOrders(orders: Order[]) {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
+  try {
+    localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
+  } catch {
+    // Never abort order flow on storage quota errors
+  }
 }
 
 export interface PlaceOrderPayload {
@@ -183,6 +229,7 @@ export async function placeOrderOnServer(payload: PlaceOrderPayload): Promise<Or
   const existing = getStoredOrders();
   const next = [data.order, ...existing.filter((o) => o.id !== data.order!.id)];
   saveStoredOrders(next);
+  broadcastCatalogChange();
   return data.order;
 }
 
@@ -459,6 +506,57 @@ export async function fetchLiveCatalogFromServer(isAdmin = false): Promise<Produ
   }
 }
 
+// Ultra-lightweight (~35-byte) live catalog version fingerprint check for near-0s cross-device sync
+export async function fetchCatalogVersion(): Promise<string | null> {
+  try {
+    const res = await fetch(`/api/admin/products?version=1&_t=${Date.now()}`, {
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { success?: boolean; version?: string };
+    return data?.success && typeof data.version === 'string' ? data.version : null;
+  } catch {
+    return null;
+  }
+}
+
+// Ultra-fast (~50-byte) PATCH for 1-click Live/Hidden toggle and Quick Stock (+/-) without re-uploading images
+export async function patchProductOnServer(
+  id: string,
+  patch: { isLive?: boolean; stockQuantity?: number }
+): Promise<ProductMutationResult & { isLive?: boolean; stockQuantity?: number }> {
+  try {
+    const res = await fetch('/api/admin/products', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+      body: JSON.stringify({ id, ...patch }),
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      success?: boolean;
+      error?: string;
+      isLive?: boolean;
+      stockQuantity?: number;
+    };
+    if (!res.ok || !data.success) {
+      return {
+        ok: false,
+        status: res.status,
+        error: data.error || `Server error (${res.status}) while updating product.`,
+      };
+    }
+    broadcastCatalogChange();
+    return {
+      ok: true,
+      status: res.status,
+      isLive: data.isLive,
+      stockQuantity: data.stockQuantity,
+    };
+  } catch {
+    return { ok: false, status: 0, error: 'Network error updating product on server.' };
+  }
+}
+
 // Sync product changes through authenticated server API with detailed error reporting
 export async function syncProductToServer(product: Product): Promise<ProductMutationResult> {
   try {
@@ -487,6 +585,7 @@ export async function syncProductToServer(product: Product): Promise<ProductMuta
         error: data.error || `Server error (${res.status}) while saving product.`,
       };
     }
+    broadcastCatalogChange();
     return { ok: true, status: res.status, product: data.product || product };
   } catch {
     return { ok: false, status: 0, error: 'Network error saving product to server.' };
@@ -510,6 +609,7 @@ export async function deleteProductOnServer(productId: string): Promise<ProductM
         error: data.error || `Server error (${res.status}) while deleting product.`,
       };
     }
+    broadcastCatalogChange();
     return { ok: true, status: res.status };
   } catch {
     return { ok: false, status: 0, error: 'Network error deleting product from server.' };
@@ -539,6 +639,7 @@ export async function restoreStarterCatalogOnServer(): Promise<ProductMutationRe
     if (typeof window !== 'undefined' && Array.isArray(data.products)) {
       saveStoredProducts(data.products);
     }
+    broadcastCatalogChange();
     return { ok: true, status: res.status, products: data.products };
   } catch {
     return { ok: false, status: 0, error: 'Network error restoring starter catalog.' };

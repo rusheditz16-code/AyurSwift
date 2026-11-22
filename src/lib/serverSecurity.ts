@@ -112,6 +112,42 @@ export function maskIpForLog(ip: string): string {
 }
 
 /**
+ * Ultra-fast bounded in-memory sliding-window rate limiter (0ms DB overhead).
+ * Ideal for already-HMAC-authenticated admin endpoints where low latency matters.
+ */
+export function checkMemoryRateLimit(
+  bucketKey: string,
+  limit: number,
+  windowMs: number
+): { allowed: boolean; retryAfterSec: number } {
+  const now = Date.now();
+  if (memoryRateLimits.size >= MAX_RATE_LIMIT_KEYS) {
+    for (const [k, v] of memoryRateLimits.entries()) {
+      if (v.resetAt <= now) memoryRateLimits.delete(k);
+    }
+    if (memoryRateLimits.size >= MAX_RATE_LIMIT_KEYS) {
+      memoryRateLimits.clear();
+    }
+  }
+
+  const record = memoryRateLimits.get(bucketKey);
+  if (!record || now > record.resetAt) {
+    memoryRateLimits.set(bucketKey, { count: 1, resetAt: now + windowMs });
+    return { allowed: true, retryAfterSec: 0 };
+  }
+
+  if (record.count >= limit) {
+    return {
+      allowed: false,
+      retryAfterSec: Math.max(1, Math.ceil((record.resetAt - now) / 1000)),
+    };
+  }
+
+  record.count += 1;
+  return { allowed: true, retryAfterSec: 0 };
+}
+
+/**
  * Shared rate limiter (uses Supabase rate_limits table when service_role is configured,
  * with a bounded in-memory sliding-window fallback).
  */

@@ -145,7 +145,7 @@ export function AdminTopbar({
         <button
           type="button"
           onClick={onToggleLiveSync}
-          title="Toggle 10-second live order polling"
+          title="Toggle 5-second live order sync"
           className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
             isLiveSync
               ? dark
@@ -161,14 +161,14 @@ export function AdminTopbar({
               isLiveSync ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
             }`}
           />
-          <span>{isLiveSync ? 'Live 10s' : 'Paused'}</span>
+          <span>{isLiveSync ? 'Live 5s' : 'Paused'}</span>
         </button>
 
         <button
           type="button"
           onClick={onRefresh}
           disabled={isRefreshing}
-          title="Sync orders now"
+          title="Sync orders & inventory now"
           className={`p-2 rounded-xl border transition-colors cursor-pointer disabled:opacity-50 ${
             dark
               ? 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:border-slate-700'

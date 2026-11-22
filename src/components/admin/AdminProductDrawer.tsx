@@ -493,13 +493,20 @@ export function AdminProductDrawer({
                 className={inputClass}
               >
                 <option value="Balm">Balm (Jar)</option>
+                <option value="Gel">Gel / Paste (Tube / Jar)</option>
+                <option value="Cream">Cream / Ointment</option>
+                <option value="Powder">Powder</option>
+                <option value="Soap">Soap (Bar)</option>
+                <option value="Toothpaste">Toothpaste</option>
+                <option value="Toothbrush">Toothbrush</option>
                 <option value="Tablets">Tablets (Bottle)</option>
+                <option value="Capsules">Capsules (Blister)</option>
                 <option value="Syrup">Syrup (Bottle)</option>
                 <option value="Oil">Oil (Bottle)</option>
+                <option value="Drops">Drops</option>
+                <option value="Lotion">Lotion</option>
                 <option value="Spray">Spray (Can)</option>
                 <option value="Churna">Churna (Tub)</option>
-                <option value="Capsules">Capsules (Blister)</option>
-                <option value="Gel">Gel / Paste (Tube)</option>
                 <option value="Husk">Husk (Box)</option>
               </select>
             </div>

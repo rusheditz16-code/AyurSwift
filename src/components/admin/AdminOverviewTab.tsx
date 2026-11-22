@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Order, Product } from '@/types';
 import { AdminTab } from '@/components/admin/AdminSidebar';
+import { getIstDateKey } from '@/lib/store';
 
 interface AdminOverviewTabProps {
   products: Product[];
@@ -37,11 +38,11 @@ export function AdminOverviewTab({
   const [chartMetric, setChartMetric] = useState<'REVENUE' | 'ORDERS'>('REVENUE');
   const [hoveredDayIdx, setHoveredDayIdx] = useState<number | null>(null);
 
-  // Core KPIs
+  // Core KPIs (strictly IST calendar days so midnight-to-5:30AM orders count on Today)
   const metrics = useMemo(() => {
-    const todayKey = new Date().toISOString().split('T')[0];
+    const todayKey = getIstDateKey(new Date());
     const validOrders = orders.filter((o) => o.orderStatus !== 'CANCELLED');
-    const todayOrders = validOrders.filter((o) => (o.createdAt || '').startsWith(todayKey));
+    const todayOrders = validOrders.filter((o) => getIstDateKey(o.createdAt || '') === todayKey);
 
     const todayRevenue = todayOrders.reduce((s, o) => s + o.totalAmount, 0);
     const totalRevenue = validOrders.reduce((s, o) => s + o.totalAmount, 0);
@@ -96,12 +97,14 @@ export function AdminOverviewTab({
     }[] = [];
 
     for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateKey = d.toISOString().split('T')[0];
-      const label = i === 0 ? 'Today' : d.toLocaleDateString('en-IN', { weekday: 'short' });
+      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+      const dateKey = getIstDateKey(d);
+      const label =
+        i === 0
+          ? 'Today'
+          : d.toLocaleDateString('en-IN', { weekday: 'short', timeZone: 'Asia/Kolkata' });
       const dayOrders = orders.filter(
-        (o) => o.orderStatus !== 'CANCELLED' && (o.createdAt || '').startsWith(dateKey)
+        (o) => o.orderStatus !== 'CANCELLED' && getIstDateKey(o.createdAt || '') === dateKey
       );
       days.push({
         dateKey,

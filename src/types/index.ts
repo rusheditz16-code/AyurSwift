@@ -25,7 +25,24 @@ export interface Product {
   brand: BrandName | string;
   category: ProductCategory | string;
   manufacturer: string;           // e.g. 'Dabur India Ltd.'
-  form: 'Oil' | 'Tablets' | 'Churna' | 'Syrup' | 'Balm' | 'Gel' | 'Husk' | 'Capsules' | 'Spray';
+  form:
+    | 'Oil'
+    | 'Tablets'
+    | 'Churna'
+    | 'Syrup'
+    | 'Balm'
+    | 'Gel'
+    | 'Husk'
+    | 'Capsules'
+    | 'Spray'
+    | 'Powder'
+    | 'Soap'
+    | 'Toothbrush'
+    | 'Toothpaste'
+    | 'Cream'
+    | 'Drops'
+    | 'Lotion'
+    | string;
   packSize: string;               // e.g. '25g Jar', '100ml Bottle', '60 Tablets'
   agencyCostPrice: number;        // Wholesale agency purchase price with GST
   mrp: number;                    // Maximum Retail Price
