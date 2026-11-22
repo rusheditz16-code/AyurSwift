@@ -774,6 +774,7 @@ export function isSafeImageUrl(url: unknown): boolean {
   const trimmed = url.trim();
   if (!trimmed || trimmed.length > 4_000_000) return false;
   if (trimmed.startsWith('/ayurswift-')) return true;
+  if (/^\/api\/product-image\/[a-zA-Z0-9._-]{8,140}$/.test(trimmed)) return true;
   if (/^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/.test(trimmed)) {
     return true;
   }

@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { INITIAL_PRODUCTS, isVerifiedProductImageUrl } from '@/lib/initialData';
+import { INITIAL_PRODUCTS } from '@/lib/initialData';
+import {
+  invalidatePublicCatalogCache,
+  mapDbRowToProduct,
+  MAX_CUSTOMER_ORDER_QTY,
+} from '@/lib/catalogCache';
+import {
+  persistOffloadedProductImages,
+  prepareOffloadedProductImages,
+} from '@/lib/productImages';
 import { Product } from '@/types';
 import {
   checkMemoryRateLimit,
@@ -13,67 +22,17 @@ import {
   verifySameOrigin,
 } from '@/lib/serverSecurity';
 
-const MAX_CUSTOMER_ORDER_QTY = 10;
-
 const NO_STORE_HEADERS = {
   'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
   Pragma: 'no-cache',
   Expires: '0',
 };
 
-function mapDbRowToProduct(
-  row: Record<string, unknown>,
-  isPublicMode: boolean,
-  baseMap: Map<string, Product>
-): Product {
-  const id = String(row.id || '');
-  const base = baseMap.get(id);
-  const rawStock = Math.max(0, Number(row.stock_quantity ?? 0));
-  const isLive = Boolean(row.is_live) && rawStock > 0;
-
-  const rawImage = typeof row.image_url === 'string' ? row.image_url : '';
-  const safePrimary = isVerifiedProductImageUrl(rawImage) ? rawImage.trim() : '';
-  const rawImgs = Array.isArray(row.images) ? (row.images as string[]) : [];
-  const safeImgs = rawImgs.filter((u) => isVerifiedProductImageUrl(u));
-
-  const safetyFromRow =
-    typeof row.safety_advice === 'string' ? row.safety_advice.trim() : '';
-  const badgeFromRow =
-    typeof row.badge_text === 'string' ? row.badge_text.trim() : '';
-
-  return {
-    id,
-    name: String(row.name || ''),
-    brand: (String(row.brand || 'Other') as Product['brand']),
-    category: (String(row.category || 'Daily Wellness') as Product['category']),
-    manufacturer: String(row.manufacturer || ''),
-    form: (String(row.form || 'Tablets') as Product['form']),
-    packSize: String(row.pack_size || ''),
-    agencyCostPrice: isPublicMode ? 0 : Number(row.agency_cost_price ?? 0),
-    mrp: Number(row.mrp ?? 0),
-    sellingPrice: Number(row.selling_price ?? 0),
-    stockQuantity: isPublicMode
-      ? rawStock > 0
-        ? Math.min(rawStock, MAX_CUSTOMER_ORDER_QTY)
-        : 0
-      : rawStock,
-    isLive,
-    badgeText: badgeFromRow || base?.badgeText || undefined,
-    indications: String(row.indications ?? ''),
-    dosage: String(row.dosage ?? ''),
-    composition: String(row.composition ?? ''),
-    safetyAdvice: safetyFromRow || base?.safetyAdvice || undefined,
-    imageUrl: safePrimary || safeImgs[0] || '',
-    images: safeImgs.length > 0 ? safeImgs : safePrimary ? [safePrimary] : [],
-  };
-}
-
 /**
  * GET /api/admin/products
  * - Version check (?version=1): Ultra-lightweight ~35-byte catalog fingerprint (no images)
- *   for near-0-second storefront change detection without wasted bandwidth.
- * - Public mode (?public=1): Returns ONLY live, in-stock products directly filtered in Supabase
- *   with wholesale cost stripped and stock capped to safe per-order customer limit.
+ * - Public fresh bypass (?public=1): Returns live, in-stock products directly from Supabase
+ *   for ~0s same-browser Admin->Storefront verification (regular shoppers use CDN /api/catalog).
  * - Admin mode: Requires valid admin session cookie and returns full inventory with stock & agencyCostPrice.
  */
 export async function GET(request: NextRequest) {
@@ -114,7 +73,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Ultra-fast lightweight version check (~15ms, selects zero image blobs)
     if (isVersionOnly) {
       const { data, error } = await supabase
         .from('products')
@@ -159,7 +117,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Filter live in-stock rows directly in Postgres for public storefront so hidden product images are never downloaded
     let query = supabase
       .from('products')
       .select('*')
@@ -182,7 +139,6 @@ export async function GET(request: NextRequest) {
     const baseMap = new Map<string, Product>();
     INITIAL_PRODUCTS.forEach((p) => baseMap.set(p.id, p));
 
-    // Authoritative Supabase catalog — respects empty catalog & deleted products (never resurrects INITIAL_PRODUCTS)
     const mapped = data.map((row: Record<string, unknown>) =>
       mapDbRowToProduct(row, isPublicMode, baseMap)
     );
@@ -206,7 +162,7 @@ export async function GET(request: NextRequest) {
 /**
  * PATCH /api/admin/products
  * Ultra-fast (~50-byte) admin endpoint for 1-click Live/Hidden toggle and Quick Stock (+/-)
- * without re-uploading multi-image base64 galleries.
+ * without re-uploading images. Immediately invalidates cached public catalog.
  */
 export async function PATCH(request: NextRequest) {
   const ip = getTrustedClientIp(request);
@@ -288,6 +244,8 @@ export async function PATCH(request: NextRequest) {
         );
       }
 
+      invalidatePublicCatalogCache();
+
       return NextResponse.json(
         {
           success: true,
@@ -299,6 +257,8 @@ export async function PATCH(request: NextRequest) {
         { headers: NO_STORE_HEADERS }
       );
     }
+
+    invalidatePublicCatalogCache();
 
     return NextResponse.json(
       {
@@ -319,7 +279,9 @@ export async function PATCH(request: NextRequest) {
 
 /**
  * POST /api/admin/products
- * Admin-only: Upserts a product in Supabase, or restores the 20 starter SKUs ({ action: 'SEED_STARTER' }).
+ * Admin-only: Upserts a product in Supabase, automatically offloading base64 photos to
+ * content-addressed public.product_images (served via 1-year immutable Vercel Edge CDN URLs),
+ * or restores the 20 starter SKUs ({ action: 'SEED_STARTER' }).
  */
 export async function POST(request: NextRequest) {
   const ip = getTrustedClientIp(request);
@@ -386,6 +348,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      invalidatePublicCatalogCache();
       logSecurityEvent('admin_catalog_restored', { ip: maskIpForLog(ip) });
       return NextResponse.json(
         { success: true, products: INITIAL_PRODUCTS },
@@ -448,30 +411,37 @@ export async function POST(request: NextRequest) {
 
     const isLive = stockQuantity > 0 ? Boolean(body.isLive) : false;
 
-    const dbPayload = {
-      id,
-      name,
-      brand,
-      category,
-      manufacturer,
-      form,
-      pack_size: packSize,
-      agency_cost_price: agencyCostPrice,
-      mrp,
-      selling_price: sellingPrice,
-      stock_quantity: stockQuantity,
-      is_live: isLive,
-      image_url: primaryImage,
-      images: safeImages,
-      indications,
-      dosage,
-      composition,
-      safety_advice: safetyAdvice || null,
-      badge_text: badgeText || null,
-      updated_at: new Date().toISOString(),
-    };
+    let finalPrimaryImage = primaryImage;
+    let finalImages = safeImages;
 
     if (supabase) {
+      const prepared = prepareOffloadedProductImages(id, primaryImage, safeImages);
+      finalPrimaryImage = prepared.primaryImage;
+      finalImages = prepared.images;
+
+      const dbPayload = {
+        id,
+        name,
+        brand,
+        category,
+        manufacturer,
+        form,
+        pack_size: packSize,
+        agency_cost_price: agencyCostPrice,
+        mrp,
+        selling_price: sellingPrice,
+        stock_quantity: stockQuantity,
+        is_live: isLive,
+        image_url: finalPrimaryImage,
+        images: finalImages,
+        indications,
+        dosage,
+        composition,
+        safety_advice: safetyAdvice || null,
+        badge_text: badgeText || null,
+        updated_at: new Date().toISOString(),
+      };
+
       const { error } = await supabase.from('products').upsert(dbPayload);
 
       if (error) {
@@ -481,7 +451,18 @@ export async function POST(request: NextRequest) {
           { status: 500, headers: NO_STORE_HEADERS }
         );
       }
+
+      const imgRes = await persistOffloadedProductImages(supabase, id, prepared);
+      if (!imgRes.ok) {
+        console.warn('Supabase product_images upsert failed:', imgRes.error);
+        return NextResponse.json(
+          { success: false, error: 'Product saved, but uploading product photos failed. Please retry.' },
+          { status: 500, headers: NO_STORE_HEADERS }
+        );
+      }
     }
+
+    invalidatePublicCatalogCache();
 
     const savedProduct: Product = {
       id,
@@ -501,8 +482,8 @@ export async function POST(request: NextRequest) {
       composition,
       safetyAdvice: safetyAdvice || undefined,
       badgeText: badgeText || undefined,
-      imageUrl: primaryImage || '',
-      images: safeImages,
+      imageUrl: finalPrimaryImage || '',
+      images: finalImages,
     };
 
     logSecurityEvent('admin_product_saved', {
@@ -524,7 +505,7 @@ export async function POST(request: NextRequest) {
 
 /**
  * DELETE /api/admin/products?id=...
- * Admin-only: Permanently deletes a product SKU from Supabase.
+ * Admin-only: Permanently deletes a product SKU from Supabase (cascades product_images).
  */
 export async function DELETE(request: NextRequest) {
   const ip = getTrustedClientIp(request);
@@ -569,6 +550,8 @@ export async function DELETE(request: NextRequest) {
       );
     }
   }
+
+  invalidatePublicCatalogCache();
 
   logSecurityEvent('admin_product_deleted', {
     productId: id,

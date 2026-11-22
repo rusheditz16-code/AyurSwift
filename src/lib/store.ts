@@ -202,6 +202,7 @@ export interface PlaceOrderPayload {
   landmark?: string;
   paymentMethod: PaymentMethod;
   items: { productId: string; quantity: number }[];
+  idempotencyKey?: string;
   website?: string; // honeypot field
 }
 
@@ -500,25 +501,45 @@ export interface ProductMutationResult {
   products?: Product[];
 }
 
-// Fetch authoritative live product catalog from Supabase via server endpoint (no browser/CDN cache)
-export async function fetchLiveCatalogFromServer(isAdmin = false): Promise<Product[] | null> {
-  try {
-    const url = isAdmin
-      ? `/api/admin/products?_t=${Date.now()}`
-      : `/api/admin/products?public=1&_t=${Date.now()}`;
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data?.success && Array.isArray(data.products)) {
-      if (typeof window !== 'undefined') {
-        saveStoredProducts(data.products);
+// Fetch live product catalog:
+// - Normal customer browsing: hits Vercel Edge CDN-cached /api/catalog (absorbs 1k-2k+ concurrent users with 1 automatic retry)
+// - Same-browser Admin->Storefront instant sync (forceFresh=true): hits uncached /api/admin/products?public=1
+// - Admin hub (isAdmin=true): hits uncached /api/admin/products with full stock & wholesale cost
+export async function fetchLiveCatalogFromServer(
+  isAdmin = false,
+  forceFresh = false
+): Promise<Product[] | null> {
+  const url = isAdmin
+    ? `/api/admin/products?_t=${Date.now()}`
+    : forceFresh
+    ? `/api/admin/products?public=1&_t=${Date.now()}`
+    : '/api/catalog';
+
+  const fetchOpts: RequestInit = isAdmin || forceFresh ? { cache: 'no-store' } : {};
+  const maxAttempts = isAdmin ? 1 : 2;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(url, fetchOpts);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.success && Array.isArray(data.products)) {
+          if (typeof window !== 'undefined') {
+            saveStoredProducts(data.products);
+          }
+          return data.products as Product[];
+        }
       }
-      return data.products as Product[];
+      if (res.status < 500) return null;
+    } catch {
+      // Transient network hiccup — retry once for shoppers
     }
-    return null;
-  } catch {
-    return null;
+
+    if (attempt < maxAttempts) {
+      await new Promise((r) => setTimeout(r, 400));
+    }
   }
+  return null;
 }
 
 // Ultra-lightweight (~35-byte) live catalog version fingerprint check for near-0s cross-device sync

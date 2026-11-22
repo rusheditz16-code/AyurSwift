@@ -58,6 +58,7 @@ interface CartDrawerProps {
     pincode: string;
     landmark?: string;
     paymentMethod: PaymentMethod;
+    idempotencyKey?: string;
     website?: string;
   }) => Promise<void>;
   settings: MerchantSettings;
@@ -88,6 +89,26 @@ export function CartDrawer({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [hasSavedProfile, setHasSavedProfile] = useState(false);
+  const [checkoutIdempotencyKey, setCheckoutIdempotencyKey] = useState('');
+
+  // Regenerate per-checkout idempotency key whenever cart signature changes so retries never double-order
+  const cartSignature = useMemo(
+    () =>
+      cart
+        .map((c) => `${c.product.id}:${c.quantity}`)
+        .sort()
+        .join('|'),
+    [cart]
+  );
+
+  useEffect(() => {
+    if (!isOpen || !cartSignature) return;
+    const key =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `ord-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    setCheckoutIdempotencyKey(key);
+  }, [isOpen, cartSignature]);
 
   // Live IST delivery slot state (populated strictly in useEffect to stay Next.js 16 prerender-safe)
   const [slotClockNow, setSlotClockNow] = useState<Date | null>(null);
@@ -298,6 +319,7 @@ export function CartDrawer({
         pincode: pincode.trim(),
         landmark: landmark.trim() || undefined,
         paymentMethod,
+        idempotencyKey: checkoutIdempotencyKey || undefined,
         website: honeypot,
       });
     } catch (err) {

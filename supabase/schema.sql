@@ -34,9 +34,22 @@ CREATE TABLE IF NOT EXISTS products (
 ALTER TABLE products ADD COLUMN IF NOT EXISTS safety_advice TEXT;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS badge_text TEXT;
 
--- Storefront query index (strictly only in-stock and live items)
+-- Storefront query indexes
 CREATE INDEX IF NOT EXISTS idx_products_storefront ON products (is_live, stock_quantity)
   WHERE is_live = true AND stock_quantity > 0;
+CREATE INDEX IF NOT EXISTS idx_products_updated_at ON products (updated_at DESC);
+
+-- 1b. Content-Addressed Product Images (offloads base64 blobs from catalog JSON for Vercel Edge CDN)
+CREATE TABLE IF NOT EXISTS product_images (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  content_type TEXT NOT NULL,
+  data_b64 TEXT NOT NULL,
+  byte_size INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_images_product_id ON product_images (product_id);
 
 -- 2. Orders Table
 CREATE TABLE IF NOT EXISTS orders (
@@ -72,6 +85,12 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS utr_number TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS courier_tracking TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS admin_note TEXT;
 
+-- High-scale order lookup & Option A unpaid-slot sweeper indexes
+CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_customer_phone ON orders (customer_phone, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_unpaid_active ON orders (created_at DESC)
+  WHERE order_status = 'NEW' AND payment_status = 'PENDING' AND delivery_type = 'RAPIDO_CITY' AND payment_method = 'UPI' AND utr_number IS NULL;
+
 -- 3. Shared Rate Limits Table (Server-only via service_role)
 CREATE TABLE IF NOT EXISTS rate_limits (
   key TEXT PRIMARY KEY,
@@ -100,6 +119,7 @@ CREATE TABLE IF NOT EXISTS admin_otps (
 
 -- 5. Row Level Security (RLS) — LOCKED DOWN
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE product_images ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rate_limits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_credentials ENABLE ROW LEVEL SECURITY;
@@ -113,6 +133,7 @@ DROP POLICY IF EXISTS "Public can view live in-stock products" ON products;
 
 -- All storefront and admin requests flow exclusively through Next.js API routes authenticated via private.is_ayurswift_server()
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE products TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE product_images TO anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE orders TO anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE rate_limits TO anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE admin_credentials TO anon, authenticated;
@@ -190,3 +211,132 @@ CREATE POLICY "Server full access admin_otps" ON admin_otps
   FOR ALL TO anon, authenticated
   USING (private.is_ayurswift_server())
   WITH CHECK (private.is_ayurswift_server());
+
+CREATE POLICY "Server full access product_images" ON product_images
+  FOR ALL TO anon, authenticated
+  USING (private.is_ayurswift_server())
+  WITH CHECK (private.is_ayurswift_server());
+
+-- 7. Atomic Concurrency-Safe Stock RPCs (FOR UPDATE deterministic row locking — zero overselling)
+CREATE OR REPLACE FUNCTION public.reserve_order_stock(p_items jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'private', 'pg_temp'
+AS $function$
+DECLARE
+  v_item RECORD;
+  v_prod RECORD;
+  v_verified JSONB := '[]'::jsonb;
+  v_now TIMESTAMPTZ := now();
+BEGIN
+  IF NOT private.is_ayurswift_server() THEN
+    RAISE EXCEPTION 'Forbidden: server authorization required';
+  END IF;
+
+  IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array' OR jsonb_array_length(p_items) = 0 THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Order must contain at least one item.');
+  END IF;
+
+  FOR v_item IN
+    SELECT
+      (elem->>'productId')::TEXT AS product_id,
+      SUM((elem->>'quantity')::INTEGER)::INTEGER AS qty
+    FROM jsonb_array_elements(p_items) AS elem
+    GROUP BY elem->>'productId'
+    ORDER BY elem->>'productId'
+  LOOP
+    IF v_item.product_id IS NULL OR v_item.qty IS NULL OR v_item.qty < 1 OR v_item.qty > 20 THEN
+      RETURN jsonb_build_object('ok', false, 'error', 'Each item must have an integer quantity between 1 and 20.');
+    END IF;
+
+    SELECT id, name, brand, pack_size, mrp, selling_price, stock_quantity, is_live
+      INTO v_prod
+      FROM public.products
+      WHERE id = v_item.product_id
+      FOR UPDATE;
+
+    IF NOT FOUND OR NOT v_prod.is_live OR v_prod.stock_quantity <= 0 THEN
+      RETURN jsonb_build_object('ok', false, 'error', 'One or more requested items are currently unavailable.');
+    END IF;
+
+    IF v_prod.stock_quantity < v_item.qty THEN
+      RETURN jsonb_build_object(
+        'ok', false,
+        'error', format('Only %s unit(s) left for %s.', v_prod.stock_quantity, v_prod.name)
+      );
+    END IF;
+
+    v_verified := v_verified || jsonb_build_array(
+      jsonb_build_object(
+        'productId', v_prod.id,
+        'name', v_prod.name,
+        'brand', v_prod.brand,
+        'packSize', v_prod.pack_size,
+        'quantity', v_item.qty,
+        'mrp', v_prod.mrp,
+        'unitPrice', v_prod.selling_price,
+        'totalPrice', round((v_prod.selling_price * v_item.qty)::numeric, 2)
+      )
+    );
+  END LOOP;
+
+  FOR v_item IN
+    SELECT
+      (elem->>'productId')::TEXT AS product_id,
+      (elem->>'quantity')::INTEGER AS qty
+    FROM jsonb_array_elements(v_verified) AS elem
+    ORDER BY elem->>'productId'
+  LOOP
+    UPDATE public.products
+       SET stock_quantity = stock_quantity - v_item.qty,
+           is_live = CASE WHEN (stock_quantity - v_item.qty) > 0 THEN is_live ELSE false END,
+           updated_at = v_now
+     WHERE id = v_item.product_id;
+  END LOOP;
+
+  RETURN jsonb_build_object('ok', true, 'items', v_verified);
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.restore_order_stock(p_items jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'private', 'pg_temp'
+AS $function$
+DECLARE
+  v_item RECORD;
+  v_now TIMESTAMPTZ := now();
+BEGIN
+  IF NOT private.is_ayurswift_server() THEN
+    RAISE EXCEPTION 'Forbidden: server authorization required';
+  END IF;
+
+  IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array' THEN
+    RETURN jsonb_build_object('ok', true);
+  END IF;
+
+  FOR v_item IN
+    SELECT
+      (elem->>'productId')::TEXT AS product_id,
+      SUM((elem->>'quantity')::INTEGER)::INTEGER AS qty
+    FROM jsonb_array_elements(p_items) AS elem
+    GROUP BY elem->>'productId'
+    ORDER BY elem->>'productId'
+  LOOP
+    IF v_item.product_id IS NOT NULL AND v_item.qty IS NOT NULL AND v_item.qty > 0 THEN
+      UPDATE public.products
+         SET stock_quantity = stock_quantity + v_item.qty,
+             is_live = CASE WHEN stock_quantity = 0 THEN true ELSE is_live END,
+             updated_at = v_now
+       WHERE id = v_item.product_id;
+    END IF;
+  END LOOP;
+
+  RETURN jsonb_build_object('ok', true);
+END;
+$function$;
+
+GRANT EXECUTE ON FUNCTION public.reserve_order_stock(jsonb) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.restore_order_stock(jsonb) TO anon, authenticated;

@@ -25,7 +25,6 @@ import {
 } from '@/types';
 import {
   CATALOG_SYNC_CHANNEL,
-  fetchCatalogVersion,
   getStoredProducts,
   getStoredSettings,
   placeOrderOnServer,
@@ -169,7 +168,6 @@ export default function StorefrontPage() {
 
   const catalogRef = useRef<HTMLElement>(null);
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const lastCatalogVersionRef = useRef<string | null>(null);
 
   const showToast = useCallback((msg: string) => {
     setToastText(msg);
@@ -177,11 +175,11 @@ export default function StorefrontPage() {
     toastTimerRef.current = setTimeout(() => setToastText(null), 2600);
   }, []);
 
-  const syncLiveCatalog = useCallback(async (silent = false) => {
+  const syncLiveCatalog = useCallback(async (silent = false, forceFresh = false) => {
     if (!silent) setIsLoadingCatalog(true);
     setCatalogError(null);
     try {
-      const liveProds = await fetchLiveCatalogFromServer(false);
+      const liveProds = await fetchLiveCatalogFromServer(false, forceFresh);
       if (liveProds !== null) {
         setProducts(liveProds);
         const liveMap = new Map(liveProds.map((p) => [p.id, p]));
@@ -226,48 +224,41 @@ export default function StorefrontPage() {
       const savedLoc = sessionStorage.getItem('ayurswift_location');
       if (savedLoc) setCurrentLocation(JSON.parse(savedLoc));
     } catch {}
-    syncLiveCatalog(false);
-    fetchCatalogVersion().then((v) => {
-      if (v) lastCatalogVersionRef.current = v;
-    });
+    syncLiveCatalog(false, false);
 
-    // Near-0-second storefront sync:
-    // 1. Same-browser instant BroadcastChannel + 13-byte localStorage ping (~0ms trigger)
-    // 2. Cross-device lightweight 35-byte version fingerprint check every 3s while tab is visible
+    // High-scale sync strategy (0 DB load at 1k-2k shoppers + ~0s owner updates):
+    // 1. Same-browser instant BroadcastChannel + localStorage ping -> bypasses CDN for ~0s Admin->Storefront feedback
+    // 2. Cross-device background refresh every 30s against Vercel Edge CDN /api/catalog (0 DB hits!)
     let bc: BroadcastChannel | null = null;
     try {
       if (typeof BroadcastChannel !== 'undefined') {
         bc = new BroadcastChannel(CATALOG_SYNC_CHANNEL);
         bc.onmessage = () => {
-          syncLiveCatalog(true);
+          syncLiveCatalog(true, true);
         };
       }
     } catch {}
 
-    const onFocus = () => syncLiveCatalog(true);
+    const onFocus = () => syncLiveCatalog(true, false);
     const onVisibility = () => {
-      if (!document.hidden) syncLiveCatalog(true);
+      if (!document.hidden) syncLiveCatalog(true, false);
     };
     const onStorage = (e: StorageEvent) => {
       if (e.key === 'ayurswift_catalog_ping' || e.key === 'ayurswift_products_v3') {
-        syncLiveCatalog(true);
+        syncLiveCatalog(true, true);
       }
     };
 
-    const versionPoll = setInterval(async () => {
+    const cdnRefreshPoll = setInterval(() => {
       if (typeof document !== 'undefined' && document.hidden) return;
-      const latestVersion = await fetchCatalogVersion();
-      if (latestVersion && latestVersion !== lastCatalogVersionRef.current) {
-        lastCatalogVersionRef.current = latestVersion;
-        syncLiveCatalog(true);
-      }
-    }, 3000);
+      syncLiveCatalog(true, false);
+    }, 30_000);
 
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('storage', onStorage);
     return () => {
-      clearInterval(versionPoll);
+      clearInterval(cdnRefreshPoll);
       try {
         bc?.close();
       } catch {}
@@ -534,6 +525,7 @@ export default function StorefrontPage() {
     pincode: string;
     landmark?: string;
     paymentMethod: PaymentMethod;
+    idempotencyKey?: string;
     website?: string;
   }) => {
     const order = await placeOrderOnServer({
@@ -551,13 +543,14 @@ export default function StorefrontPage() {
         productId: item.product.id,
         quantity: item.quantity,
       })),
+      idempotencyKey: orderData.idempotencyKey,
       website: orderData.website,
     });
 
     setIsCartOpen(false);
     setActiveOrder(order);
     handleClearCart();
-    syncLiveCatalog(true);
+    syncLiveCatalog(true, true);
   };
 
   const handleCallbackSubmit = (e: React.FormEvent) => {
