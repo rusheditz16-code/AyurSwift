@@ -17,7 +17,10 @@ import {
 } from 'lucide-react';
 import { Order, MerchantSettings } from '@/types';
 import { generateUpiUri, generateWhatsAppOrderUrl, submitOrderUtr } from '@/lib/store';
-import { formatDeliverySlotForDisplay } from '@/lib/deliverySlots';
+import {
+  formatDeliverySlotForDisplay,
+  getSlotPaymentDeadlineText,
+} from '@/lib/deliverySlots';
 import { InvoiceModal } from '@/components/InvoiceModal';
 
 interface PaymentModalProps {
@@ -39,6 +42,8 @@ export function PaymentModal({
   const [copiedOrderId, setCopiedOrderId] = useState(false);
   const [utrNumber, setUtrNumber] = useState('');
   const [savedUtr, setSavedUtr] = useState<string | null>(null);
+  const [displaySlot, setDisplaySlot] = useState<string | undefined>(order?.deliverySlot);
+  const [slotShiftedNotice, setSlotShiftedNotice] = useState(false);
   const [isSavingUtr, setIsSavingUtr] = useState(false);
   const [utrError, setUtrError] = useState<string | null>(null);
   const [showInvoice, setShowInvoice] = useState(false);
@@ -46,8 +51,10 @@ export function PaymentModal({
   useEffect(() => {
     setUtrNumber(order?.utrNumber || '');
     setSavedUtr(order?.utrNumber || null);
+    setDisplaySlot(order?.deliverySlot);
+    setSlotShiftedNotice(false);
     setUtrError(null);
-  }, [order?.id, order?.utrNumber]);
+  }, [order?.id, order?.utrNumber, order?.deliverySlot]);
 
   useEffect(() => {
     if (!order) return;
@@ -101,6 +108,10 @@ export function PaymentModal({
       const updated = await submitOrderUtr(order.id, order.customerPhone, clean);
       setSavedUtr(clean);
       setUtrNumber(clean);
+      if (updated?.deliverySlot && updated.deliverySlot !== displaySlot) {
+        setDisplaySlot(updated.deliverySlot);
+        setSlotShiftedNotice(true);
+      }
       if (updated && onOrderUpdated) onOrderUpdated(updated);
       return true;
     } catch (err) {
@@ -182,12 +193,21 @@ export function PaymentModal({
                 {order.deliveryAddress}, {order.city}
               </span>
             </div>
-            {order.deliverySlot && (
+            {displaySlot && (
               <div className="flex justify-between items-center text-gray-600 gap-3">
                 <span className="shrink-0">Delivery Slot</span>
                 <span className="font-extrabold text-[#0A5C16] bg-[#ECFDF3] border border-[#BBF7D0] px-2 py-0.5 rounded-lg text-[11px] text-right">
-                  {formatDeliverySlotForDisplay(order.deliverySlot)}
+                  {formatDeliverySlotForDisplay(displaySlot)}
                 </span>
+              </div>
+            )}
+            {order.paymentMethod === 'UPI' && displaySlot && !savedUtr && (
+              <div className="bg-amber-50 border border-amber-200/90 rounded-xl px-2.5 py-1.5 text-[10.5px] text-amber-900 font-semibold leading-snug">
+                Pay &amp; save UTR before{' '}
+                <strong className="font-extrabold">
+                  {getSlotPaymentDeadlineText(displaySlot)}
+                </strong>{' '}
+                to lock this slot. Unpaid orders automatically move to the next available slot.
               </div>
             )}
             <div className="flex justify-between items-center border-t border-gray-100 pt-2">
@@ -293,7 +313,9 @@ export function PaymentModal({
                 )}
                 {savedUtr && !utrError && (
                   <p className="text-[10.5px] font-semibold text-[#0C831F]">
-                    ✓ Sent to dark store! Merchant can verify payment immediately.
+                    {slotShiftedNotice && displaySlot
+                      ? `✓ UTR saved! Because the earlier slot had started, your delivery is now scheduled for ${formatDeliverySlotForDisplay(displaySlot)}.`
+                      : '✓ Sent to dark store! Merchant can verify your UTR immediately.'}
                   </p>
                 )}
               </div>

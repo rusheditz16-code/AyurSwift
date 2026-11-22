@@ -22,6 +22,7 @@ import {
   saveStoredSettings,
   formatRapidoDropText,
   generateSmartAdminWhatsAppUrl,
+  broadcastCatalogChange,
   patchProductOnServer,
   syncProductToServer,
   deleteProductOnServer,
@@ -820,12 +821,18 @@ export function AdminDashboard() {
   };
 
   const handleUpdateOrderStatus = async (orderId: string, status: Order['orderStatus']) => {
-    await commitOrderUpdate(
+    const ok = await commitOrderUpdate(
       orderId,
       { orderStatus: status },
       { orderStatus: status },
-      `${orderId} updated to ${status}`
+      status === 'CANCELLED'
+        ? `${orderId} cancelled & stock restored to storefront`
+        : `${orderId} updated to ${status}`
     );
+    if (ok && status === 'CANCELLED') {
+      refreshCatalog();
+      broadcastCatalogChange();
+    }
   };
 
   const handleTogglePaymentVerified = async (orderId: string) => {

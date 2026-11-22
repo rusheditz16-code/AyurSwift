@@ -283,7 +283,9 @@ export async function syncOrderStatuses(): Promise<Order[]> {
   try {
     const ids = local.map((o) => o.id).filter(Boolean).slice(0, 20).join(',');
     if (!ids) return local;
-    const res = await fetch(`/api/orders?ids=${encodeURIComponent(ids)}`);
+    const res = await fetch(`/api/orders?ids=${encodeURIComponent(ids)}&_t=${Date.now()}`, {
+      cache: 'no-store',
+    });
     if (res.ok) {
       const data = await res.json();
       if (data.success && Array.isArray(data.orders)) {
@@ -298,6 +300,8 @@ export async function syncOrderStatuses(): Promise<Order[]> {
             (srv.orderStatus !== locOrder.orderStatus ||
               srv.paymentStatus !== locOrder.paymentStatus ||
               srv.courierTracking !== locOrder.courierTracking ||
+              srv.deliverySlot !== locOrder.deliverySlot ||
+              (srv.slotRescheduledCount ?? 0) !== (locOrder.slotRescheduledCount ?? 0) ||
               (srv.utrNumber && !locOrder.utrNumber))
           ) {
             changed = true;
@@ -305,6 +309,8 @@ export async function syncOrderStatuses(): Promise<Order[]> {
               ...locOrder,
               orderStatus: srv.orderStatus,
               paymentStatus: srv.paymentStatus,
+              deliverySlot: srv.deliverySlot ?? locOrder.deliverySlot,
+              slotRescheduledCount: srv.slotRescheduledCount ?? locOrder.slotRescheduledCount,
               courierTracking: srv.courierTracking ?? locOrder.courierTracking,
               utrNumber: locOrder.utrNumber || srv.utrNumber,
             };
@@ -313,7 +319,7 @@ export async function syncOrderStatuses(): Promise<Order[]> {
         });
 
         if (changed) {
-          localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
+          saveStoredOrders(updated);
           return updated;
         }
       }
@@ -357,9 +363,18 @@ export async function submitOrderUtr(
   if (typeof window !== 'undefined') {
     const current = getStoredOrders();
     const updated = current.map((o) =>
-      o.id === orderId ? { ...o, utrNumber: cleanUtr } : o
+      o.id === orderId
+        ? {
+            ...o,
+            utrNumber: cleanUtr,
+            ...(data.order?.deliverySlot ? { deliverySlot: data.order.deliverySlot } : {}),
+            ...(data.order?.slotRescheduledCount !== undefined
+              ? { slotRescheduledCount: data.order.slotRescheduledCount }
+              : {}),
+          }
+        : o
     );
-    localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
+    saveStoredOrders(updated);
     return updated.find((o) => o.id === orderId) || data.order || null;
   }
 

@@ -163,15 +163,28 @@ export function AdminOrderCard({
       {order.deliverySlot && (
         <div
           className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl border text-[11px] ${
-            dark
+            (order.slotRescheduledCount ?? 0) >= 1 &&
+            order.orderStatus === 'NEW' &&
+            order.paymentStatus === 'PENDING'
+              ? dark
+                ? 'bg-amber-500/15 border-amber-500/35 text-amber-300'
+                : 'bg-amber-50 border-amber-200 text-amber-900'
+              : dark
               ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300'
               : 'bg-emerald-50 border-emerald-200 text-emerald-900'
           }`}
         >
-          <span className="inline-flex items-center gap-1.5 font-extrabold">
+          <span className="inline-flex items-center gap-1.5 font-extrabold min-w-0">
             <Clock className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-            <span>Slot: {formatDeliverySlotForDisplay(order.deliverySlot)}</span>
+            <span className="truncate">Slot: {formatDeliverySlotForDisplay(order.deliverySlot)}</span>
           </span>
+          {(order.slotRescheduledCount ?? 0) >= 1 &&
+            order.orderStatus === 'NEW' &&
+            order.paymentStatus === 'PENDING' && (
+              <span className="text-[9.5px] font-extrabold px-1.5 py-0.5 rounded bg-amber-500 text-slate-950 shrink-0">
+                Auto-Moved
+              </span>
+            )}
         </div>
       )}
 
@@ -340,14 +353,38 @@ export function AdminOrderCard({
         {order.orderStatus === 'NEW' &&
           order.paymentMethod === 'UPI' &&
           order.paymentStatus === 'PENDING' && (
-            <button
-              type="button"
-              onClick={() => onVerifyAndPack(order.id)}
-              className="w-full py-2 px-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11.5px] font-extrabold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs"
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Verify UPI &amp; Pack</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => onVerifyAndPack(order.id)}
+                className="flex-1 py-2 px-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11.5px] font-extrabold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Verify UPI &amp; Pack</span>
+              </button>
+              {!order.utrNumber && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Cancel unpaid order ${order.id} and restore all item stock back to your storefront?`
+                      )
+                    ) {
+                      onUpdateOrderStatus(order.id, 'CANCELLED');
+                    }
+                  }}
+                  title="Cancel unpaid order & restore stock"
+                  className={`py-2 px-2.5 rounded-xl text-[11px] font-extrabold border transition-all active:scale-95 cursor-pointer shrink-0 ${
+                    dark
+                      ? 'border-rose-500/40 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20'
+                      : 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
+                  }`}
+                >
+                  Cancel Unpaid
+                </button>
+              )}
+            </div>
           )}
 
         <div className="flex items-center gap-1.5">

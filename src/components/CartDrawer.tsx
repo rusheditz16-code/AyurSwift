@@ -760,7 +760,7 @@ export function CartDrawer({
                     </div>
 
                     <p className="text-[10.5px] text-gray-500 leading-snug">
-                      An ongoing slot cannot be booked so we have dedicated time to verify stock and pack your order before dispatch.
+                      Complete UPI payment before your chosen slot starts to confirm delivery. If unpaid when a slot starts, your order automatically moves to the next open slot.
                     </p>
                   </div>
                 )}

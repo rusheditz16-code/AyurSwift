@@ -7,6 +7,7 @@ type OrderItem = Order['items'][number];
 import { DEFAULT_SETTINGS, INITIAL_PRODUCTS } from '@/lib/initialData';
 import {
   getNextAvailableSlot,
+  isDeliverySlotStarted,
   validateDeliverySlotSelection,
 } from '@/lib/deliverySlots';
 import {
@@ -127,6 +128,7 @@ function mapDbRowToOrder(row: Record<string, unknown>): Order {
     customerPhone: String(row.customer_phone || ''),
     deliveryType: (row.delivery_type as DeliveryType) || 'RAPIDO_CITY',
     deliverySlot: row.delivery_slot ? String(row.delivery_slot) : undefined,
+    slotRescheduledCount: Number(row.slot_rescheduled_count ?? 0) || 0,
     deliveryAddress: String(row.delivery_address || ''),
     city: String(row.city || ''),
     pincode: String(row.pincode || ''),
@@ -153,6 +155,7 @@ function mapOrderToDbRow(order: Order) {
     customer_phone: order.customerPhone,
     delivery_type: order.deliveryType,
     delivery_slot: order.deliverySlot || null,
+    slot_rescheduled_count: order.slotRescheduledCount ?? 0,
     delivery_address: order.deliveryAddress,
     city: order.city,
     pincode: order.pincode,
@@ -173,7 +176,128 @@ function mapOrderToDbRow(order: Order) {
   };
 }
 
-async function loadAllOrders(): Promise<Order[]> {
+async function restoreStockForOrder(
+  supabase: NonNullable<ReturnType<typeof getSupabaseAdminClient>>,
+  order: Order
+): Promise<void> {
+  const catalog = await loadServerCatalog();
+  const nowIso = new Date().toISOString();
+  await Promise.all(
+    order.items.map((item) => {
+      const prod = catalog.get(item.productId);
+      if (!prod) return Promise.resolve();
+      const restoredStock = prod.stockQuantity + item.quantity;
+      return supabase
+        .from('products')
+        .update({
+          stock_quantity: restoredStock,
+          is_live: restoredStock > 0,
+          updated_at: nowIso,
+        })
+        .eq('id', prod.id);
+    })
+  );
+}
+
+/**
+ * Option A Automated Slot Protection for Unpaid UPI Orders:
+ * - If a Bhavnagar local UPI order is still NEW + paymentStatus PENDING + NO UTR submitted
+ *   once its chosen slot begins:
+ *     1) First missed slot (slotRescheduledCount === 0): Auto-moves to the next available slot
+ *        so the customer still has time to pay without disrupting the ongoing slot.
+ *     2) Second missed slot (slotRescheduledCount >= 1): Auto-cancels the unpaid order and
+ *        immediately restores all ordered product stock back to Supabase.
+ * - Never auto-cancels any order where the customer already submitted a UTR!
+ */
+async function reconcileUnpaidSlotOrders(
+  orders: Order[],
+  now: Date = new Date(),
+  skipAutoCancelOrderId?: string
+): Promise<Order[]> {
+  const supabase = getSupabaseAdminClient();
+  let mutatedAny = false;
+  const nowIso = now.toISOString();
+
+  const updated = await Promise.all(
+    orders.map(async (order) => {
+      if (skipAutoCancelOrderId && order.id === skipAutoCancelOrderId) {
+        return order;
+      }
+      const isUnpaidActiveSlotOrder =
+        order.deliveryType === 'RAPIDO_CITY' &&
+        order.paymentMethod === 'UPI' &&
+        order.paymentStatus === 'PENDING' &&
+        order.orderStatus === 'NEW' &&
+        !order.utrNumber &&
+        Boolean(order.deliverySlot) &&
+        isDeliverySlotStarted(order.deliverySlot, now);
+
+      if (!isUnpaidActiveSlotOrder) return order;
+
+      mutatedAny = true;
+      const rescheduleCount = Number(order.slotRescheduledCount ?? 0);
+
+      if (rescheduleCount === 0) {
+        const nextSlot = getNextAvailableSlot(now).canonicalValue;
+        const shiftedOrder: Order = {
+          ...order,
+          deliverySlot: nextSlot,
+          slotRescheduledCount: 1,
+        };
+        if (supabase) {
+          await supabase
+            .from('orders')
+            .update({
+              delivery_slot: nextSlot,
+              slot_rescheduled_count: 1,
+              updated_at: nowIso,
+            })
+            .eq('id', order.id);
+        }
+        logSecurityEvent('order_unpaid_slot_auto_moved', {
+          orderId: order.id,
+          nextSlot,
+        });
+        return shiftedOrder;
+      }
+
+      // Already auto-moved once and still unpaid with no UTR when rescheduled slot started -> auto-cancel & restore stock
+      const cancelNote =
+        order.adminNote || 'Auto-cancelled: UPI payment not completed before rescheduled slot started';
+      const cancelledOrder: Order = {
+        ...order,
+        orderStatus: 'CANCELLED',
+        adminNote: cancelNote,
+      };
+      if (supabase) {
+        const { error: cancelErr } = await supabase
+          .from('orders')
+          .update({
+            order_status: 'CANCELLED',
+            admin_note: cancelNote,
+            updated_at: nowIso,
+          })
+          .eq('id', order.id);
+
+        if (!cancelErr) {
+          await restoreStockForOrder(supabase, order);
+        }
+      }
+      logSecurityEvent('order_unpaid_auto_cancelled', {
+        orderId: order.id,
+      });
+      return cancelledOrder;
+    })
+  );
+
+  if (mutatedAny) {
+    memoryOrders = updated;
+    saveOrdersToFile(updated);
+  }
+  return updated;
+}
+
+async function loadAllOrders(skipAutoCancelOrderId?: string): Promise<Order[]> {
   const diskOrders = loadOrdersFromFile();
   const allOrdersMap = new Map<string, Order>();
 
@@ -206,8 +330,9 @@ async function loadAllOrders(): Promise<Order[]> {
   const sorted = Array.from(allOrdersMap.values()).sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
-  memoryOrders = sorted;
-  return sorted;
+  const reconciled = await reconcileUnpaidSlotOrders(sorted, new Date(), skipAutoCancelOrderId);
+  memoryOrders = reconciled;
+  return reconciled;
 }
 
 /**
@@ -764,7 +889,8 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const allOrders = await loadAllOrders();
+    // If customer is submitting a UTR right now, never auto-cancel that order before saving their UTR
+    const allOrders = await loadAllOrders(hasUtr && cleanUtr ? orderId : undefined);
     const existing = allOrders.find((o) => o.id === orderId);
 
     if (!existing) {
@@ -833,11 +959,30 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    // If customer submits a late UTR after their booked slot has already started, auto-move to next open slot
+    let slotAutoShifted = false;
+    let nextSlotForLateUtr: string | undefined;
+    let nextRescheduleCount: number | undefined;
+    if (
+      hasUtr &&
+      cleanUtr &&
+      existing.deliveryType === 'RAPIDO_CITY' &&
+      existing.orderStatus === 'NEW' &&
+      existing.deliverySlot &&
+      isDeliverySlotStarted(existing.deliverySlot, new Date())
+    ) {
+      nextSlotForLateUtr = getNextAvailableSlot(new Date()).canonicalValue;
+      nextRescheduleCount = (existing.slotRescheduledCount ?? 0) + 1;
+      slotAutoShifted = true;
+    }
+
     const updatedOrder: Order = {
       ...existing,
       ...(orderStatus ? { orderStatus } : {}),
       ...(paymentStatus ? { paymentStatus } : {}),
       ...(hasUtr ? { utrNumber: cleanUtr || undefined } : {}),
+      ...(nextSlotForLateUtr ? { deliverySlot: nextSlotForLateUtr } : {}),
+      ...(nextRescheduleCount !== undefined ? { slotRescheduledCount: nextRescheduleCount } : {}),
       ...(hasCourierTracking ? { courierTracking: cleanCourierTracking || undefined } : {}),
       ...(hasAdminNote ? { adminNote: cleanAdminNote || undefined } : {}),
       ...(hasRapidoCopied ? { rapidoCopied: rapidoCopiedVal } : {}),
@@ -849,12 +994,14 @@ export async function PUT(request: NextRequest) {
 
     const supabase = getSupabaseAdminClient();
     if (supabase) {
-      const dbPatch: Record<string, string | boolean | null> = {
+      const dbPatch: Record<string, string | number | boolean | null> = {
         updated_at: new Date().toISOString(),
       };
       if (orderStatus) dbPatch.order_status = orderStatus;
       if (paymentStatus) dbPatch.payment_status = paymentStatus;
       if (hasUtr) dbPatch.utr_number = cleanUtr || null;
+      if (nextSlotForLateUtr) dbPatch.delivery_slot = nextSlotForLateUtr;
+      if (nextRescheduleCount !== undefined) dbPatch.slot_rescheduled_count = nextRescheduleCount;
       if (hasCourierTracking) dbPatch.courier_tracking = cleanCourierTracking || null;
       if (hasAdminNote) dbPatch.admin_note = cleanAdminNote || null;
       if (hasRapidoCopied) dbPatch.rapido_copied = Boolean(rapidoCopiedVal);
@@ -867,23 +1014,9 @@ export async function PUT(request: NextRequest) {
         console.warn('Supabase update error in PUT /api/orders');
       }
 
-      // Restore stock in Supabase when transitioning to CANCELLED from a non-cancelled state
+      // Restore stock in Supabase in parallel when transitioning to CANCELLED from a non-cancelled state
       if (existing.orderStatus !== 'CANCELLED' && orderStatus === 'CANCELLED') {
-        const catalog = await loadServerCatalog();
-        for (const item of existing.items) {
-          const prod = catalog.get(item.productId);
-          if (prod) {
-            const restoredStock = prod.stockQuantity + item.quantity;
-            await supabase
-              .from('products')
-              .update({
-                stock_quantity: restoredStock,
-                is_live: restoredStock > 0,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', prod.id);
-          }
-        }
+        await restoreStockForOrder(supabase, existing);
       }
     }
 
@@ -900,13 +1033,17 @@ export async function PUT(request: NextRequest) {
       ip: maskIpForLog(ip),
     });
 
-    return NextResponse.json({
-      success: true,
-      orderId,
-      orderStatus: updatedOrder.orderStatus,
-      paymentStatus: updatedOrder.paymentStatus,
-      order: isAdmin ? updatedOrder : maskOrderForPublic(updatedOrder),
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        orderId,
+        orderStatus: updatedOrder.orderStatus,
+        paymentStatus: updatedOrder.paymentStatus,
+        slotAutoShifted,
+        order: isAdmin ? updatedOrder : maskOrderForPublic(updatedOrder),
+      },
+      { headers: NO_STORE_HEADERS }
+    );
   } catch {
     return NextResponse.json(
       { success: false, error: 'Unable to update order right now.' },

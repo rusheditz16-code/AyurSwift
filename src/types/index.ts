@@ -88,6 +88,7 @@ export interface Order {
   customerPhone: string;
   deliveryType: DeliveryType;
   deliverySlot?: string;          // e.g. '22 Nov 2026 • 9:00 AM – 10:00 AM'
+  slotRescheduledCount?: number;  // 0 = original slot, 1+ = auto-moved to next slot because UPI was unpaid
   deliveryAddress: string;
   city: string;
   pincode: string;

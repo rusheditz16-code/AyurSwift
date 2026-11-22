@@ -18,7 +18,10 @@ import {
 } from 'lucide-react';
 import { MerchantSettings, Order } from '@/types';
 import { generateUpiUri, submitOrderUtr } from '@/lib/store';
-import { formatDeliverySlotForDisplay } from '@/lib/deliverySlots';
+import {
+  formatDeliverySlotForDisplay,
+  getSlotPaymentDeadlineText,
+} from '@/lib/deliverySlots';
 
 interface CustomerOrderCardProps {
   order: Order;
@@ -40,6 +43,9 @@ const STEP_LABELS: Record<(typeof TIMELINE_STEPS)[number], string> = {
 
 function getStageSummary(order: Order): string {
   if (order.orderStatus === 'CANCELLED') {
+    if (order.paymentMethod === 'UPI' && order.paymentStatus === 'PENDING' && !order.utrNumber) {
+      return 'Cancelled — UPI payment was not completed before the scheduled slot started. Tap Reorder anytime to choose the next slot.';
+    }
     return 'Order cancelled — any prepaid UPI amount is refunded promptly.';
   }
   if (order.orderStatus === 'DELIVERED') {
@@ -199,16 +205,38 @@ export function CustomerOrderCard({
         </div>
       </div>
 
-      {/* Scheduled Delivery Slot Badge */}
+      {/* Scheduled Delivery Slot Badge + Unpaid Deadline / Auto-Move Notice */}
       {order.deliverySlot && (
-        <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-[#ECFDF3] border border-[#BBF7D0] text-[11px]">
-          <span className="inline-flex items-center gap-1.5 font-bold text-[#0A5C16]">
-            <Clock className="w-3.5 h-3.5 text-[#0C831F] shrink-0" />
-            <span>Delivery Slot</span>
-          </span>
-          <span className="font-extrabold text-gray-900">
-            {formatDeliverySlotForDisplay(order.deliverySlot)}
-          </span>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-[#ECFDF3] border border-[#BBF7D0] text-[11px]">
+            <span className="inline-flex items-center gap-1.5 font-bold text-[#0A5C16]">
+              <Clock className="w-3.5 h-3.5 text-[#0C831F] shrink-0" />
+              <span>Delivery Slot</span>
+            </span>
+            <span className="font-extrabold text-gray-900 text-right">
+              {formatDeliverySlotForDisplay(order.deliverySlot)}
+            </span>
+          </div>
+
+          {!isCancelled &&
+            order.orderStatus === 'NEW' &&
+            order.paymentMethod === 'UPI' &&
+            order.paymentStatus === 'PENDING' &&
+            !order.utrNumber && (
+              <div className="px-2.5 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-[10.5px] font-semibold text-amber-900 leading-snug">
+                {(order.slotRescheduledCount ?? 0) >= 1 ? (
+                  <>
+                    <strong>Slot auto-moved:</strong> Your earlier slot started before payment was completed. Pay &amp; save your UTR before{' '}
+                    <strong>{getSlotPaymentDeadlineText(order.deliverySlot)}</strong>, otherwise this order will auto-cancel.
+                  </>
+                ) : (
+                  <>
+                    Pay &amp; save your UPI UTR before{' '}
+                    <strong>{getSlotPaymentDeadlineText(order.deliverySlot)}</strong> to lock this slot (unpaid orders automatically move to the next slot).
+                  </>
+                )}
+              </div>
+            )}
         </div>
       )}
 
