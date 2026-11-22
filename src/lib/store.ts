@@ -370,6 +370,7 @@ export async function submitOrderUtr(
         ? {
             ...o,
             utrNumber: cleanUtr,
+            ...(data.order?.paymentStatus ? { paymentStatus: data.order.paymentStatus } : {}),
             ...(data.order?.deliverySlot ? { deliverySlot: data.order.deliverySlot } : {}),
             ...(data.order?.slotRescheduledCount !== undefined
               ? { slotRescheduledCount: data.order.slotRescheduledCount }

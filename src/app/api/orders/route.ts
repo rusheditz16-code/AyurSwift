@@ -11,6 +11,7 @@ import {
   isDeliverySlotStarted,
   validateDeliverySlotSelection,
 } from '@/lib/deliverySlots';
+import { doesSenderMatchCustomerName } from '@/lib/upiNotificationParser';
 import {
   checkMemoryRateLimit,
   generateSecureOrderId,
@@ -1302,15 +1303,103 @@ export async function PUT(request: NextRequest) {
       slotAutoShifted = true;
     }
 
+    // Check if an unmatched FamApp webhook credit is already waiting in public.upi_webhook_credits for this order
+    let autoVerifiedByWebhook = false;
+    let webhookCombinedUtr: string | undefined;
+    let webhookAutoNote: string | undefined;
+
+    if (
+      supabase &&
+      hasUtr &&
+      cleanUtr &&
+      existing.paymentMethod === 'UPI' &&
+      existing.paymentStatus === 'PENDING' &&
+      !paymentStatus
+    ) {
+      try {
+        const since24hIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const { data: unmatchedCredits } = await supabase
+          .from('upi_webhook_credits')
+          .select('txn_id, amount, sender_name, order_id_hint, raw_summary, received_at')
+          .is('matched_order_id', null)
+          .eq('amount', existing.totalAmount)
+          .gte('received_at', since24hIso)
+          .order('received_at', { ascending: false })
+          .limit(10);
+
+        if (Array.isArray(unmatchedCredits) && unmatchedCredits.length > 0) {
+          const credits = unmatchedCredits as Array<{
+            txn_id: string;
+            amount: number;
+            sender_name: string;
+            order_id_hint: string | null;
+            raw_summary: string;
+            received_at: string;
+          }>;
+
+          const matchedCredit =
+            credits.find((c) => c.txn_id.toUpperCase() === cleanUtr.toUpperCase()) ||
+            credits.find(
+              (c) =>
+                c.order_id_hint &&
+                c.order_id_hint.toUpperCase() === existing.id.toUpperCase()
+            ) ||
+            credits.find((c) =>
+              doesSenderMatchCustomerName(c.sender_name, existing.customerName)
+            ) ||
+            (credits.length === 1 &&
+            Date.now() - new Date(credits[0].received_at).getTime() <= 45 * 60 * 1000
+              ? credits[0]
+              : undefined);
+
+          if (matchedCredit) {
+            const { data: claimed } = await supabase
+              .from('upi_webhook_credits')
+              .update({ matched_order_id: existing.id })
+              .eq('txn_id', matchedCredit.txn_id)
+              .is('matched_order_id', null)
+              .select('txn_id')
+              .maybeSingle();
+
+            if (claimed) {
+              autoVerifiedByWebhook = true;
+              webhookCombinedUtr =
+                cleanUtr.toUpperCase() === matchedCredit.txn_id.toUpperCase()
+                  ? matchedCredit.txn_id
+                  : `${cleanUtr} • ${matchedCredit.txn_id}`;
+              const notePiece = sanitizeText(
+                `Auto-verified via FamApp: ${matchedCredit.raw_summary}`,
+                240
+              );
+              webhookAutoNote = existing.adminNote
+                ? sanitizeText(`${existing.adminNote} | ${notePiece}`, 250)
+                : notePiece;
+            }
+          }
+        }
+      } catch {
+        // Non-fatal webhook credit lookup error
+      }
+    }
+
+    const effectivePaymentStatus =
+      paymentStatus || (autoVerifiedByWebhook ? 'VERIFIED' : undefined);
+    const effectiveUtr = webhookCombinedUtr || cleanUtr;
+    const effectiveAdminNote = hasAdminNote
+      ? cleanAdminNote
+      : webhookAutoNote !== undefined
+      ? webhookAutoNote
+      : undefined;
+
     const updatedOrder: Order = {
       ...existing,
       ...(orderStatus ? { orderStatus } : {}),
-      ...(paymentStatus ? { paymentStatus } : {}),
-      ...(hasUtr ? { utrNumber: cleanUtr || undefined } : {}),
+      ...(effectivePaymentStatus ? { paymentStatus: effectivePaymentStatus } : {}),
+      ...(hasUtr ? { utrNumber: effectiveUtr || undefined } : {}),
       ...(nextSlotForLateUtr ? { deliverySlot: nextSlotForLateUtr } : {}),
       ...(nextRescheduleCount !== undefined ? { slotRescheduledCount: nextRescheduleCount } : {}),
       ...(hasCourierTracking ? { courierTracking: cleanCourierTracking || undefined } : {}),
-      ...(hasAdminNote ? { adminNote: cleanAdminNote || undefined } : {}),
+      ...(effectiveAdminNote !== undefined ? { adminNote: effectiveAdminNote || undefined } : {}),
       ...(hasRapidoCopied ? { rapidoCopied: rapidoCopiedVal } : {}),
     };
 
@@ -1319,12 +1408,12 @@ export async function PUT(request: NextRequest) {
         updated_at: new Date().toISOString(),
       };
       if (orderStatus) dbPatch.order_status = orderStatus;
-      if (paymentStatus) dbPatch.payment_status = paymentStatus;
-      if (hasUtr) dbPatch.utr_number = cleanUtr || null;
+      if (effectivePaymentStatus) dbPatch.payment_status = effectivePaymentStatus;
+      if (hasUtr) dbPatch.utr_number = effectiveUtr || null;
       if (nextSlotForLateUtr) dbPatch.delivery_slot = nextSlotForLateUtr;
       if (nextRescheduleCount !== undefined) dbPatch.slot_rescheduled_count = nextRescheduleCount;
       if (hasCourierTracking) dbPatch.courier_tracking = cleanCourierTracking || null;
-      if (hasAdminNote) dbPatch.admin_note = cleanAdminNote || null;
+      if (effectiveAdminNote !== undefined) dbPatch.admin_note = effectiveAdminNote || null;
       if (hasRapidoCopied) dbPatch.rapido_copied = Boolean(rapidoCopiedVal);
 
       const isCancellingFromActive =

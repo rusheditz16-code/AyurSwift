@@ -16,7 +16,13 @@ import {
   Package,
 } from 'lucide-react';
 import { Order, MerchantSettings } from '@/types';
-import { generateUpiUri, generateWhatsAppOrderUrl, submitOrderUtr } from '@/lib/store';
+import {
+  generateUpiUri,
+  generateWhatsAppOrderUrl,
+  getStoredOrders,
+  saveStoredOrders,
+  submitOrderUtr,
+} from '@/lib/store';
 import {
   formatDeliverySlotForDisplay,
   getSlotPaymentDeadlineText,
@@ -47,14 +53,69 @@ export function PaymentModal({
   const [isSavingUtr, setIsSavingUtr] = useState(false);
   const [utrError, setUtrError] = useState<string | null>(null);
   const [showInvoice, setShowInvoice] = useState(false);
+  const [livePaymentStatus, setLivePaymentStatus] = useState<Order['paymentStatus']>(
+    order?.paymentStatus || 'PENDING'
+  );
 
   useEffect(() => {
     setUtrNumber(order?.utrNumber || '');
     setSavedUtr(order?.utrNumber || null);
     setDisplaySlot(order?.deliverySlot);
+    setLivePaymentStatus(order?.paymentStatus || 'PENDING');
     setSlotShiftedNotice(false);
     setUtrError(null);
-  }, [order?.id, order?.utrNumber, order?.deliverySlot]);
+  }, [order?.id, order?.utrNumber, order?.deliverySlot, order?.paymentStatus]);
+
+  // Live 4-second auto-detection for FamApp notification webhook verification
+  useEffect(() => {
+    if (!order || order.paymentMethod !== 'UPI' || livePaymentStatus === 'VERIFIED') return;
+    let active = true;
+
+    const checkWebhookStatus = async () => {
+      try {
+        const res = await fetch(
+          `/api/orders?ids=${encodeURIComponent(order.id)}&_t=${Date.now()}`,
+          { cache: 'no-store' }
+        );
+        if (!res.ok || !active) return;
+        const data = (await res.json()) as { success?: boolean; orders?: Order[] };
+        const srv = data?.orders?.[0];
+        if (!srv || !active) return;
+
+        if (srv.paymentStatus === 'VERIFIED') {
+          setLivePaymentStatus('VERIFIED');
+          if (srv.utrNumber && !savedUtr) {
+            setSavedUtr(srv.utrNumber);
+            setUtrNumber(srv.utrNumber);
+          }
+          const stored = getStoredOrders();
+          const next = stored.map((o) =>
+            o.id === order.id
+              ? {
+                  ...o,
+                  paymentStatus: 'VERIFIED' as const,
+                  utrNumber: o.utrNumber || srv.utrNumber,
+                }
+              : o
+          );
+          saveStoredOrders(next);
+          if (onOrderUpdated) {
+            onOrderUpdated({
+              ...order,
+              paymentStatus: 'VERIFIED',
+              utrNumber: order.utrNumber || srv.utrNumber,
+            });
+          }
+        }
+      } catch {}
+    };
+
+    const timer = setInterval(checkWebhookStatus, 4_000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [order, livePaymentStatus, savedUtr, onOrderUpdated]);
 
   useEffect(() => {
     if (!order) return;
@@ -108,6 +169,9 @@ export function PaymentModal({
       const updated = await submitOrderUtr(order.id, order.customerPhone, clean);
       setSavedUtr(clean);
       setUtrNumber(clean);
+      if (updated?.paymentStatus === 'VERIFIED') {
+        setLivePaymentStatus('VERIFIED');
+      }
       if (updated?.deliverySlot && updated.deliverySlot !== displaySlot) {
         setDisplaySlot(updated.deliverySlot);
         setSlotShiftedNotice(true);
@@ -179,9 +243,16 @@ export function PaymentModal({
           <div className="bg-white rounded-2xl p-3.5 text-xs space-y-2 border border-gray-200/80 shadow-2xs">
             <div className="flex justify-between items-center">
               <span className="text-gray-500 font-medium">Status</span>
-              <span className="bg-amber-50 text-amber-800 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold border border-amber-200">
-                Awaiting Store Confirmation
-              </span>
+              {livePaymentStatus === 'VERIFIED' ? (
+                <span className="bg-emerald-50 text-[#0A5C16] px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold border border-emerald-200 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-[#0C831F]" />
+                  <span>UPI Payment Verified Automatically ✓</span>
+                </span>
+              ) : (
+                <span className="bg-amber-50 text-amber-800 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold border border-amber-200">
+                  Awaiting Store Confirmation
+                </span>
+              )}
             </div>
             <div className="flex justify-between text-gray-600">
               <span>Customer</span>
@@ -269,56 +340,77 @@ export function PaymentModal({
                 <span>Tap to Pay ₹{order.totalAmount} in UPI App</span>
               </button>
 
-              {/* Submit UTR / Transaction Ref straight to Admin Queue */}
-              <div className="pt-1 text-left space-y-1.5">
-                <label htmlFor="payment-utr-input" className="text-[10.5px] font-bold text-gray-700 block">
-                  Paid? Save your UPI Ref / UTR for faster store verification
-                </label>
-                <div className="flex items-center gap-1.5">
-                  <input
-                    id="payment-utr-input"
-                    type="text"
-                    value={utrNumber}
-                    onChange={(e) => {
-                      setUtrNumber(e.target.value);
-                      setUtrError(null);
-                    }}
-                    placeholder="e.g. 432512345678"
-                    className="flex-1 px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl font-mono text-gray-900 placeholder:text-gray-500 focus:bg-white focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSaveUtr}
-                    disabled={isSavingUtr}
-                    className={`px-3 py-2 rounded-xl text-[11px] font-extrabold shrink-0 transition-all cursor-pointer flex items-center gap-1 ${
-                      savedUtr && savedUtr === utrNumber.replace(/[^a-zA-Z0-9]/g, '').trim()
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-[#0C831F] hover:bg-[#096B19] text-white'
-                    }`}
-                  >
-                    {isSavingUtr ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : savedUtr && savedUtr === utrNumber.replace(/[^a-zA-Z0-9]/g, '').trim() ? (
-                      <>
-                        <Check className="w-3.5 h-3.5" />
-                        <span>UTR Saved</span>
-                      </>
-                    ) : (
-                      <span>Save UTR</span>
-                    )}
-                  </button>
+              {/* Auto-Verified Banner OR Manual UTR Fallback */}
+              {livePaymentStatus === 'VERIFIED' ? (
+                <div className="p-3 rounded-2xl bg-[#ECFDF3] border border-[#BBF7D0] text-left flex items-start gap-2.5 animate-fade-in">
+                  <CheckCircle2 className="w-5 h-5 text-[#0C831F] shrink-0 mt-0.5" />
+                  <div className="text-xs">
+                    <div className="font-extrabold text-[#0A5C16]">
+                      Payment of ₹{order.totalAmount} Verified Automatically!
+                    </div>
+                    <p className="text-[11px] text-emerald-800 mt-0.5 leading-snug">
+                      Our store received your UPI transfer notification
+                      {savedUtr ? ` (Ref: ${savedUtr})` : ''} and locked your delivery slot.
+                    </p>
+                  </div>
                 </div>
-                {utrError && (
-                  <p className="text-[10.5px] font-semibold text-rose-600">{utrError}</p>
-                )}
-                {savedUtr && !utrError && (
-                  <p className="text-[10.5px] font-semibold text-[#0C831F]">
-                    {slotShiftedNotice && displaySlot
-                      ? `✓ UTR saved! Because the earlier slot had started, your delivery is now scheduled for ${formatDeliverySlotForDisplay(displaySlot)}.`
-                      : '✓ Sent to dark store! Merchant can verify your UTR immediately.'}
-                  </p>
-                )}
-              </div>
+              ) : (
+                <div className="pt-1 text-left space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <label htmlFor="payment-utr-input" className="text-[10.5px] font-bold text-gray-700 block">
+                      Auto-detecting payment... or paste UPI Ref / UTR
+                    </label>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#0C831F]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span>Live listening</span>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      id="payment-utr-input"
+                      type="text"
+                      value={utrNumber}
+                      onChange={(e) => {
+                        setUtrNumber(e.target.value);
+                        setUtrError(null);
+                      }}
+                      placeholder="e.g. 432512345678 or FMPIB..."
+                      className="flex-1 px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl font-mono text-gray-900 placeholder:text-gray-500 focus:bg-white focus:border-[#0C831F] focus:ring-2 focus:ring-[#0C831F]/15"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveUtr}
+                      disabled={isSavingUtr}
+                      className={`px-3 py-2 rounded-xl text-[11px] font-extrabold shrink-0 transition-all cursor-pointer flex items-center gap-1 ${
+                        savedUtr && savedUtr === utrNumber.replace(/[^a-zA-Z0-9]/g, '').trim()
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-[#0C831F] hover:bg-[#096B19] text-white'
+                      }`}
+                    >
+                      {isSavingUtr ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : savedUtr && savedUtr === utrNumber.replace(/[^a-zA-Z0-9]/g, '').trim() ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>UTR Saved</span>
+                        </>
+                      ) : (
+                        <span>Save UTR</span>
+                      )}
+                    </button>
+                  </div>
+                  {utrError && (
+                    <p className="text-[10.5px] font-semibold text-rose-600">{utrError}</p>
+                  )}
+                  {savedUtr && !utrError && (
+                    <p className="text-[10.5px] font-semibold text-[#0C831F]">
+                      {slotShiftedNotice && displaySlot
+                        ? `✓ UTR saved! Because the earlier slot had started, your delivery is now scheduled for ${formatDeliverySlotForDisplay(displaySlot)}.`
+                        : '✓ Sent to dark store! Merchant can verify your UTR immediately.'}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center space-y-1.5">

@@ -1068,3 +1068,26 @@ export function isRequestBodyTooLarge(request: NextRequest, maxBytes: number): b
   const parsed = Number(lenHeader);
   return Number.isFinite(parsed) && parsed > maxBytes;
 }
+
+// ---------------------------------------------------------------------------
+// Zero-Fee FamApp / Android Notification Webhook Authentication
+// ---------------------------------------------------------------------------
+
+export function getUpiWebhookSecret(): string | null {
+  const explicit = (process.env.UPI_WEBHOOK_SECRET || '').trim();
+  if (explicit.length >= 16) return explicit;
+  const derived = deriveScopedSecret('ayurswift-famapp-webhook-v1');
+  return derived ? derived.slice(0, 32) : null;
+}
+
+export function verifyUpiWebhookSecret(candidate: unknown): boolean {
+  if (typeof candidate !== 'string') return false;
+  const clean = candidate.trim();
+  const expected = getUpiWebhookSecret();
+  if (!clean || !expected || clean.length !== expected.length) return false;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(clean, 'utf8'), Buffer.from(expected, 'utf8'));
+  } catch {
+    return false;
+  }
+}

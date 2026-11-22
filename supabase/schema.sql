@@ -117,6 +117,21 @@ CREATE TABLE IF NOT EXISTS admin_otps (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- 4b. Zero-Fee FamApp / Android Notification UPI Credits Ledger
+CREATE TABLE IF NOT EXISTS upi_webhook_credits (
+  txn_id TEXT PRIMARY KEY,
+  amount NUMERIC(10,2) NOT NULL,
+  sender_name TEXT DEFAULT '',
+  order_id_hint TEXT,
+  matched_order_id TEXT,
+  raw_summary TEXT DEFAULT '',
+  received_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_upi_webhook_credits_unmatched
+  ON upi_webhook_credits (amount, received_at DESC)
+  WHERE matched_order_id IS NULL;
+
 -- 5. Row Level Security (RLS) — LOCKED DOWN
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE product_images ENABLE ROW LEVEL SECURITY;
