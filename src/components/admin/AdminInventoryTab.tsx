@@ -314,7 +314,9 @@ export function AdminInventoryTab({
                         <div className="flex items-center gap-3">
                           <div className="relative shrink-0">
                             <div
-                              className={`w-10 h-10 rounded-xl border p-0.5 flex items-center justify-center overflow-hidden ${
+                              className={`w-10 h-10 rounded-xl border flex items-center justify-center overflow-hidden ${
+                                showPhoto ? 'p-0' : 'p-0.5'
+                              } ${
                                 dark ? 'bg-slate-900 border-slate-700' : 'bg-[#F7FAF8] border-slate-200'
                               }`}
                             >
@@ -322,7 +324,7 @@ export function AdminInventoryTab({
                                 <img
                                   src={product.imageUrl}
                                   alt={product.name}
-                                  className="w-full h-full object-contain"
+                                  className="w-full h-full object-cover object-center"
                                 />
                               ) : (
                                 <MedicinePackVisual product={product} compact className="w-full h-full" />

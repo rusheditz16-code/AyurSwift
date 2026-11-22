@@ -58,23 +58,25 @@ export function ProductCard({
         {product.form}
       </div>
 
-      {/* Consistent 4:3 Image Frame */}
+      {/* Consistent Full-Bleed Image Frame */}
       <button
         type="button"
         onClick={() => onViewDetails(product)}
         aria-label={`View details for ${product.name}, ${product.packSize}`}
-        className="relative w-full aspect-[4/3] bg-[#F7FAF8] group-hover:bg-[#EFF7F2] border-b border-gray-100 transition-colors flex items-center justify-center p-3 cursor-pointer overflow-hidden text-left"
+        className={`relative w-full aspect-[4/5] bg-[#F7FAF8] group-hover:bg-[#EFF7F2] border-b border-gray-100 transition-colors flex items-center justify-center cursor-pointer overflow-hidden text-left ${
+          showPhoto ? 'p-0' : 'p-3'
+        }`}
       >
         {showPhoto ? (
           <img
             src={primaryImage}
             alt={`${product.name} (${product.packSize}) by ${product.brand}`}
-            width={320}
-            height={240}
+            width={400}
+            height={500}
             loading="lazy"
             decoding="async"
             onError={() => setImageError(true)}
-            className="w-full h-full object-contain transition-transform duration-300 ease-out group-hover:scale-105"
+            className="w-full h-full object-cover object-center transition-transform duration-300 ease-out group-hover:scale-105"
           />
         ) : (
           <>

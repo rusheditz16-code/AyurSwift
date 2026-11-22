@@ -271,14 +271,18 @@ export function Header({
                           }}
                           className="flex items-center gap-3 min-w-0 flex-1 text-left cursor-pointer rounded-lg"
                         >
-                          <div className="w-11 h-11 rounded-xl bg-[#F7FAF8] border border-gray-200/80 flex items-center justify-center p-1 shrink-0 overflow-hidden">
+                          <div
+                            className={`w-11 h-11 rounded-xl bg-[#F7FAF8] border border-gray-200/80 flex items-center justify-center shrink-0 overflow-hidden ${
+                              showPhoto ? 'p-0' : 'p-1'
+                            }`}
+                          >
                             {showPhoto ? (
                               <img
                                 src={item.imageUrl}
                                 alt={`${item.name} (${item.packSize})`}
                                 width={44}
                                 height={44}
-                                className="w-full h-full object-contain"
+                                className="w-full h-full object-cover object-center"
                               />
                             ) : (
                               <MedicinePackVisual product={item} compact className="w-full h-full" />

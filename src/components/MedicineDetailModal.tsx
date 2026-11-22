@@ -119,18 +119,31 @@ export function MedicineDetailModal({
         <div className="flex-1 overflow-y-auto thin-scrollbar p-4 sm:p-5 space-y-4 bg-[#F8FAFC]">
           {/* Image Stage */}
           <div className="space-y-2.5">
-            <div className="relative bg-white rounded-2xl p-5 border border-gray-200/80 flex items-center justify-center h-52 sm:h-60 overflow-hidden">
+            <div
+              className={`relative bg-white rounded-2xl border border-gray-200/80 flex items-center justify-center h-72 sm:h-80 overflow-hidden ${
+                showVerifiedPhoto ? 'p-0' : 'p-5'
+              }`}
+            >
               {showVerifiedPhoto ? (
-                <img
-                  src={currentImage}
-                  alt={`${product.name} (${product.packSize}) by ${product.brand} — View ${activeImageIdx + 1}`}
-                  width={360}
-                  height={240}
-                  onError={() =>
-                    setFailedImages((prev) => ({ ...prev, [activeImageIdx]: true }))
-                  }
-                  className="max-h-full max-w-full object-contain transition-transform duration-300"
-                />
+                <>
+                  {/* Ambient edge-fill backdrop eliminates white side bars while keeping full label visible */}
+                  <img
+                    src={currentImage}
+                    alt=""
+                    aria-hidden="true"
+                    className="absolute inset-0 w-full h-full object-cover object-center scale-110 blur-xl opacity-60 pointer-events-none select-none"
+                  />
+                  <img
+                    src={currentImage}
+                    alt={`${product.name} (${product.packSize}) by ${product.brand} — View ${activeImageIdx + 1}`}
+                    width={420}
+                    height={320}
+                    onError={() =>
+                      setFailedImages((prev) => ({ ...prev, [activeImageIdx]: true }))
+                    }
+                    className="relative z-1 h-full w-full object-contain transition-transform duration-300"
+                  />
+                </>
               ) : (
                 <MedicinePackVisual product={product} className="w-full h-full" />
               )}
@@ -195,7 +208,7 @@ export function MedicineDetailModal({
                     type="button"
                     onClick={() => setActiveImageIdx(idx)}
                     aria-label={`View image ${idx + 1} of ${product.name}`}
-                    className={`w-13 h-13 rounded-xl border bg-white p-1 shrink-0 overflow-hidden cursor-pointer transition-all ${
+                    className={`w-13 h-13 rounded-xl border bg-white p-0 shrink-0 overflow-hidden cursor-pointer transition-all ${
                       idx === activeImageIdx
                         ? 'border-[#0C831F] ring-2 ring-[#0C831F]/30'
                         : 'border-gray-200 opacity-70 hover:opacity-100'
@@ -206,7 +219,7 @@ export function MedicineDetailModal({
                       alt={`${product.name} thumbnail ${idx + 1}`}
                       width={52}
                       height={52}
-                      className="w-full h-full object-contain"
+                      className="w-full h-full object-cover object-center"
                     />
                   </button>
                 ))}

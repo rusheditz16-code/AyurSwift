@@ -133,14 +133,18 @@ export function HeroAnimatedShowcase({
         </div>
 
         <div key={currentDeal.id} className="animate-deal-swap flex items-center gap-4">
-          <div className="relative w-28 h-22 sm:w-32 sm:h-24 rounded-xl bg-white p-1.5 shadow-md flex items-center justify-center shrink-0 overflow-hidden">
+          <div
+            className={`relative w-24 h-28 sm:w-28 sm:h-32 rounded-xl bg-white shadow-md flex items-center justify-center shrink-0 overflow-hidden ${
+              showCurrentPhoto ? 'p-0' : 'p-1.5'
+            }`}
+          >
             {showCurrentPhoto ? (
               <img
                 src={currentDeal.imageUrl}
                 alt={`${currentDeal.name} (${currentDeal.packSize})`}
-                width={128}
-                height={96}
-                className="w-full h-full object-contain"
+                width={112}
+                height={128}
+                className="w-full h-full object-cover object-center"
               />
             ) : (
               <>

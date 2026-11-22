@@ -227,11 +227,11 @@ export function AdminProductDrawer({
                 {uploadedImages.map((imgSrc, idx) => (
                   <div
                     key={idx}
-                    className={`relative group rounded-xl border p-1.5 aspect-square flex items-center justify-center overflow-hidden ${
+                    className={`relative group rounded-xl border p-0 aspect-[4/5] flex items-center justify-center overflow-hidden ${
                       dark ? 'bg-slate-950 border-slate-700' : 'bg-white border-slate-200'
                     }`}
                   >
-                    <img src={imgSrc} alt={`View ${idx + 1}`} className="w-full h-full object-contain" />
+                    <img src={imgSrc} alt={`View ${idx + 1}`} className="w-full h-full object-cover object-center" />
                     {idx === 0 ? (
                       <span className="absolute top-1 left-1 bg-[#0C831F] text-white text-[8.5px] font-extrabold px-1.5 py-0.5 rounded">
                         Cover

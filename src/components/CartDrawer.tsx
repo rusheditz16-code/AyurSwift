@@ -449,14 +449,18 @@ export function CartDrawer({
                 <div className="divide-y divide-gray-100">
                   {cart.map((item) => (
                     <div key={item.product.id} className="p-3 flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-[#F7FAF8] border border-gray-200/80 p-1 flex items-center justify-center shrink-0 overflow-hidden">
+                      <div
+                        className={`w-13 h-13 rounded-xl bg-[#F7FAF8] border border-gray-200/80 flex items-center justify-center shrink-0 overflow-hidden ${
+                          isVerifiedProductImageUrl(item.product.imageUrl) ? 'p-0' : 'p-1'
+                        }`}
+                      >
                         {isVerifiedProductImageUrl(item.product.imageUrl) ? (
                           <img
                             src={item.product.imageUrl}
                             alt={`${item.product.name} (${item.product.packSize})`}
-                            width={48}
-                            height={48}
-                            className="w-full h-full object-contain"
+                            width={52}
+                            height={52}
+                            className="w-full h-full object-cover object-center"
                           />
                         ) : (
                           <MedicinePackVisual product={item.product} compact className="w-full h-full" />
@@ -527,14 +531,18 @@ export function CartDrawer({
                         className="w-[126px] shrink-0 rounded-xl border border-gray-200/80 bg-[#F8FAFC] p-2 flex flex-col justify-between gap-1.5"
                       >
                         <div>
-                          <div className="h-14 bg-[#F7FAF8] rounded-lg p-1 flex items-center justify-center border border-gray-100 mb-1.5 overflow-hidden">
+                          <div
+                            className={`h-24 bg-[#F7FAF8] rounded-lg flex items-center justify-center border border-gray-100 mb-1.5 overflow-hidden ${
+                              isVerifiedProductImageUrl(prod.imageUrl) ? 'p-0' : 'p-1'
+                            }`}
+                          >
                             {isVerifiedProductImageUrl(prod.imageUrl) ? (
                               <img
                                 src={prod.imageUrl}
                                 alt={`${prod.name} (${prod.packSize})`}
-                                width={80}
-                                height={56}
-                                className="max-h-full max-w-full object-contain"
+                                width={110}
+                                height={96}
+                                className="w-full h-full object-cover object-center"
                               />
                             ) : (
                               <MedicinePackVisual product={prod} compact className="w-full h-full" />

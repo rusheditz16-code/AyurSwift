@@ -133,14 +133,18 @@ export function QuickBuyModal({
                       className="p-2.5 rounded-2xl border border-gray-200/85 bg-white flex items-center justify-between gap-3 shadow-2xs hover:border-[#0C831F]/40 transition-colors"
                     >
                       <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <div className="w-11 h-11 rounded-xl bg-[#F7FAF8] border border-gray-100 p-1 flex items-center justify-center shrink-0 overflow-hidden">
+                        <div
+                          className={`w-12 h-12 rounded-xl bg-[#F7FAF8] border border-gray-100 flex items-center justify-center shrink-0 overflow-hidden ${
+                            isVerifiedProductImageUrl(thumbUrl) ? 'p-0' : 'p-1'
+                          }`}
+                        >
                           {isVerifiedProductImageUrl(thumbUrl) ? (
                             <img
                               src={thumbUrl}
                               alt={`${product.name} (${product.packSize})`}
-                              width={44}
-                              height={44}
-                              className="w-full h-full object-contain"
+                              width={48}
+                              height={48}
+                              className="w-full h-full object-cover object-center"
                             />
                           ) : (
                             <MedicinePackVisual product={product} compact className="w-full h-full" />
