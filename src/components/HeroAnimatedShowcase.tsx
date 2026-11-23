@@ -88,11 +88,11 @@ export function HeroAnimatedShowcase({
       onBlur={() => setIsPaused(false)}
     >
       {/* 1. Shop by Brand Pill Row */}
-      <div className="flex items-center justify-between gap-2.5 bg-[#EAE1D0] border border-[#DDD1BC] rounded-xl px-3.5 py-2">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 bg-[#EAE1D0] border border-[#DDD1BC] rounded-xl px-3.5 py-2.5">
         <span className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#5C5346] shrink-0">
           Shop by Brand
         </span>
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+        <div className="flex flex-wrap items-center gap-1.5">
           {liveBrands.map((brand) => (
             <button
               key={brand}
@@ -166,12 +166,12 @@ export function HeroAnimatedShowcase({
               {currentDeal.indications}
             </p>
             <div className="flex items-center justify-between gap-2 pt-1">
-              <div className="flex items-baseline gap-2 tabular-nums">
-                <span className="text-lg font-extrabold text-[#181B18]">
+              <div className="flex items-baseline gap-1.5 tabular-nums flex-nowrap min-w-0">
+                <span className="text-lg font-extrabold text-[#181B18] whitespace-nowrap">
                   ₹{currentDeal.sellingPrice}
                 </span>
                 {currentDeal.mrp > currentDeal.sellingPrice && (
-                  <span className="text-xs text-[#8A8277] line-through">
+                  <span className="text-xs text-[#8A8277] line-through whitespace-nowrap">
                     MRP ₹{currentDeal.mrp}
                   </span>
                 )}
@@ -180,7 +180,7 @@ export function HeroAnimatedShowcase({
                 type="button"
                 onClick={(e) => handleQuickAdd(e, currentDeal)}
                 aria-label={`Add ${currentDeal.name} to cart`}
-                className={`px-3.5 py-1.5 rounded-xl font-extrabold text-xs shadow-sm flex items-center gap-1 transition-all cursor-pointer ${
+                className={`px-3 sm:px-3.5 py-1.5 rounded-xl font-extrabold text-xs shadow-sm flex items-center gap-1 transition-all cursor-pointer shrink-0 ${
                   justAddedId === currentDeal.id
                     ? 'bg-[#0C831F] text-white'
                     : 'bg-[#1B2A21] text-white hover:bg-[#0C831F]'
