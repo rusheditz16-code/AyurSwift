@@ -577,7 +577,7 @@ export default function StorefrontPage() {
   const isLocal = activeDispatchType !== 'COURIER_OUTSIDE';
 
   return (
-    <div className="min-h-screen bg-[#F5F7FA] text-gray-900 flex flex-col font-sans pb-28 md:pb-12">
+    <div className="min-h-screen bg-[#F8F6F1] text-gray-900 flex flex-col font-sans pb-28 md:pb-12">
       {/* 1. Compact Header + Clearly Separated Category Navigation Bar */}
       <Header
         cart={cart}
@@ -634,21 +634,18 @@ export default function StorefrontPage() {
           </div>
         )}
 
-        {/* 2. Promotional Home Hero (hidden while actively filtering/searching) */}
+        {/* 2. Editorial Home Hero — Warm Sandalwood & Deep Apothecary Espresso (hidden while actively filtering/searching) */}
         {!isFilterActive && (
           <section aria-label="AyurSwift store highlights">
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#065F46] via-[#0C831F] to-[#0F766E] text-white p-5 sm:p-7 lg:p-8 shadow-lg shadow-[#0C831F]/15 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-              <div className="pointer-events-none absolute -right-12 -top-12 w-56 h-56 rounded-full bg-white/10 blur-2xl" />
-              <div className="pointer-events-none absolute left-1/3 -bottom-20 w-48 h-48 rounded-full bg-teal-300/15 blur-2xl" />
-
+            <div className="relative overflow-hidden rounded-2xl bg-[#F4EDE1] border border-[#E5DAC6] text-[#181B18] p-5 sm:p-7 lg:p-8 shadow-[0_1px_2px_rgba(24,24,20,0.04)] grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
               {/* Left Column: Core Promise & Primary Actions */}
               <div className="lg:col-span-5 flex flex-col justify-between gap-5 relative z-10">
                 <div className="space-y-3">
-                  <div className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-xs border border-white/25 px-3 py-1 rounded-full text-[11px] font-bold text-emerald-50">
+                  <div className="inline-flex items-center gap-2 bg-white border border-[#DFD3BE] px-3 py-1 rounded-full text-[11px] font-bold text-[#1F2421] shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
                     {isLocal ? (
-                      <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+                      <span className="w-2 h-2 rounded-full bg-[#15803D] shrink-0" aria-hidden="true" />
                     ) : (
-                      <Truck className="w-3.5 h-3.5 text-amber-300" />
+                      <Truck className="w-3.5 h-3.5 text-[#9A3412]" aria-hidden="true" />
                     )}
                     <span>
                       {isLocal
@@ -657,23 +654,23 @@ export default function StorefrontPage() {
                     </span>
                   </div>
 
-                  <h1 className="font-extrabold text-2xl sm:text-3xl lg:text-[34px] tracking-tight leading-[1.15]">
+                  <h1 className="font-extrabold text-2xl sm:text-3xl lg:text-[34px] text-[#181B18] tracking-[-0.025em] leading-[1.13]">
                     Authentic Ayurvedic &amp; OTC Essentials,{' '}
-                    <span className="text-amber-300">
+                    <span className="text-[#9A3412]">
                       {isLocal
                         ? 'delivered in your chosen slot.'
                         : `delivered in ${DELIVERY_PROMISE.courierTimeShort}.`}
                     </span>
                   </h1>
 
-                  <p className="text-xs sm:text-sm text-emerald-50/90 leading-relaxed font-medium max-w-lg">
+                  <p className="text-xs sm:text-sm text-[#4A463E] leading-relaxed font-medium max-w-lg">
                     Genuine Ayurvedic &amp; wellness essentials dispatched from our Bhavnagar store.{' '}
                     {isLocal ? (
-                      <strong className="text-white">
+                      <strong className="text-[#181B18] font-bold">
                         Daily slots: {DELIVERY_PROMISE.localSlotsSummary} • ₹{settings.cityDeliveryFee} (Free above ₹{settings.cityFreeDeliveryAbove}).
                       </strong>
                     ) : (
-                      <strong className="text-white">
+                      <strong className="text-[#181B18] font-bold">
                         Flat ₹{settings.courierDeliveryFee} tracked All-India courier.
                       </strong>
                     )}
@@ -684,7 +681,7 @@ export default function StorefrontPage() {
                   <button
                     type="button"
                     onClick={scrollToCatalog}
-                    className="bg-white hover:bg-emerald-50 text-[#0A5C16] font-extrabold text-xs sm:text-sm px-5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer"
+                    className="bg-[#1B2A21] hover:bg-[#121D17] text-[#FAF8F4] font-bold text-xs sm:text-sm px-5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
                   >
                     <span>Browse All Remedies</span>
                     <ArrowRight className="w-4 h-4" />
@@ -692,9 +689,9 @@ export default function StorefrontPage() {
                   <button
                     type="button"
                     onClick={() => setIsQuickBuyModalOpen(true)}
-                    className="bg-white/15 hover:bg-white/25 text-white border border-white/30 font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer backdrop-blur-xs"
+                    className="bg-white hover:bg-[#FAF7F0] text-[#181B18] border border-[#D8CCB7] font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
                   >
-                    <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+                    <MessageCircle className="w-3.5 h-3.5 text-[#9A3412]" aria-hidden="true" />
                     <span>Quick Buy / WhatsApp</span>
                   </button>
                 </div>
