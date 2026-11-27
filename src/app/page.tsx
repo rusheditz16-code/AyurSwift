@@ -30,6 +30,7 @@ import {
   getStoredSettings,
   placeOrderOnServer,
   fetchLiveCatalogFromServer,
+  fetchLiveSettingsFromServer,
 } from '@/lib/store';
 import {
   DEFAULT_SETTINGS,
@@ -219,6 +220,9 @@ export default function StorefrontPage() {
       setProducts(cached);
     }
     setSettings(getStoredSettings());
+    fetchLiveSettingsFromServer(false).then((liveSettings) => {
+      if (liveSettings) setSettings(liveSettings);
+    });
     try {
       const savedCart = sessionStorage.getItem('ayurswift_cart');
       if (savedCart) setCart(JSON.parse(savedCart));
@@ -236,17 +240,30 @@ export default function StorefrontPage() {
         bc = new BroadcastChannel(CATALOG_SYNC_CHANNEL);
         bc.onmessage = () => {
           syncLiveCatalog(true, true);
+          fetchLiveSettingsFromServer(true).then((liveSettings) => {
+            if (liveSettings) setSettings(liveSettings);
+          });
         };
       }
     } catch {}
 
-    const onFocus = () => syncLiveCatalog(true, false);
+    const onFocus = () => {
+      syncLiveCatalog(true, false);
+      fetchLiveSettingsFromServer(false).then((liveSettings) => {
+        if (liveSettings) setSettings(liveSettings);
+      });
+    };
     const onVisibility = () => {
       if (!document.hidden) syncLiveCatalog(true, false);
     };
     const onStorage = (e: StorageEvent) => {
       if (e.key === 'ayurswift_catalog_ping' || e.key === 'ayurswift_products_v3') {
         syncLiveCatalog(true, true);
+      }
+      if (e.key === 'ayurswift_catalog_ping' || e.key === 'ayurswift_settings_v2') {
+        fetchLiveSettingsFromServer(true).then((liveSettings) => {
+          if (liveSettings) setSettings(liveSettings);
+        });
       }
     };
 

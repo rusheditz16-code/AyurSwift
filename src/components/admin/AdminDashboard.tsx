@@ -27,6 +27,8 @@ import {
   syncProductToServer,
   deleteProductOnServer,
   fetchLiveCatalogFromServer,
+  fetchLiveSettingsFromServer,
+  saveSettingsToServer,
   restoreStarterCatalogOnServer,
   exportOrdersToCsv,
   getIstDateKey,
@@ -178,6 +180,7 @@ export function AdminDashboard() {
 
   // Settings & Billing & Modals
   const [settingsSavedToast, setSettingsSavedToast] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [selectedBillOrder, setSelectedBillOrder] = useState<Order | null>(null);
   const [billFormat, setBillFormat] = useState<'A4' | 'THERMAL'>('A4');
   const [showCreateOrderModal, setShowCreateOrderModal] = useState(false);
@@ -204,6 +207,9 @@ export function AdminDashboard() {
     setOrders(localOrders);
     prevOrderCountRef.current = localOrders.length;
     setSettings(getStoredSettings());
+    fetchLiveSettingsFromServer(true).then((liveSettings) => {
+      if (liveSettings) setSettings(liveSettings);
+    });
 
     try {
       if (localStorage.getItem('ayurswift_admin_theme') === 'dark') {
@@ -694,6 +700,10 @@ export function AdminDashboard() {
       composition:
         (newProd.composition || existingProd?.composition || 'Herbal Ayurvedic Formulation').trim(),
       safetyAdvice: (newProd.safetyAdvice || '').trim() || undefined,
+      hsnCode: (newProd.hsnCode || '').trim() || undefined,
+      gstRate: typeof newProd.gstRate === 'number' ? newProd.gstRate : undefined,
+      batchNo: (newProd.batchNo || '').trim() || undefined,
+      expiryDate: (newProd.expiryDate || '').trim() || undefined,
       imageUrl: primaryImageUrl,
       images: finalImages,
     };
@@ -916,7 +926,7 @@ export function AdminDashboard() {
   };
 
   const handleExportCsv = (ordersToExport: Order[]) => {
-    const blob = new Blob([exportOrdersToCsv(ordersToExport)], {
+    const blob = new Blob([exportOrdersToCsv(ordersToExport, settings)], {
       type: 'text/csv;charset=utf-8;',
     });
     const url = URL.createObjectURL(blob);
@@ -941,11 +951,34 @@ export function AdminDashboard() {
     setBillFormat(format);
   };
 
-  const handleSaveSettings = (e: React.FormEvent) => {
+  const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    saveStoredSettings(settings);
+    if (isSavingSettings) return;
+    setIsSavingSettings(true);
+    const res = await saveSettingsToServer(settings);
+    setIsSavingSettings(false);
+
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        setIsAuthenticated(false);
+        setAuthError('Your admin session expired. Please sign in again.');
+      } else {
+        showToast('error', res.error || 'Could not save settings to server.');
+      }
+      return;
+    }
+
+    if (res.settings) {
+      setSettings(res.settings);
+    }
     setSettingsSavedToast(true);
-    setTimeout(() => setSettingsSavedToast(false), 2200);
+    showToast(
+      'success',
+      res.settings?.billingMode === 'GST'
+        ? 'GST Tax Invoice mode & store settings synced live!'
+        : 'Retail Cash Memo mode & store settings synced live!'
+    );
+    setTimeout(() => setSettingsSavedToast(false), 2600);
   };
 
   if (!isAuthenticated) {
@@ -1078,6 +1111,7 @@ export function AdminDashboard() {
                 await handleLogout();
               }}
               savedToast={settingsSavedToast}
+              isSavingSettings={isSavingSettings}
               dark={dark}
             />
           )}

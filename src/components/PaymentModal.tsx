@@ -484,7 +484,16 @@ export function PaymentModal({
       </div>
 
       <InvoiceModal
-        order={order}
+        order={
+          order
+            ? {
+                ...order,
+                paymentStatus: livePaymentStatus,
+                utrNumber: savedUtr || order.utrNumber,
+                deliverySlot: displaySlot || order.deliverySlot,
+              }
+            : null
+        }
         isOpen={showInvoice}
         onClose={() => setShowInvoice(false)}
         settings={settings}

@@ -34,6 +34,17 @@ export const DEFAULT_SETTINGS: MerchantSettings = {
   cityFreeDeliveryAbove: 499,
   courierDeliveryFee: 60,
   adminEmail: 'ayurswift.care@gmail.com',
+  billingMode: 'NON_GST',
+  legalBusinessName: 'AyurSwift Wellness & Ayurvedic Store',
+  proprietorName: '',
+  storeAddress: 'Bhavnagar City, Dist. Bhavnagar, Gujarat - 364001',
+  storeStateCode: '24',
+  gstin: '',
+  defaultGstRate: 12,
+  udyamNumber: '',
+  fssaiNumber: '',
+  ayushLicenseNote: 'Retail sale of sealed manufacturer-packed Ayurvedic & Personal Care goods',
+  restrictCourierToGujarat: false,
 };
 
 export const INITIAL_PRODUCTS: Product[] = [

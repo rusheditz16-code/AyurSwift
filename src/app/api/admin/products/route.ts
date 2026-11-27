@@ -336,6 +336,10 @@ export async function POST(request: NextRequest) {
           composition: p.composition,
           safety_advice: p.safetyAdvice || null,
           badge_text: p.badgeText || null,
+          hsn_code: p.hsnCode || null,
+          gst_rate: typeof p.gstRate === 'number' ? p.gstRate : null,
+          batch_no: p.batchNo || null,
+          expiry_date: p.expiryDate || null,
           updated_at: nowIso,
         }));
 
@@ -368,6 +372,20 @@ export async function POST(request: NextRequest) {
     const composition = sanitizeText(body.composition, 500);
     const safetyAdvice = sanitizeText(body.safetyAdvice, 350);
     const badgeText = sanitizeText(body.badgeText, 40);
+    const hsnCode = sanitizeText(body.hsnCode, 16).replace(/[^0-9A-Za-z]/g, '');
+    const batchNo = sanitizeText(body.batchNo, 40);
+    const expiryDate = sanitizeText(body.expiryDate, 20);
+    const parsedGstRate =
+      body.gstRate !== undefined && body.gstRate !== null && String(body.gstRate).trim() !== ''
+        ? Number(body.gstRate)
+        : null;
+    const gstRate =
+      parsedGstRate !== null &&
+      Number.isFinite(parsedGstRate) &&
+      parsedGstRate >= 0 &&
+      parsedGstRate <= 28
+        ? Math.round(parsedGstRate * 100) / 100
+        : null;
 
     const agencyCostPrice = Number(body.agencyCostPrice);
     const mrp = Number(body.mrp);
@@ -439,6 +457,10 @@ export async function POST(request: NextRequest) {
         composition,
         safety_advice: safetyAdvice || null,
         badge_text: badgeText || null,
+        hsn_code: hsnCode || null,
+        gst_rate: gstRate,
+        batch_no: batchNo || null,
+        expiry_date: expiryDate || null,
         updated_at: new Date().toISOString(),
       };
 
@@ -482,6 +504,10 @@ export async function POST(request: NextRequest) {
       composition,
       safetyAdvice: safetyAdvice || undefined,
       badgeText: badgeText || undefined,
+      hsnCode: hsnCode || undefined,
+      gstRate: gstRate !== null ? gstRate : undefined,
+      batchNo: batchNo || undefined,
+      expiryDate: expiryDate || undefined,
       imageUrl: finalPrimaryImage || '',
       images: finalImages,
     };

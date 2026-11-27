@@ -5,7 +5,9 @@ import path from 'path';
 import { DeliveryType, Order, PaymentMethod, Product } from '@/types';
 type OrderItem = Order['items'][number];
 import { DEFAULT_SETTINGS, INITIAL_PRODUCTS } from '@/lib/initialData';
+import { formatInvoiceNumber, isGujaratPincode } from '@/lib/billing';
 import { invalidatePublicCatalogCache } from '@/lib/catalogCache';
+import { getCachedPublicSettings } from '@/lib/settingsCache';
 import {
   getNextAvailableSlot,
   isDeliverySlotStarted,
@@ -165,6 +167,7 @@ function saveOrdersToFile(orders: Order[]): void {
 function mapDbRowToOrder(row: Record<string, unknown>): Order {
   return {
     id: String(row.id || ''),
+    invoiceNumber: row.invoice_number ? String(row.invoice_number) : undefined,
     customerName: String(row.customer_name || ''),
     customerPhone: String(row.customer_phone || ''),
     deliveryType: (row.delivery_type as DeliveryType) || 'RAPIDO_CITY',
@@ -192,6 +195,7 @@ function mapDbRowToOrder(row: Record<string, unknown>): Order {
 function mapOrderToDbRow(order: Order) {
   return {
     id: order.id,
+    invoice_number: order.invoiceNumber || null,
     customer_name: order.customerName,
     customer_phone: order.customerPhone,
     delivery_type: order.deliveryType,
@@ -562,6 +566,7 @@ export async function GET(request: NextRequest) {
 
   const cleanIdQuery = normalizeOrderIdForCompare(q);
   const phoneQuery = normalizeIndianPhone(q);
+  const isInvoiceQuery = /^as\/\d{2}-\d{2}\//i.test(q.trim());
 
   let matched: Order[] = [];
   if (supabase) {
@@ -571,6 +576,15 @@ export async function GET(request: NextRequest) {
         .select('*')
         .eq('customer_phone', phoneQuery)
         .order('created_at', { ascending: false })
+        .limit(20);
+      if (!error && Array.isArray(data)) {
+        matched = data.map((row) => mapDbRowToOrder(row as Record<string, unknown>));
+      }
+    } else if (isInvoiceQuery) {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('invoice_number', q.trim().toUpperCase())
         .limit(20);
       if (!error && Array.isArray(data)) {
         matched = data.map((row) => mapDbRowToOrder(row as Record<string, unknown>));
@@ -592,6 +606,9 @@ export async function GET(request: NextRequest) {
     matched = fallbackAll.filter((order) => {
       const cleanOrderId = normalizeOrderIdForCompare(order.id);
       const orderPhone = normalizeIndianPhone(order.customerPhone);
+      if (isInvoiceQuery && (order.invoiceNumber || '').toUpperCase() === q.trim().toUpperCase()) {
+        return true;
+      }
       if (cleanIdQuery.length >= 6 && cleanOrderId === cleanIdQuery) return true;
       if (phoneQuery && orderPhone === phoneQuery) return true;
       return false;
@@ -750,6 +767,23 @@ export async function POST(request: NextRequest) {
     if (deliveryType === 'COURIER_OUTSIDE' && paymentMethod === 'COD') {
       return NextResponse.json(
         { success: false, error: 'Outside-city courier orders require prepaid UPI payment.' },
+        { status: 400, headers: NO_STORE_HEADERS }
+      );
+    }
+
+    const liveSettings = await getCachedPublicSettings().catch(() => DEFAULT_SETTINGS);
+
+    if (
+      deliveryType === 'COURIER_OUTSIDE' &&
+      liveSettings.restrictCourierToGujarat &&
+      !isGujaratPincode(pincodeRaw)
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'Outside-Gujarat courier is currently paused. Please enter a Gujarat PIN code (36xxxx–39xxxx) or message us on WhatsApp.',
+        },
         { status: 400, headers: NO_STORE_HEADERS }
       );
     }
@@ -922,6 +956,10 @@ export async function POST(request: NextRequest) {
         const qty = Number(it.quantity ?? 0);
         const totalPrice = Number((unitPrice * qty).toFixed(2));
         subtotal = Number((subtotal + totalPrice).toFixed(2));
+        const rawGstRate =
+          it.gstRate !== null && it.gstRate !== undefined && Number.isFinite(Number(it.gstRate))
+            ? Number(it.gstRate)
+            : undefined;
         verifiedItems.push({
           productId: String(it.productId || ''),
           name: String(it.name || ''),
@@ -931,6 +969,10 @@ export async function POST(request: NextRequest) {
           mrp: Number(it.mrp ?? 0),
           unitPrice,
           totalPrice,
+          ...(it.hsnCode ? { hsnCode: String(it.hsnCode) } : {}),
+          ...(rawGstRate !== undefined ? { gstRate: rawGstRate } : {}),
+          ...(it.batchNo ? { batchNo: String(it.batchNo) } : {}),
+          ...(it.expiryDate ? { expiryDate: String(it.expiryDate) } : {}),
         });
       }
     } else {
@@ -965,22 +1007,39 @@ export async function POST(request: NextRequest) {
           mrp: product.mrp,
           unitPrice,
           totalPrice,
+          ...(product.hsnCode ? { hsnCode: product.hsnCode } : {}),
+          ...(typeof product.gstRate === 'number' ? { gstRate: product.gstRate } : {}),
+          ...(product.batchNo ? { batchNo: product.batchNo } : {}),
+          ...(product.expiryDate ? { expiryDate: product.expiryDate } : {}),
         });
       }
     }
 
     const deliveryFee =
       deliveryType === 'RAPIDO_CITY'
-        ? subtotal >= DEFAULT_SETTINGS.cityFreeDeliveryAbove
+        ? subtotal >= liveSettings.cityFreeDeliveryAbove
           ? 0
-          : DEFAULT_SETTINGS.cityDeliveryFee
-        : DEFAULT_SETTINGS.courierDeliveryFee;
+          : liveSettings.cityDeliveryFee
+        : liveSettings.courierDeliveryFee;
 
     const totalAmount = Number((subtotal + deliveryFee).toFixed(2));
     const adminNote = isAdmin && body.adminNote ? sanitizeText(body.adminNote, 250) : undefined;
+    const orderId = generateSecureOrderId();
+    const createdAtIso = new Date().toISOString();
+
+    let assignedInvoiceNumber = formatInvoiceNumber(orderId, createdAtIso);
+    if (supabase) {
+      const { data: seqInv } = await supabase.rpc('next_invoice_number', {
+        p_created_at: createdAtIso,
+      });
+      if (typeof seqInv === 'string' && seqInv.trim()) {
+        assignedInvoiceNumber = seqInv.trim();
+      }
+    }
 
     const newOrder: Order = {
-      id: generateSecureOrderId(),
+      id: orderId,
+      invoiceNumber: assignedInvoiceNumber,
       customerName,
       customerPhone,
       deliveryType,
@@ -998,7 +1057,7 @@ export async function POST(request: NextRequest) {
       orderStatus: 'NEW',
       rapidoCopied: false,
       ...(adminNote ? { adminNote } : {}),
-      createdAt: new Date().toISOString(),
+      createdAt: createdAtIso,
     };
 
     if (supabase) {

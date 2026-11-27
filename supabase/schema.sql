@@ -33,6 +33,10 @@ CREATE TABLE IF NOT EXISTS products (
 
 ALTER TABLE products ADD COLUMN IF NOT EXISTS safety_advice TEXT;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS badge_text TEXT;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS hsn_code TEXT;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS gst_rate NUMERIC(5,2);
+ALTER TABLE products ADD COLUMN IF NOT EXISTS batch_no TEXT;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS expiry_date TEXT;
 
 -- Storefront query indexes
 CREATE INDEX IF NOT EXISTS idx_products_storefront ON products (is_live, stock_quantity)
@@ -79,11 +83,15 @@ CREATE TABLE IF NOT EXISTS orders (
 );
 
 -- Idempotent column migrations for existing databases
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_number TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_slot TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS slot_rescheduled_count INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS utr_number TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS courier_tracking TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS admin_note TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_orders_invoice_number ON orders (invoice_number)
+  WHERE invoice_number IS NOT NULL;
 
 -- High-scale order lookup & Option A unpaid-slot sweeper indexes
 CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders (created_at DESC);
@@ -131,6 +139,61 @@ CREATE TABLE IF NOT EXISTS upi_webhook_credits (
 CREATE INDEX IF NOT EXISTS idx_upi_webhook_credits_unmatched
   ON upi_webhook_credits (amount, received_at DESC)
   WHERE matched_order_id IS NULL;
+
+-- 4c. Server-Persisted Merchant & Dual Legal Billing Settings + Atomic Invoice Sequence
+CREATE TABLE IF NOT EXISTS store_settings (
+  id TEXT PRIMARY KEY DEFAULT 'primary',
+  config JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE store_settings ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE store_settings TO anon, authenticated;
+
+CREATE SEQUENCE IF NOT EXISTS public.ayurswift_invoice_seq START WITH 1 INCREMENT BY 1;
+GRANT USAGE, SELECT ON SEQUENCE public.ayurswift_invoice_seq TO anon, authenticated;
+
+CREATE OR REPLACE FUNCTION public.next_invoice_number(p_created_at timestamptz DEFAULT now())
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'private', 'pg_temp'
+AS $function$
+DECLARE
+  v_ist TIMESTAMP;
+  v_year INTEGER;
+  v_month INTEGER;
+  v_fy_start INTEGER;
+  v_fy_end INTEGER;
+  v_seq BIGINT;
+BEGIN
+  IF NOT private.is_ayurswift_server() THEN
+    RAISE EXCEPTION 'Forbidden: server authorization required';
+  END IF;
+
+  v_ist := (COALESCE(p_created_at, now()) AT TIME ZONE 'Asia/Kolkata');
+  v_year := EXTRACT(YEAR FROM v_ist)::INTEGER;
+  v_month := EXTRACT(MONTH FROM v_ist)::INTEGER;
+
+  IF v_month >= 4 THEN
+    v_fy_start := v_year % 100;
+  ELSE
+    v_fy_start := (v_year - 1) % 100;
+  END IF;
+  v_fy_end := (v_fy_start + 1) % 100;
+
+  v_seq := nextval('public.ayurswift_invoice_seq');
+
+  RETURN format(
+    'AS/%s-%s/%s',
+    lpad(v_fy_start::text, 2, '0'),
+    lpad(v_fy_end::text, 2, '0'),
+    lpad(v_seq::text, 4, '0')
+  );
+END;
+$function$;
+
+GRANT EXECUTE ON FUNCTION public.next_invoice_number(timestamptz) TO anon, authenticated;
 
 -- 5. Row Level Security (RLS) — LOCKED DOWN
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
@@ -232,6 +295,11 @@ CREATE POLICY "Server full access product_images" ON product_images
   USING (private.is_ayurswift_server())
   WITH CHECK (private.is_ayurswift_server());
 
+CREATE POLICY "Server full access store_settings" ON store_settings
+  FOR ALL TO anon, authenticated
+  USING (private.is_ayurswift_server())
+  WITH CHECK (private.is_ayurswift_server());
+
 -- 7. Atomic Concurrency-Safe Stock RPCs (FOR UPDATE deterministic row locking — zero overselling)
 CREATE OR REPLACE FUNCTION public.reserve_order_stock(p_items jsonb)
 RETURNS jsonb
@@ -265,7 +333,8 @@ BEGIN
       RETURN jsonb_build_object('ok', false, 'error', 'Each item must have an integer quantity between 1 and 20.');
     END IF;
 
-    SELECT id, name, brand, pack_size, mrp, selling_price, stock_quantity, is_live
+    SELECT id, name, brand, pack_size, mrp, selling_price, stock_quantity, is_live,
+           hsn_code, gst_rate, batch_no, expiry_date
       INTO v_prod
       FROM public.products
       WHERE id = v_item.product_id
@@ -291,7 +360,11 @@ BEGIN
         'quantity', v_item.qty,
         'mrp', v_prod.mrp,
         'unitPrice', v_prod.selling_price,
-        'totalPrice', round((v_prod.selling_price * v_item.qty)::numeric, 2)
+        'totalPrice', round((v_prod.selling_price * v_item.qty)::numeric, 2),
+        'hsnCode', v_prod.hsn_code,
+        'gstRate', v_prod.gst_rate,
+        'batchNo', v_prod.batch_no,
+        'expiryDate', v_prod.expiry_date
       )
     );
   END LOOP;

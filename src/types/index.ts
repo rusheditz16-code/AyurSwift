@@ -58,6 +58,10 @@ export interface Product {
   composition: string;            // Key Ayurvedic herbs/ingredients
   safetyAdvice?: string;          // e.g. 'Store in cool dry place, keep away from direct sunlight'
   badgeText?: string;             // e.g. 'Classical Oil', '40+ Herbs'
+  hsnCode?: string;               // Optional HSN code for GST invoices (e.g. '30049011', '34011190')
+  gstRate?: number;               // Optional GST slab % (0 | 5 | 12 | 18)
+  batchNo?: string;               // Optional manufacturer Batch No.
+  expiryDate?: string;            // Optional Expiry Date (e.g. '10/2028')
 }
 
 export interface CartItem {
@@ -71,6 +75,8 @@ export type PaymentMethod = 'COD' | 'UPI';
 
 export type OrderStatus = 'NEW' | 'PACKED' | 'DISPATCHED' | 'DELIVERED' | 'CANCELLED';
 
+export type BillingMode = 'NON_GST' | 'GST';
+
 export interface OrderItemSummary {
   productId: string;
   name: string;
@@ -80,10 +86,15 @@ export interface OrderItemSummary {
   mrp?: number;
   unitPrice: number;
   totalPrice: number;
+  hsnCode?: string;
+  gstRate?: number;
+  batchNo?: string;
+  expiryDate?: string;
 }
 
 export interface Order {
-  id: string;                     // e.g. '#AS-1001'
+  id: string;                     // e.g. '#AS-7K4M9X2P'
+  invoiceNumber?: string;         // Sequential legal bill number e.g. 'AS/26-27/0001'
   customerName: string;
   customerPhone: string;
   deliveryType: DeliveryType;
@@ -110,11 +121,23 @@ export interface Order {
 export interface MerchantSettings {
   storeName: string;
   tagline: string;
-  merchantWhatsApp: string;       // WhatsApp number with country code, e.g. '919876543210'
-  merchantUpiId: string;          // e.g. 'ayurswift@okhdfcbank'
+  merchantWhatsApp: string;       // WhatsApp number with country code, e.g. '919624766242'
+  merchantUpiId: string;          // e.g. '9624766242@fam'
   merchantUpiName: string;        // Name on UPI account
   cityDeliveryFee: number;        // Flat ₹35
   cityFreeDeliveryAbove: number;  // Free above ₹499
   courierDeliveryFee: number;     // Flat ₹60
   adminEmail?: string;            // Display email for admin portal
+  // Dual Legal Billing & Statutory Fields (Non-GST Retail Cash Memo <-> Full GST Tax Invoice)
+  billingMode?: BillingMode;      // 'NON_GST' (default) or 'GST' (CGST+SGST intra-state / IGST inter-state)
+  legalBusinessName?: string;     // Registered firm/trade name on bills
+  proprietorName?: string;        // Sole Proprietor name (optional)
+  storeAddress?: string;          // Full Bhavnagar dispatch address printed on bills
+  storeStateCode?: string;        // Supplier GST state code ('24' = Gujarat)
+  gstin?: string;                 // 15-character GSTIN (required when billingMode === 'GST')
+  defaultGstRate?: number;        // Default GST % when product doesn't specify one (default 12)
+  udyamNumber?: string;           // Optional MSME Udyam Reg. No. (e.g. 'UDYAM-GJ-04-0000000')
+  fssaiNumber?: string;           // Optional 14-digit FSSAI Lic. No.
+  ayushLicenseNote?: string;      // Optional license/declaration line
+  restrictCourierToGujarat?: boolean; // Optional guard to restrict courier to Gujarat PINs (36xxxx-39xxxx)
 }

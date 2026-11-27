@@ -11,8 +11,12 @@ import {
   Zap,
   Loader2,
   RefreshCw,
+  FileText,
+  Receipt,
+  Building2,
 } from 'lucide-react';
 import { MerchantSettings } from '@/types';
+import { isValidIndianGstin } from '@/lib/billing';
 
 interface WebhookCreditRecord {
   txn_id: string;
@@ -29,6 +33,7 @@ interface AdminSettingsTabProps {
   onSaveSettings: (e: React.FormEvent) => void;
   onOpenCredentialReset?: () => void;
   savedToast: boolean;
+  isSavingSettings?: boolean;
   dark: boolean;
 }
 
@@ -38,6 +43,7 @@ export function AdminSettingsTab({
   onSaveSettings,
   onOpenCredentialReset,
   savedToast,
+  isSavingSettings = false,
   dark,
 }: AdminSettingsTabProps) {
   const [copiedVpa, setCopiedVpa] = useState(false);
@@ -250,6 +256,228 @@ export function AdminSettingsTab({
             </div>
           </div>
 
+          {/* Dual Legal Billing & Pan-India GST System */}
+          <div className="pt-3 border-t border-slate-500/15 space-y-3.5">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-[#0C831F]" />
+                <div>
+                  <h3 className="font-extrabold text-sm">
+                    Dual Legal Billing &amp; Pan-India GST System
+                  </h3>
+                  <p className={`text-[11px] ${muted}`}>
+                    Switch anytime between Non-GST Retail Cash Memo and Full GST Tax Invoice (CGST+SGST for Gujarat • IGST outside Gujarat)
+                  </p>
+                </div>
+              </div>
+              <span
+                className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${
+                  settings.billingMode === 'GST'
+                    ? 'bg-emerald-500/15 text-emerald-500'
+                    : 'bg-amber-500/15 text-amber-500'
+                }`}
+              >
+                {settings.billingMode === 'GST' ? 'GST Tax Invoice Active' : 'Non-GST Cash Memo'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => onChangeSettings({ ...settings, billingMode: 'NON_GST' })}
+                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                  (settings.billingMode || 'NON_GST') === 'NON_GST'
+                    ? 'border-[#0C831F] bg-emerald-500/10 ring-1 ring-[#0C831F]'
+                    : dark
+                      ? 'border-slate-800 bg-slate-900/60 hover:border-slate-700'
+                      : 'border-slate-200 bg-slate-50/70 hover:bg-white'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 text-xs font-extrabold">
+                  <Receipt className="w-3.5 h-3.5 text-[#0C831F]" />
+                  <span>Mode 1: Non-GST Cash Memo</span>
+                </div>
+                <p className={`text-[10.5px] mt-1 leading-snug ${muted}`}>
+                  Default while unregistered (&lt; ₹40L intra-state Gujarat). Prints clean Retail Cash Memo without GST columns.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onChangeSettings({ ...settings, billingMode: 'GST' })}
+                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                  settings.billingMode === 'GST'
+                    ? 'border-[#0C831F] bg-emerald-500/10 ring-1 ring-[#0C831F]'
+                    : dark
+                      ? 'border-slate-800 bg-slate-900/60 hover:border-slate-700'
+                      : 'border-slate-200 bg-slate-50/70 hover:bg-white'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 text-xs font-extrabold">
+                  <FileText className="w-3.5 h-3.5 text-[#0C831F]" />
+                  <span>Mode 2: Full GST Tax Invoice</span>
+                </div>
+                <p className={`text-[10.5px] mt-1 leading-snug ${muted}`}>
+                  For Pan-India e-commerce. Auto-prints CGST+SGST for Gujarat PINs &amp; IGST for outside-Gujarat PINs + HSN table.
+                </p>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold mb-1">
+                  Legal Business / Firm Name (on Bills)
+                </label>
+                <input
+                  type="text"
+                  value={settings.legalBusinessName || ''}
+                  onChange={(e) =>
+                    onChangeSettings({ ...settings, legalBusinessName: e.target.value })
+                  }
+                  placeholder="e.g. AyurSwift Wellness & Ayurvedic Store"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold mb-1">
+                  Sole Proprietor Name (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={settings.proprietorName || ''}
+                  onChange={(e) =>
+                    onChangeSettings({ ...settings, proprietorName: e.target.value })
+                  }
+                  placeholder="e.g. Rushiraj Dabhi"
+                  className={inputClass}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold mb-1">
+                Full Dispatch Store Address (Printed on Invoices)
+              </label>
+              <input
+                type="text"
+                value={settings.storeAddress || ''}
+                onChange={(e) =>
+                  onChangeSettings({ ...settings, storeAddress: e.target.value })
+                }
+                placeholder="Shop / House No., Area, Bhavnagar, Gujarat - 364001"
+                className={inputClass}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-2">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold">
+                    15-Digit GSTIN {settings.billingMode === 'GST' ? '*' : '(Optional until registered)'}
+                  </label>
+                  {settings.gstin ? (
+                    <span
+                      className={`text-[10px] font-bold ${
+                        isValidIndianGstin(settings.gstin) ? 'text-emerald-500' : 'text-rose-500'
+                      }`}
+                    >
+                      {isValidIndianGstin(settings.gstin) ? 'Valid GSTIN ✓' : 'Check 15-char format'}
+                    </span>
+                  ) : null}
+                </div>
+                <input
+                  type="text"
+                  maxLength={15}
+                  value={settings.gstin || ''}
+                  onChange={(e) =>
+                    onChangeSettings({
+                      ...settings,
+                      gstin: e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, ''),
+                    })
+                  }
+                  placeholder="e.g. 24AAAAA0000A1Z5"
+                  required={settings.billingMode === 'GST'}
+                  className={`${inputClass} font-mono uppercase`}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold mb-1">Default GST Slab</label>
+                <select
+                  value={settings.defaultGstRate ?? 12}
+                  onChange={(e) =>
+                    onChangeSettings({
+                      ...settings,
+                      defaultGstRate: Number(e.target.value),
+                    })
+                  }
+                  className={inputClass}
+                >
+                  <option value={5}>5% (Essential / Honey)</option>
+                  <option value={12}>12% (Ayurvedic Default)</option>
+                  <option value={18}>18% (Personal Care / Soaps)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold mb-1">
+                  MSME Udyam Reg. No. (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={settings.udyamNumber || ''}
+                  onChange={(e) =>
+                    onChangeSettings({ ...settings, udyamNumber: e.target.value.toUpperCase() })
+                  }
+                  placeholder="e.g. UDYAM-GJ-04-0000000"
+                  className={`${inputClass} font-mono`}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold mb-1">
+                  FSSAI Lic. No. (Optional — for Juices/Edibles)
+                </label>
+                <input
+                  type="text"
+                  maxLength={20}
+                  value={settings.fssaiNumber || ''}
+                  onChange={(e) =>
+                    onChangeSettings({ ...settings, fssaiNumber: e.target.value })
+                  }
+                  placeholder="14-digit FSSAI number"
+                  className={`${inputClass} font-mono`}
+                />
+              </div>
+            </div>
+
+            <label
+              className={`flex items-start gap-2.5 p-3 rounded-xl border text-xs cursor-pointer select-none ${
+                dark ? 'bg-slate-900/70 border-slate-800' : 'bg-slate-50 border-slate-200'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={Boolean(settings.restrictCourierToGujarat)}
+                onChange={(e) =>
+                  onChangeSettings({
+                    ...settings,
+                    restrictCourierToGujarat: e.target.checked,
+                  })
+                }
+                className="mt-0.5 w-4 h-4 rounded border-slate-400 text-[#0C831F] focus:ring-[#0C831F] cursor-pointer shrink-0"
+              />
+              <div>
+                <div className="font-extrabold">
+                  Pause Outside-Gujarat Courier Checkout (Gujarat PINs 36xxxx–39xxxx Only)
+                </div>
+                <div className={`text-[11px] mt-0.5 leading-snug ${muted}`}>
+                  Leave unchecked to accept Pan-India courier orders everywhere. Tick temporarily if you want to restrict courier orders strictly within Gujarat while awaiting GST registration.
+                </div>
+              </div>
+            </label>
+          </div>
+
           <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3.5 text-xs space-y-2.5">
             <div className="font-extrabold text-emerald-700 dark:text-emerald-400">
               Server-Side Admin Credentials &amp; OTP Reset
@@ -273,14 +501,16 @@ export function AdminSettingsTab({
           <div className="pt-2 flex items-center justify-between gap-3">
             <button
               type="submit"
-              className="bg-[#0C831F] hover:bg-[#096B19] text-white font-extrabold text-xs px-5 py-2.5 rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
+              disabled={isSavingSettings}
+              className="bg-[#0C831F] hover:bg-[#096B19] disabled:opacity-60 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer inline-flex items-center gap-1.5"
             >
-              Save Store Configuration
+              {isSavingSettings && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>{isSavingSettings ? 'Saving to Server...' : 'Save Store & Billing Config'}</span>
             </button>
             {savedToast && (
               <span className="text-xs font-extrabold text-emerald-500 flex items-center gap-1 animate-fade-in">
                 <Check className="w-4 h-4" />
-                <span>Settings saved!</span>
+                <span>Synced live to server!</span>
               </span>
             )}
           </div>

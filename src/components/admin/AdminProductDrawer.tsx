@@ -710,6 +710,95 @@ export function AdminProductDrawer({
               className={inputClass}
             />
           </div>
+
+          {/* Optional Legal Billing & Batch Fields (HSN, GST Slab, Batch, Expiry) */}
+          <div
+            className={`rounded-2xl border p-3.5 space-y-2.5 ${
+              dark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50/70 border-slate-200'
+            }`}
+          >
+            <div>
+              <div className="text-[11px] font-extrabold">
+                Invoice HSN, GST &amp; Pack Batch Details (Optional)
+              </div>
+              <div className={`text-[10px] ${dark ? 'text-slate-400' : 'text-slate-500'}`}>
+                Printed on customer bills. Leave HSN/GST blank to auto-detect (30049011 • 12% for Ayurvedic, 18% for Soap/Paste/Gel).
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div>
+                <label htmlFor="admin-sku-hsn" className="block text-[10px] font-bold mb-1">
+                  HSN Code
+                </label>
+                <input
+                  id="admin-sku-hsn"
+                  type="text"
+                  maxLength={12}
+                  value={newProd.hsnCode || ''}
+                  onChange={(e) =>
+                    onChangeProd({
+                      ...newProd,
+                      hsnCode: e.target.value.replace(/[^0-9A-Za-z]/g, ''),
+                    })
+                  }
+                  placeholder="30049011"
+                  className={`${inputClass} font-mono`}
+                />
+              </div>
+              <div>
+                <label htmlFor="admin-sku-gst" className="block text-[10px] font-bold mb-1">
+                  GST Slab
+                </label>
+                <select
+                  id="admin-sku-gst"
+                  value={
+                    typeof newProd.gstRate === 'number' ? String(newProd.gstRate) : ''
+                  }
+                  onChange={(e) =>
+                    onChangeProd({
+                      ...newProd,
+                      gstRate: e.target.value === '' ? undefined : Number(e.target.value),
+                    })
+                  }
+                  className={inputClass}
+                >
+                  <option value="">Auto</option>
+                  <option value="0">0%</option>
+                  <option value="5">5%</option>
+                  <option value="12">12%</option>
+                  <option value="18">18%</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="admin-sku-batch" className="block text-[10px] font-bold mb-1">
+                  Batch No.
+                </label>
+                <input
+                  id="admin-sku-batch"
+                  type="text"
+                  maxLength={32}
+                  value={newProd.batchNo || ''}
+                  onChange={(e) => onChangeProd({ ...newProd, batchNo: e.target.value })}
+                  placeholder="e.g. B2604"
+                  className={`${inputClass} font-mono`}
+                />
+              </div>
+              <div>
+                <label htmlFor="admin-sku-exp" className="block text-[10px] font-bold mb-1">
+                  Expiry
+                </label>
+                <input
+                  id="admin-sku-exp"
+                  type="text"
+                  maxLength={16}
+                  value={newProd.expiryDate || ''}
+                  onChange={(e) => onChangeProd({ ...newProd, expiryDate: e.target.value })}
+                  placeholder="MM/YYYY"
+                  className={`${inputClass} font-mono`}
+                />
+              </div>
+            </div>
+          </div>
         </form>
 
         {/* Footer */}

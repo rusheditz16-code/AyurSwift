@@ -19,6 +19,7 @@ import {
   Trash2,
   Clock,
   CalendarDays,
+  MessageCircle,
 } from 'lucide-react';
 import {
   CartItem,
@@ -28,6 +29,11 @@ import {
   Product,
 } from '@/types';
 import { DELIVERY_PROMISE, isVerifiedProductImageUrl } from '@/lib/initialData';
+import {
+  isGujaratPincode,
+  isValidIndianGstin,
+  resolveIndianStateFromPincode,
+} from '@/lib/billing';
 import {
   DeliveryDayType,
   DeliverySlotId,
@@ -284,6 +290,17 @@ export function CartDrawer({
   const grandTotal = subtotal + deliveryFee;
   const amountToFreeDelivery = Math.max(0, settings.cityFreeDeliveryAbove - subtotal);
   const freeDeliveryPercent = Math.min(100, (subtotal / settings.cityFreeDeliveryAbove) * 100);
+  const cleanPinDigits = pincode.replace(/\D/g, '');
+  const resolvedPinState =
+    cleanPinDigits.length === 6 ? resolveIndianStateFromPincode(cleanPinDigits) : null;
+  const isGstActive =
+    settings.billingMode === 'GST' && isValidIndianGstin(settings.gstin);
+  const isOutsideGujaratBlocked = Boolean(
+    deliveryType === 'COURIER_OUTSIDE' &&
+      settings.restrictCourierToGujarat &&
+      cleanPinDigits.length === 6 &&
+      !isGujaratPincode(cleanPinDigits)
+  );
 
   const handleDeliveryTypeChange = (type: DeliveryType) => {
     setDeliveryType(type);
@@ -317,6 +334,16 @@ export function CartDrawer({
     }
     if (!pincode.trim() || pincode.replace(/\D/g, '').length < 6) {
       setFormError('Please enter a valid 6-digit postal pincode.');
+      return;
+    }
+    if (
+      deliveryType === 'COURIER_OUTSIDE' &&
+      settings.restrictCourierToGujarat &&
+      !isGujaratPincode(pincode)
+    ) {
+      setFormError(
+        'Outside-Gujarat courier is currently paused. Please enter a Gujarat PIN code (36xxxx–39xxxx) or inquire via WhatsApp.'
+      );
       return;
     }
 
@@ -716,6 +743,15 @@ export function CartDrawer({
                     <span>Grand total</span>
                     <span className="tabular-nums">₹{grandTotal}</span>
                   </div>
+                  <div className="text-[10.5px] text-gray-500 pt-0.5">
+                    {isGstActive
+                      ? `Official GST Tax Invoice included (${
+                          resolvedPinState && !resolvedPinState.isGujarat
+                            ? `IGST • ${resolvedPinState.state}`
+                            : 'CGST + SGST • Gujarat'
+                        } included in MRP)`
+                      : 'Official Retail Cash Memo included • Inclusive of all taxes'}
+                  </div>
                 </div>
               </div>
 
@@ -991,6 +1027,44 @@ export function CartDrawer({
                     />
                   </div>
                 </div>
+
+                {resolvedPinState && (
+                  <div className="flex items-center justify-between text-[10.5px] text-gray-600 px-1">
+                    <span>
+                      Place of Supply:{' '}
+                      <strong className="text-gray-900">
+                        {resolvedPinState.state} (State Code {resolvedPinState.stateCode})
+                      </strong>
+                    </span>
+                    {isGstActive && (
+                      <span className="font-bold text-[#0C831F]">
+                        {resolvedPinState.isGujarat ? 'CGST + SGST' : 'Inter-State IGST'}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {isOutsideGujaratBlocked && (
+                  <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] space-y-1.5">
+                    <div className="font-bold">
+                      Outside-Gujarat courier is currently paused ({resolvedPinState?.state}).
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span>Gujarat PINs (36xxxx–39xxxx) are open, or inquire on WhatsApp:</span>
+                      <a
+                        href={`https://wa.me/${settings.merchantWhatsApp.replace(/\D/g, '')}?text=${encodeURIComponent(
+                          `Hi AyurSwift! I want to inquire about courier delivery to PIN ${cleanPinDigits} (${resolvedPinState?.state || 'India'}).`
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#25D366] text-white font-extrabold text-[10.5px] shrink-0"
+                      >
+                        <MessageCircle className="w-3 h-3" />
+                        <span>WhatsApp</span>
+                      </a>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Payment Method Card — Direct UPI Instructions (Where Customers Need Them) */}

@@ -1,7 +1,19 @@
 'use client';
 
-import { Product, Order, MerchantSettings, DeliveryType, PaymentMethod } from '@/types';
+import {
+  Product,
+  Order,
+  MerchantSettings,
+  DeliveryType,
+  PaymentMethod,
+  BillingMode,
+} from '@/types';
 import { INITIAL_PRODUCTS, DEFAULT_SETTINGS, isVerifiedProductImageUrl } from './initialData';
+import {
+  computeOrderBillingBreakdown,
+  formatInvoiceNumber,
+  getLegalPaymentStatusDisplay,
+} from './billing';
 
 const STORAGE_KEYS = {
   PRODUCTS: 'ayurswift_products_v3',
@@ -50,6 +62,8 @@ export function getStoredSettings(): MerchantSettings {
       !parsed.adminEmail ||
       !parsed.merchantUpiId;
 
+    const billingMode: BillingMode = parsed.billingMode === 'GST' ? 'GST' : 'NON_GST';
+
     const clean: MerchantSettings = {
       ...DEFAULT_SETTINGS,
       storeName: typeof parsed.storeName === 'string' ? parsed.storeName : DEFAULT_SETTINGS.storeName,
@@ -82,6 +96,47 @@ export function getStoredSettings(): MerchantSettings {
         typeof parsed.adminEmail === 'string' && parsed.adminEmail
           ? parsed.adminEmail
           : DEFAULT_SETTINGS.adminEmail,
+      billingMode,
+      legalBusinessName:
+        typeof parsed.legalBusinessName === 'string' && parsed.legalBusinessName
+          ? parsed.legalBusinessName
+          : DEFAULT_SETTINGS.legalBusinessName,
+      proprietorName:
+        typeof parsed.proprietorName === 'string'
+          ? parsed.proprietorName
+          : DEFAULT_SETTINGS.proprietorName,
+      storeAddress:
+        typeof parsed.storeAddress === 'string' && parsed.storeAddress
+          ? parsed.storeAddress
+          : DEFAULT_SETTINGS.storeAddress,
+      storeStateCode:
+        typeof parsed.storeStateCode === 'string' && parsed.storeStateCode
+          ? parsed.storeStateCode
+          : DEFAULT_SETTINGS.storeStateCode,
+      gstin:
+        typeof parsed.gstin === 'string'
+          ? parsed.gstin.toUpperCase()
+          : DEFAULT_SETTINGS.gstin,
+      defaultGstRate:
+        typeof parsed.defaultGstRate === 'number'
+          ? parsed.defaultGstRate
+          : DEFAULT_SETTINGS.defaultGstRate,
+      udyamNumber:
+        typeof parsed.udyamNumber === 'string'
+          ? parsed.udyamNumber
+          : DEFAULT_SETTINGS.udyamNumber,
+      fssaiNumber:
+        typeof parsed.fssaiNumber === 'string'
+          ? parsed.fssaiNumber
+          : DEFAULT_SETTINGS.fssaiNumber,
+      ayushLicenseNote:
+        typeof parsed.ayushLicenseNote === 'string'
+          ? parsed.ayushLicenseNote
+          : DEFAULT_SETTINGS.ayushLicenseNote,
+      restrictCourierToGujarat:
+        typeof parsed.restrictCourierToGujarat === 'boolean'
+          ? parsed.restrictCourierToGujarat
+          : DEFAULT_SETTINGS.restrictCourierToGujarat,
     };
 
     if (needsMigration) {
@@ -100,6 +155,65 @@ export function saveStoredSettings(settings: MerchantSettings) {
     localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(safeSettings));
   } catch {
     // Ignore storage quota / privacy mode errors
+  }
+}
+
+export async function fetchLiveSettingsFromServer(
+  forceFresh = false
+): Promise<MerchantSettings | null> {
+  const url = forceFresh ? `/api/settings?fresh=1&_t=${Date.now()}` : '/api/settings';
+  const opts: RequestInit = forceFresh ? { cache: 'no-store' } : {};
+  try {
+    const res = await fetch(url, opts);
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      success?: boolean;
+      settings?: MerchantSettings;
+    };
+    if (data?.success && data.settings) {
+      saveStoredSettings(data.settings);
+      return data.settings;
+    }
+  } catch {
+    // Fallback cleanly to local cached settings
+  }
+  return null;
+}
+
+export async function saveSettingsToServer(settings: MerchantSettings): Promise<{
+  ok: boolean;
+  status: number;
+  settings?: MerchantSettings;
+  error?: string;
+}> {
+  try {
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+      body: JSON.stringify({ settings }),
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      success?: boolean;
+      settings?: MerchantSettings;
+      error?: string;
+    };
+    if (!res.ok || !data.success || !data.settings) {
+      return {
+        ok: false,
+        status: res.status,
+        error: data.error || `Could not save store settings (${res.status}).`,
+      };
+    }
+    saveStoredSettings(data.settings);
+    broadcastCatalogChange();
+    return { ok: true, status: res.status, settings: data.settings };
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      error: 'Network error while saving settings to server.',
+    };
   }
 }
 
@@ -248,8 +362,10 @@ export async function lookupOrdersCrossDevice(query: string): Promise<Order[]> {
   const localMatches = local.filter((o) => {
     const cleanId = o.id.toLowerCase().replace(/[^a-z0-9]/g, '');
     const cleanPhone = o.customerPhone.replace(/\D/g, '');
+    const cleanInv = (o.invoiceNumber || '').toLowerCase();
     return (
       (cleanStrQ.length >= 6 && cleanId === cleanStrQ) ||
+      (cleanInv && cleanInv === cleanQ.toLowerCase()) ||
       (digitsQ.length === 10 && cleanPhone.slice(-10) === digitsQ)
     );
   });
@@ -302,6 +418,7 @@ export async function syncOrderStatuses(): Promise<Order[]> {
             srv &&
             (srv.orderStatus !== locOrder.orderStatus ||
               srv.paymentStatus !== locOrder.paymentStatus ||
+              srv.invoiceNumber !== locOrder.invoiceNumber ||
               srv.courierTracking !== locOrder.courierTracking ||
               srv.deliverySlot !== locOrder.deliverySlot ||
               (srv.slotRescheduledCount ?? 0) !== (locOrder.slotRescheduledCount ?? 0) ||
@@ -310,6 +427,7 @@ export async function syncOrderStatuses(): Promise<Order[]> {
             changed = true;
             return {
               ...locOrder,
+              invoiceNumber: srv.invoiceNumber ?? locOrder.invoiceNumber,
               orderStatus: srv.orderStatus,
               paymentStatus: srv.paymentStatus,
               deliverySlot: srv.deliverySlot ?? locOrder.deliverySlot,
@@ -802,14 +920,19 @@ export function getDailyOrderStats(orders: Order[], filterDateKey?: string) {
   };
 }
 
-// 1-Click Export Orders to CSV (Spreadsheet / Excel format)
-export function exportOrdersToCsv(orders: Order[]): string {
+// 1-Click Export Orders to CSV (Spreadsheet / CA GST & Non-GST Bookkeeping format)
+export function exportOrdersToCsv(orders: Order[], settings?: MerchantSettings): string {
   const headers = [
+    'Invoice Number',
     'Order ID',
     'Date',
     'Time',
+    'Billing Mode',
     'Customer Name',
     'Customer Phone',
+    'Place of Supply (State)',
+    'State Code',
+    'Supply Type',
     'Delivery Type',
     'Delivery Slot',
     'Address',
@@ -817,11 +940,16 @@ export function exportOrdersToCsv(orders: Order[]): string {
     'City',
     'Pincode',
     'Items Summary',
+    'Taxable Value (INR)',
+    'CGST (INR)',
+    'SGST (INR)',
+    'IGST (INR)',
     'Subtotal (INR)',
     'Delivery Fee (INR)',
     'Total Amount (INR)',
     'Payment Method',
     'Payment Status',
+    'Legal Payment Status',
     'Order Status',
     'Rapido Copied',
     'UTR / Ref',
@@ -836,16 +964,24 @@ export function exportOrdersToCsv(orders: Order[]): string {
       minute: '2-digit',
       timeZone: 'Asia/Kolkata',
     });
+    const invNo = formatInvoiceNumber(o.id, o.createdAt, o.invoiceNumber);
+    const billing = computeOrderBillingBreakdown(o, settings);
+    const payLegal = getLegalPaymentStatusDisplay(o);
     const itemsSummary = o.items
       .map((i) => `${i.quantity}x ${i.name} (${i.packSize})`)
       .join('; ');
 
     return [
+      `"${invNo}"`,
       `"${o.id}"`,
       `"${dateStr}"`,
       `"${timeStr}"`,
+      `"${billing.isGstInvoice ? 'GST_TAX_INVOICE' : 'NON_GST_CASH_MEMO'}"`,
       `"${(o.customerName || '').replace(/"/g, '""')}"`,
       `"${o.customerPhone}"`,
+      `"${billing.placeOfSupply.state}"`,
+      `"${billing.placeOfSupply.stateCode}"`,
+      `"${billing.isIntraState ? 'INTRA_STATE_GUJARAT' : 'INTER_STATE'}"`,
       `"${o.deliveryType}"`,
       `"${(o.deliverySlot || '').replace(/"/g, '""')}"`,
       `"${(o.deliveryAddress || '').replace(/"/g, '""')}"`,
@@ -853,11 +989,16 @@ export function exportOrdersToCsv(orders: Order[]): string {
       `"${o.city}"`,
       `"${o.pincode}"`,
       `"${itemsSummary.replace(/"/g, '""')}"`,
+      billing.totalTaxableValue,
+      billing.totalCgst,
+      billing.totalSgst,
+      billing.totalIgst,
       o.subtotal,
       o.deliveryFee,
       o.totalAmount,
       `"${o.paymentMethod}"`,
       `"${o.paymentStatus}"`,
+      `"${payLegal.statusBadge}"`,
       `"${o.orderStatus}"`,
       o.rapidoCopied ? 'YES' : 'NO',
       `"${(o.utrNumber || '').replace(/"/g, '""')}"`,

@@ -25,6 +25,16 @@ export function mapDbRowToProduct(
     typeof row.safety_advice === 'string' ? row.safety_advice.trim() : '';
   const badgeFromRow =
     typeof row.badge_text === 'string' ? row.badge_text.trim() : '';
+  const hsnFromRow =
+    typeof row.hsn_code === 'string' ? row.hsn_code.trim() : '';
+  const gstRateFromRow =
+    row.gst_rate !== null && row.gst_rate !== undefined && Number.isFinite(Number(row.gst_rate))
+      ? Number(row.gst_rate)
+      : undefined;
+  const batchFromRow =
+    typeof row.batch_no === 'string' ? row.batch_no.trim() : '';
+  const expiryFromRow =
+    typeof row.expiry_date === 'string' ? row.expiry_date.trim() : '';
 
   return {
     id,
@@ -50,6 +60,10 @@ export function mapDbRowToProduct(
     safetyAdvice: safetyFromRow || base?.safetyAdvice || undefined,
     imageUrl: safePrimary || safeImgs[0] || '',
     images: safeImgs.length > 0 ? safeImgs : safePrimary ? [safePrimary] : [],
+    hsnCode: hsnFromRow || base?.hsnCode || undefined,
+    gstRate: gstRateFromRow !== undefined ? gstRateFromRow : base?.gstRate,
+    batchNo: batchFromRow || base?.batchNo || undefined,
+    expiryDate: expiryFromRow || base?.expiryDate || undefined,
   };
 }
 
@@ -106,7 +120,7 @@ export async function getCachedPublicCatalog(): Promise<CachedPublicCatalogResul
   const { data, error } = await supabase
     .from('products')
     .select(
-      'id, name, brand, category, manufacturer, form, pack_size, mrp, selling_price, stock_quantity, is_live, image_url, images, indications, dosage, composition, safety_advice, badge_text, updated_at'
+      'id, name, brand, category, manufacturer, form, pack_size, mrp, selling_price, stock_quantity, is_live, image_url, images, indications, dosage, composition, safety_advice, badge_text, hsn_code, gst_rate, batch_no, expiry_date, updated_at'
     )
     .eq('is_live', true)
     .gt('stock_quantity', 0)
